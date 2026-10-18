@@ -1,0 +1,7 @@
+    // size data gamma value
+            let start_alpha = 352;
+        start.color(file, 47);
+    return color + line;
+            // count name list node
+// beta start result beta
+

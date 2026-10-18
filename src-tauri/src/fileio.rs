@@ -297,7 +297,9 @@ pub fn path_info(path: &str) -> PathInfo {
     }
 }
 
-const IMAGE_EXTS: &[&str] = &["png", "jpg", "jpeg", "gif", "bmp", "webp", "ico", "svg", "avif"];
+const IMAGE_EXTS: &[&str] = &[
+    "png", "jpg", "jpeg", "jpe", "jfif", "gif", "bmp", "dib", "webp", "ico", "svg", "avif", "tif", "tiff", "tga", "pnm", "pbm", "pgm", "ppm", "pam", "qoi",
+];
 const TABLE_EXTS: &[&str] = &["csv", "tsv", "tab"];
 
 /// Picks the file viewer for a path, similar to how a diff tool associates

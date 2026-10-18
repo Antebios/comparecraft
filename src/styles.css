@@ -837,6 +837,13 @@ button.link {
 .hb.hmiss {
   background: var(--filler);
 }
+.hb.horph {
+  background: var(--orphan-bg);
+  color: var(--orphan-fg);
+}
+.hrow.hblock {
+  border-top: 1px dashed var(--border);
+}
 .hb.hcur {
   outline: 1px solid var(--accent);
 }
@@ -927,18 +934,109 @@ button.link {
 .pic-pane canvas {
   display: block;
 }
-.blend-stack {
-  position: relative;
+.pic-pane.focused {
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
-.blend-stack .over {
+.pix-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--border);
+}
+.pix-bottom {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 4px;
+}
+.pix-stage {
+  position: relative;
+  flex: none;
+}
+.pix-stage img {
   position: absolute;
   left: 0;
   top: 0;
+}
+.pix-msg {
+  padding: 8px;
+  background: var(--bg2);
+}
+.pix-controls {
+  flex: none;
+  width: 210px;
+  overflow: auto;
+  padding: 6px 8px;
+  background: var(--bg2);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+.pix-controls fieldset {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  margin: 0;
+  padding: 4px 6px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.pix-controls legend {
+  padding: 0 4px;
+  color: var(--muted);
+}
+.pix-controls label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.pix-slider {
+  flex-direction: column;
+  align-items: stretch !important;
+}
+.pix-offset {
+  display: flex;
+  gap: 8px;
+}
+.pix-offset input.num {
+  width: 56px;
+}
+.pix-nudge {
+  display: flex;
+  gap: 2px;
+}
+.pix-nudge button {
+  min-width: 24px;
+  padding: 1px 4px;
+}
+.pix-detail {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pix-swatch {
+  display: inline-block;
+  width: 18px;
+  height: 14px;
+  border: 1px solid var(--border);
+  background-size: 8px 8px;
+}
+.pix-swatch span {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 /* Rules panel */
 .panel.rules label {
   white-space: nowrap;
+}
+.panel.rules input.num {
+  width: 6em;
 }
 
 /* Home */

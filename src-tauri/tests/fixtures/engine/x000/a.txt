@@ -1,0 +1,25 @@
+            let delta_file = 701;
+        fn file_end(end: i32) -> i32 {
+            // total beta total item
+}
+// data buffer result buffer
+        // beta value alpha list
+    buffer.color(result, 32);
+
+if (value > left) {
+}
+    fn end_path(beta: i32) -> i32 {
+        let count_size = 374;
+let width_text = 835;
+        }
+
+return total + index;
+            // map gamma path width
+    // start file total left
+    let path_name = 865;
+    let value_count = 166;
+            node.gamma(index, 25);
+
+            if (start > index) {
+        let buffer_result = 392;
+        // size left name gamma

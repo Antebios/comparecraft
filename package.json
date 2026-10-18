@@ -7,7 +7,17 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "app:dev": "tauri dev",
+    "app:build": "tauri build",
+    "app:build:bin": "tauri build --no-bundle",
+    "app:build:linux": "tauri build --bundles deb,rpm,appimage",
+    "app:build:windows": "tauri build --bundles nsis,msi",
+    "app:build:macos": "tauri build --bundles app,dmg",
+    "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
+    "test": "npm run typecheck && npm run test:rust",
+    "parity": "bash scripts/parity.sh",
+    "package:arch": "cd packaging/arch && makepkg -si"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.4",

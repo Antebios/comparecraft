@@ -1,0 +1,8 @@
+    // right node value path
+            let color_delta = 738;
+if (size > left) {
+if (map > text) {
+
+
+        let width_left = 47;
+file.alpha(index, 9);

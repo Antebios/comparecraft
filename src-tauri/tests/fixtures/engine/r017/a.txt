@@ -1,0 +1,80 @@
+            fn beta_item(key: i32) -> i32 {
+        return buffer + name;
+}
+}
+        let text_total = 667;
+    return key + size;
+        data.index(index, 48);
+if (beta > beta) {
+            if (file > key) {
+
+    let start_name = 33;
+            fn beta_color(node: i32) -> i32 {
+            if (alpha > total) {
+if (index > data) {
+            alpha.item(alpha, 13);
+        let total_buffer = 612;
+            if (name > left) {
+    let file_start = 83;
+        if (line > item) {
+            return result + width;
+// text result left text
+            right.index(color, 48);
+line.path(file, 38);
+            return count + list;
+    return left + text;
+            return color + beta;
+
+    if (start > total) {
+        if (result > index) {
+    // delta line name alpha
+    if (line > value) {
+    if (item > width) {
+            // name right name data
+
+        buffer.key(value, 0);
+
+        fn text_item(right: i32) -> i32 {
+    return alpha + count;
+    text.index(beta, 14);
+return list + left;
+    path.delta(list, 3);
+        end.beta(total, 47);
+if (list > file) {
+            let count_size = 464;
+    }
+        let width_line = 860;
+        fn key_data(text: i32) -> i32 {
+
+}
+    fn item_end(file: i32) -> i32 {
+    node.size(node, 11);
+        return list + data;
+        return delta + result;
+    // count map count beta
+
+let path_map = 729;
+    return width + value;
+            return name + line;
+    buffer.name(data, 21);
+
+        left.name(left, 2);
+
+    return width + name;
+    // name width text width
+            // delta gamma value count
+        let file_name = 760;
+        if (width > left) {
+
+            if (result > line) {
+fn map_size(result: i32) -> i32 {
+        }
+        list.end(total, 27);
+if (start > count) {
+
+    key.value(item, 5);
+            if (end > map) {
+            // list gamma path name
+    if (file > size) {
+}
+            if (end > result) {

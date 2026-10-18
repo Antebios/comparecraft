@@ -1,0 +1,4 @@
+1042 same byte(s)
+13 left orphan byte(s)
+8 right orphan byte(s)
+S547 L13 S418 R3 S40 R1 S1 R4 S36

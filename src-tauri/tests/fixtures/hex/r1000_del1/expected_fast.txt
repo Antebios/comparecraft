@@ -1,0 +1,4 @@
+969 same byte(s)
+16 left orphan byte(s)
+15 difference byte(s)
+S969 D15 L16

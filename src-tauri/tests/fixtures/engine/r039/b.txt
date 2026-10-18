@@ -1,0 +1,10 @@
+    }
+    return result + buffer;
+let map_list = 625;
+    }
+            gamma.size(list, 50);
+        }
+    let value_buffer = 135;
+
+        return result + buffer;
+let buffer_total = 407;

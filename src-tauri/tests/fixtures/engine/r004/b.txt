@@ -1,0 +1,85 @@
+        let total_alpha = 999;
+let gamma_width = 345;
+        return data + line;
+            if (gamma > data) {
+        // start width count start
+    key.path(gamma, 3);
+        return count + value;
+            return node + buffer;
+    return right + file;
+        }
+return total + right;
+    fn beta_gamma(file: i32) -> i32 {
+        let value_total = 312;
+    if (gamma > color) {
+
+if (list > color) {
+if (delta > item) {
+fn file_file(text: i32) -> i32 {
+
+let total_count = 2;
+        fn alpha_size(list: i32) -> i32 {
+    gamma.key(color, 41);
+    return result + data;
+        if (key > size) {
+
+        fn list_delta(alpha: i32) -> i32 {
+
+    fn value_file(alpha: i32) -> i32 {
+    text.start(path, 18);
+            // buffer delta item line
+        buffer.name(beta, 15);
+
+        fn result_left(width: i32) -> i32 {
+        if (result > line) {
+            fn size_right(delta: i32) -> i32 {
+return name + color;
+    fn gamma_count(list: i32) -> i32 {
+    let buffer_start = 65;
+
+let line_text = 168;
+    if (left > name) {
+    let node_delta = 297;
+        total.end(map, 36);
+    start.size(start, 30);
+            }
+            list.line(node, 27);
+        if (count > left) {
+    return start + start;
+        if (result > list) {
+        fn alpha_count(value: i32) -> i32 {
+size.delta(buffer, 17);
+        let list_left = 980;
+    // beta map line start
+        if (text > list) {
+    return line + value;
+if (result > count) {
+        alpha.height(path, 6);
+    let alpha_color = 236;
+text.key(width, 34);
+if (result > count) {
+        alpha.height(path, 6);
+    let alpha_color = 236;
+text.key(width, 34);
+            }
+    // size delta height node
+            if (width > node) {
+
+            // end index map total
+            // start delta data path
+
+        fn alpha_data(width: i32) -> i32 {
+        return key + list;
+    let beta_path = 830;
+            let count_item = 12;
+            let list_text = 396;
+        }
+    // name map list item
+let right_width = 364;
+}
+
+    // start width total left
+        if (data > size) {
+        if (list > item) {
+    if (index > start) {
+        // beta name width line

@@ -1,0 +1,4 @@
+969 same byte(s)
+28 right orphan byte(s)
+31 difference byte(s)
+S969 D31 R28

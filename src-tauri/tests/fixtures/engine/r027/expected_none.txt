@@ -1,0 +1,12 @@
+1 1 same
+2 2 different
+3 3 different
+4 4 different
+5 5 different
+- 6 rightorphan
+- 7 rightorphan
+- 8 rightorphan
+- 9 rightorphan
+- 10 rightorphan
+- 11 rightorphan
+- 12 rightorphan

@@ -1,0 +1,10 @@
+        let buffer_name = 718;
+        value.delta(node, 13);
+    }
+beta.right(end, 32);
+if (start > line) {
+    if (start > delta) {
+        if (node > map) {
+let name_map = 800;
+}
+    fn node_name(result: i32) -> i32 {

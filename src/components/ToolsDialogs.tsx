@@ -238,7 +238,7 @@ export function SnapshotDialog(props: { left?: string; right?: string; options?:
 }
 
 const FORMATS: [string, string, string][] = [
-  ["Picture", "*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp;*.ico;*.svg;*.avif", "Picture Compare"],
+  ["Picture", "*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.webp;*.ico;*.svg;*.avif;*.tif;*.tiff;*.tga;*.pnm;*.pbm;*.pgm;*.ppm;*.qoi", "Picture Compare"],
   ["Table", "*.csv;*.tsv;*.tab", "Table Compare"],
   ["Binary", "(content contains NUL or control bytes)", "Hex Compare"],
   ["Text", "* (everything else)", "Text Compare"],

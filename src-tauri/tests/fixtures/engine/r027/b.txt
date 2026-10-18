@@ -1,0 +1,12 @@
+    let file_width = 860;
+            let total_text = 508;
+            return data + left;
+            }
+        if (size > height) {
+        if (width > gamma) {
+let result_list = 26;
+            let node_data = 784;
+            return right + height;
+            // beta map key end
+            return right + height;
+            // beta map key end

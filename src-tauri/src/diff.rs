@@ -3,7 +3,10 @@
 
 use serde::{Deserialize, Serialize};
 use similar::{capture_diff_slices, Algorithm, DiffTag};
+use std::collections::HashMap;
 use std::sync::OnceLock;
+
+use crate::align;
 
 /// A "replacement" rule: text on either side that matches `from` is treated
 /// as `to` when lines are aligned, so such differences become unimportant.
@@ -23,8 +26,14 @@ pub struct Rules {
     pub ignore_trailing_ws: bool,
     pub ignore_embedded_ws: bool,
     pub ignore_blank_lines: bool,
-    /// "myers" or "patience"
+    /// Line alignment: "standard", "none" (unaligned), "patience" or "myers".
     pub algorithm: String,
+    /// How many lines ahead the standard alignment looks for matching runs.
+    pub skew_tolerance: i32,
+    /// Pair unmatched lines by character similarity.
+    pub use_closeness: bool,
+    /// Never pair differing lines; show them as orphans instead.
+    pub never_align_diffs: bool,
     pub replacements: Vec<Replacement>,
     #[serde(skip)]
     pub(crate) compiled: OnceLock<Vec<(regex::Regex, String)>>,
@@ -33,12 +42,15 @@ pub struct Rules {
 impl Default for Rules {
     fn default() -> Self {
         Rules {
-            ignore_case: false,
+            ignore_case: true,
             ignore_leading_ws: true,
             ignore_trailing_ws: true,
             ignore_embedded_ws: true,
             ignore_blank_lines: true,
-            algorithm: "patience".into(),
+            algorithm: "standard".into(),
+            skew_tolerance: 2000,
+            use_closeness: true,
+            never_align_diffs: false,
             replacements: Vec::new(),
             compiled: OnceLock::new(),
         }
@@ -46,12 +58,31 @@ impl Default for Rules {
 }
 
 impl Rules {
+    /// Algorithm used by modules that rely on a plain sequence diff (merge).
     pub fn algo(&self) -> Algorithm {
         match self.algorithm.as_str() {
             "myers" => Algorithm::Myers,
             "lcs" => Algorithm::Lcs,
             _ => Algorithm::Patience,
         }
+    }
+
+    pub fn align_options(&self) -> align::Options {
+        align::Options {
+            kind: align::AlignKind::parse(&self.algorithm),
+            skew_tolerance: self.skew_tolerance.max(1),
+            use_closeness: self.use_closeness,
+            never_align_diffs: self.never_align_diffs,
+            orphans_always_sig: !self.ignore_blank_lines,
+        }
+    }
+
+    fn apply_replacements(&self, line: &str) -> String {
+        let mut t = line.to_string();
+        for (re, to) in self.replacers() {
+            t = re.replace_all(&t, to.as_str()).into_owned();
+        }
+        t
     }
 
     /// Replacement rules compiled once per comparison; invalid patterns are skipped.
@@ -156,86 +187,52 @@ pub struct DiffResult {
     pub identical: bool,
 }
 
-fn is_blank(s: &str) -> bool {
-    s.trim().is_empty()
-}
-
-/// Cheap similarity ratio (0..1) between two strings using a token diff.
-fn similarity(a: &str, b: &str) -> f32 {
-    if a == b {
-        return 1.0;
-    }
-    if a.is_empty() || b.is_empty() {
-        return 0.0;
-    }
-    let ta = tokenize(a);
-    let tb = tokenize(b);
-    let ops = capture_diff_slices(Algorithm::Myers, &ta, &tb);
-    let mut same = 0usize;
-    for op in ops {
-        let (tag, o, _) = op.as_tag_tuple();
-        if tag == DiffTag::Equal {
-            same += ta[o].iter().map(|t| t.len()).sum::<usize>();
+/// Important text of a line under `rules`.
+///
+/// Characters are classified as leading whitespace, embedded whitespace,
+/// trailing whitespace or other text (only space and tab count as whitespace).
+/// Returns `(key, text)`: `text` holds the important characters as written and
+/// `key` is the same text case-folded when case is unimportant.
+fn important_text(line: &str, rules: &Rules) -> (String, String) {
+    let is_ws = |c: char| c == ' ' || c == '\t';
+    let chars: Vec<char> = line.chars().collect();
+    let mut text = String::with_capacity(line.len());
+    let mut i = 0;
+    while i < chars.len() {
+        if !is_ws(chars[i]) {
+            text.push(chars[i]);
+            i += 1;
+            continue;
+        }
+        let start = i;
+        while i < chars.len() && is_ws(chars[i]) {
+            i += 1;
+        }
+        let ignored = if start == 0 {
+            rules.ignore_leading_ws
+        } else if i < chars.len() {
+            rules.ignore_embedded_ws
+        } else {
+            rules.ignore_trailing_ws
+        };
+        if !ignored {
+            text.extend(&chars[start..i]);
         }
     }
-    (2 * same) as f32 / (a.len() + b.len()) as f32
-}
-
-/// Aligns a replaced block of lines so that similar lines are paired together.
-fn align_block(ln: &[&str], rn: &[&str]) -> Vec<(Option<usize>, Option<usize>)> {
-    let (n, m) = (ln.len(), rn.len());
-    let mut anchors: Vec<(usize, usize)> = Vec::new();
-    if n > 0 && m > 0 && n * m <= 2500 && n != m {
-        let mut best = vec![vec![0f32; m + 1]; n + 1];
-        let mut sims = vec![vec![0f32; m]; n];
-        for i in 0..n {
-            for j in 0..m {
-                sims[i][j] = similarity(ln[i], rn[j]);
-            }
-        }
-        for i in 1..=n {
-            for j in 1..=m {
-                let mut v = best[i - 1][j].max(best[i][j - 1]);
-                let s = sims[i - 1][j - 1];
-                if s >= 0.5 {
-                    v = v.max(best[i - 1][j - 1] + s);
+    let key = if rules.ignore_case {
+        text.chars()
+            .map(|c| {
+                let mut up = c.to_uppercase();
+                match (up.next(), up.next()) {
+                    (Some(u), None) => u,
+                    _ => c,
                 }
-                best[i][j] = v;
-            }
-        }
-        let (mut i, mut j) = (n, m);
-        while i > 0 && j > 0 {
-            let s = sims[i - 1][j - 1];
-            if s >= 0.5 && (best[i][j] - (best[i - 1][j - 1] + s)).abs() < 1e-6 {
-                anchors.push((i - 1, j - 1));
-                i -= 1;
-                j -= 1;
-            } else if (best[i][j] - best[i - 1][j]).abs() < 1e-6 {
-                i -= 1;
-            } else {
-                j -= 1;
-            }
-        }
-        anchors.reverse();
-    }
-    anchors.push((n, m));
-    let mut out = Vec::new();
-    let (mut ci, mut cj) = (0usize, 0usize);
-    for (ai, aj) in anchors {
-        let gl = ai - ci;
-        let gr = aj - cj;
-        for k in 0..gl.max(gr) {
-            let l = if k < gl { Some(ci + k) } else { None };
-            let r = if k < gr { Some(cj + k) } else { None };
-            out.push((l, r));
-        }
-        if ai < n && aj < m {
-            out.push((Some(ai), Some(aj)));
-        }
-        ci = ai + 1;
-        cj = aj + 1;
-    }
-    out
+            })
+            .collect()
+    } else {
+        text.clone()
+    };
+    (key, text)
 }
 
 /// Splits a line into word / whitespace-run / single punctuation tokens.
@@ -336,89 +333,108 @@ fn push_range(v: &mut Vec<[u32; 2]>, a: u32, b: u32) {
     v.push([a, b]);
 }
 
-pub fn diff_lines(left: &[String], right: &[String], rules: &Rules) -> DiffResult {
-    let ln: Vec<String> = left.iter().map(|s| normalize(s, rules)).collect();
-    let rn: Vec<String> = right.iter().map(|s| normalize(s, rules)).collect();
+struct LineInfo {
+    key: String,
+    text: String,
+    sig: bool,
+}
 
-    // When blank lines are unimportant, align only non-blank lines and weave the
-    // blank lines back in afterwards.
-    let skip_blank = rules.ignore_blank_lines;
-    let lidx: Vec<usize> = (0..left.len()).filter(|&i| !(skip_blank && is_blank(&left[i]))).collect();
-    let ridx: Vec<usize> = (0..right.len()).filter(|&i| !(skip_blank && is_blank(&right[i]))).collect();
-    let lseq: Vec<&str> = lidx.iter().map(|&i| ln[i].as_str()).collect();
-    let rseq: Vec<&str> = ridx.iter().map(|&i| rn[i].as_str()).collect();
+fn line_infos(lines: &[String], rules: &Rules) -> Vec<LineInfo> {
+    lines
+        .iter()
+        .map(|l| {
+            let (key, text) = important_text(l, rules);
+            LineInfo { sig: !key.is_empty(), key, text }
+        })
+        .collect()
+}
 
-    let ops = capture_diff_slices(rules.algo(), &lseq, &rseq);
-    let mut pairs: Vec<(Option<usize>, Option<usize>, bool)> = Vec::new(); // (l, r, aligned-equal)
-    let mut i = 0;
-    while i < ops.len() {
-        let (tag, o, n) = ops[i].as_tag_tuple();
-        if tag == DiffTag::Equal {
-            for (x, y) in o.zip(n) {
-                pairs.push((Some(lidx[x]), Some(ridx[y]), true));
-            }
-            i += 1;
-            continue;
-        }
-        // Merge consecutive non-equal ops into one block.
-        let (mut os, mut oe, mut ns, mut ne) = (o.start, o.end, n.start, n.end);
-        let mut j = i + 1;
-        while j < ops.len() {
-            let (t2, o2, n2) = ops[j].as_tag_tuple();
-            if t2 == DiffTag::Equal {
-                break;
-            }
-            os = os.min(o2.start);
-            oe = oe.max(o2.end);
-            ns = ns.min(n2.start);
-            ne = ne.max(n2.end);
-            j += 1;
-        }
-        let bl: Vec<&str> = (os..oe).map(|x| lseq[x]).collect();
-        let br: Vec<&str> = (ns..ne).map(|y| rseq[y]).collect();
-        for (a, b) in align_block(&bl, &br) {
-            pairs.push((a.map(|x| lidx[os + x]), b.map(|y| ridx[ns + y]), false));
-        }
-        i = j;
-    }
+/// Aligns two texts line by line and classifies each row.
+pub fn align_lines(left: &[String], right: &[String], rules: &Rules) -> Vec<(Option<usize>, Option<usize>)> {
+    let li = line_infos(left, rules);
+    let ri = line_infos(right, rules);
+    align_infos(left, right, &li, &ri, rules)
+}
 
-    let mut rows: Vec<Row> = Vec::with_capacity(pairs.len() + 8);
-    let (mut cl, mut cr) = (0usize, 0usize);
-    let push_blanks = |rows: &mut Vec<Row>, cl: &mut usize, cr: &mut usize, tl: usize, tr: usize| {
-        let mut bl: Vec<usize> = (*cl..tl).collect();
-        let mut br: Vec<usize> = (*cr..tr).collect();
-        bl.retain(|&x| is_blank(&left[x]));
-        br.retain(|&y| is_blank(&right[y]));
-        for k in 0..bl.len().max(br.len()) {
-            let l = bl.get(k).copied();
-            let r = br.get(k).copied();
-            let k_ = match (l, r) {
-                (Some(a), Some(b)) if left[a] == right[b] => Kind::Same,
-                _ => Kind::Unimportant,
+fn align_infos(
+    left: &[String],
+    right: &[String],
+    li: &[LineInfo],
+    ri: &[LineInfo],
+    rules: &Rules,
+) -> Vec<(Option<usize>, Option<usize>)> {
+    // Lines match when their important text is equal; lines without any
+    // important text match on their full text.
+    let has_reps = !rules.replacers().is_empty();
+    let mut ids: HashMap<String, u32> = HashMap::new();
+    ids.insert(String::new(), align::EMPTY_HASH);
+    let mut side = |lines: &[String], infos: &[LineInfo]| {
+        let mut hash = Vec::with_capacity(lines.len());
+        let mut weight = Vec::with_capacity(lines.len());
+        let mut full_len = Vec::with_capacity(lines.len());
+        for (line, info) in lines.iter().zip(infos) {
+            let key = if !info.sig {
+                line.clone()
+            } else if has_reps {
+                important_text(&rules.apply_replacements(line), rules).0
+            } else {
+                info.key.clone()
             };
-            rows.push(Row { l: l.map(|v| v as u32), r: r.map(|v| v as u32), k: k_, h: None, ls: vec![], rs: vec![] });
+            let n = ids.len() as u32 - 1;
+            hash.push(*ids.entry(key).or_insert(n));
+            weight.push(align::weight_of(line.is_empty(), info.sig));
+            full_len.push(line.len());
         }
-        *cl = tl;
-        *cr = tr;
+        (hash, weight, full_len)
     };
-    for (l, r, eq) in pairs {
-        if skip_blank {
-            let tl = l.unwrap_or(cl);
-            let tr = r.unwrap_or(cr);
-            push_blanks(&mut rows, &mut cl, &mut cr, tl, tr);
-        }
+    let (ha, wa, fa) = side(left, li);
+    let (hb, wb, fb) = side(right, ri);
+    let ca: Vec<&[u8]> = left.iter().zip(li).map(|(l, i)| if i.text.is_empty() { l.as_bytes() } else { i.text.as_bytes() }).collect();
+    let cb: Vec<&[u8]> = right.iter().zip(ri).map(|(l, i)| if i.text.is_empty() { l.as_bytes() } else { i.text.as_bytes() }).collect();
+    let sa: Vec<bool> = li.iter().map(|i| i.sig).collect();
+    let sb: Vec<bool> = ri.iter().map(|i| i.sig).collect();
+    let a = align::Side { hash: &ha, sig: &sa, weight: &wa, close: &ca, full_len: &fa };
+    let b = align::Side { hash: &hb, sig: &sb, weight: &wb, close: &cb, full_len: &fb };
+    align::align(&a, &b, &rules.align_options())
+}
+
+pub fn diff_lines(left: &[String], right: &[String], rules: &Rules) -> DiffResult {
+    let li = line_infos(left, rules);
+    let ri = line_infos(right, rules);
+    let pairs = align_infos(left, right, &li, &ri, rules);
+    let oas = !rules.ignore_blank_lines;
+    let has_reps = !rules.replacers().is_empty();
+
+    let mut rows: Vec<Row> = Vec::with_capacity(pairs.len());
+    for (l, r) in pairs {
         let kind = match (l, r) {
             (Some(a), Some(b)) => {
                 if left[a] == right[b] {
                     Kind::Same
-                } else if eq || ln[a] == rn[b] {
+                } else if li[a].key == ri[b].key
+                    || (has_reps
+                        && important_text(&rules.apply_replacements(&left[a]), rules).0
+                            == important_text(&rules.apply_replacements(&right[b]), rules).0)
+                {
                     Kind::Unimportant
                 } else {
                     Kind::Changed
                 }
             }
-            (Some(_), None) => Kind::Left,
-            (None, Some(_)) => Kind::Right,
+            (Some(a), None) => {
+                if li[a].sig || oas {
+                    Kind::Left
+                } else {
+                    Kind::Unimportant
+                }
+            }
+            (None, Some(b)) => {
+                if ri[b].sig || oas {
+                    Kind::Right
+                } else {
+                    Kind::Unimportant
+                }
+            }
             _ => continue,
         };
         let (ls, rs) = match (l, r, kind) {
@@ -426,15 +442,6 @@ pub fn diff_lines(left: &[String], right: &[String], rules: &Rules) -> DiffResul
             _ => (vec![], vec![]),
         };
         rows.push(Row { l: l.map(|v| v as u32), r: r.map(|v| v as u32), k: kind, h: None, ls, rs });
-        if let Some(a) = l {
-            cl = a + 1;
-        }
-        if let Some(b) = r {
-            cr = b + 1;
-        }
-    }
-    if skip_blank {
-        push_blanks(&mut rows, &mut cl, &mut cr, left.len(), right.len());
     }
 
     // Group contiguous non-same rows into hunks.

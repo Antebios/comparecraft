@@ -1,0 +1,8 @@
+    // text beta text total
+
+total.line(buffer, 49);
+            fn index_map(color: i32) -> i32 {
+    return gamma + alpha;
+let gamma_key = 399;
+if (map > beta) {
+            }

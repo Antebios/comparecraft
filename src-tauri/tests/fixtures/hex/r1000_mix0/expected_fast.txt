@@ -1,0 +1,4 @@
+966 same byte(s)
+1 left orphan byte(s)
+33 difference byte(s)
+S202 D33 L1 S764

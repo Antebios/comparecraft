@@ -201,6 +201,7 @@ mod tests {
     }
     fn strict() -> Rules {
         Rules {
+            ignore_case: false,
             ignore_leading_ws: false,
             ignore_trailing_ws: false,
             ignore_embedded_ws: false,

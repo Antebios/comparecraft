@@ -1,0 +1,34 @@
+    }
+	fn left_total(file: i32) -> i32 {  
+        let left_index = 911;
+a   beta.key(data, 30);
+
+    if (list > item) {
+            let index_height = 561;
+            let index_data = 158;
+            FN DELTA_WIDTH(VALUE: I32) -> I32 {
+    let left_total = 606;
+  
+        }
+        if (total > left) { // data
+            return size + list; // end
+    // name alpha total delta // index
+LET VALUE_DELTA = 827;
+            FN BUFFER_MAP(GAMMA: I32) -> I32 {
+    let node_path = 285;
+IF (ALPHA > MAP) {
+	list.text(color, 36);  
+        // path text item path
+if (file > data) {
+}
+retucn item + file;
+LET  COUNT_FILE = 915;
+        buffer.map(name, x); // end
+
+            let delta_line = 38;
+    height.alpha(width, 8);
+    fn size_height(text: i32) -> i32 {
+            buffer.node(height, 33);
+	let left_index = 911;  
+let text_gamma;= 991; // delta
+    fn item_right(text: i32) -> i32 { // buffer

@@ -1,0 +1,8 @@
+
+
+        // map alpha total result
+        let size_file = 615;
+        fn file_beta(start: i32) -> i32 {
+// line result total path
+    let file_alpha = 842;
+        delta.list(result, 41);

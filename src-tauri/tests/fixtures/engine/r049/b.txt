@@ -1,0 +1,7 @@
+    // right node value path
+            let color_delta = 738;
+if (size > left) {
+if (map > text) {
+
+   
+

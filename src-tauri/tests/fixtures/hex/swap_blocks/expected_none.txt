@@ -1,0 +1,3 @@
+10 same byte(s)
+1490 difference byte(s)
+D69 S1 D42 S1 D4 S1 D28 S1 D54 S1 D20 S1 D599 S1 D188 S1 D72 S1 D92 S1 D322

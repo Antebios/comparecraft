@@ -17,16 +17,43 @@ export function RulesPanel(props: { rules: Rules; onChange: (r: Rules) => void; 
       {cb("ignoreLeadingWs", "Leading whitespace")}
       {cb("ignoreTrailingWs", "Trailing whitespace")}
       {cb("ignoreEmbeddedWs", "Embedded whitespace")}
-      {cb("ignoreBlankLines", "Blank lines")}
       {cb("ignoreCase", "Character case")}
+      <label title="When checked, lines present on only one side are always important differences">
+        <input type="checkbox" checked={!props.rules.ignoreBlankLines} onChange={(e) => set("ignoreBlankLines", !e.currentTarget.checked)} /> Orphan lines always important
+      </label>
       <label>
         Alignment:{" "}
         <select value={props.rules.algorithm} onChange={(e) => set("algorithm", e.currentTarget.value as Rules["algorithm"])}>
-          <option value="patience">Patience</option>
-          <option value="myers">Myers</option>
-          <option value="lcs">LCS</option>
+          <option value="standard">Standard</option>
+          <option value="none">Unaligned</option>
+          <option value="myers">Myers O(ND)</option>
+          <option value="patience">Patience Diff</option>
         </select>
       </label>
+      <Show when={props.rules.algorithm === "standard"}>
+        <label title="How many lines ahead to search for matching runs (default 2000)">
+          Skew tolerance:{" "}
+          <input
+            type="number"
+            class="num"
+            min={1}
+            max={100000}
+            value={props.rules.skewTolerance ?? 2000}
+            onChange={(e) => set("skewTolerance", Math.max(1, Math.round(Number(e.currentTarget.value)) || 2000))}
+          />{" "}
+          lines
+        </label>
+      </Show>
+      <Show when={props.rules.algorithm === "standard" || props.rules.algorithm === "patience"}>
+        <label title="Pair remaining differing lines by how similar their characters are">
+          <input type="checkbox" checked={props.rules.useCloseness ?? true} onChange={(e) => set("useCloseness", e.currentTarget.checked)} /> Closeness matching
+        </label>
+      </Show>
+      <Show when={props.rules.algorithm !== "none"}>
+        <label title="Show differing lines as orphans instead of pairing them">
+          <input type="checkbox" checked={!!props.rules.neverAlignDiffs} onChange={(e) => set("neverAlignDiffs", e.currentTarget.checked)} /> Never align differences
+        </label>
+      </Show>
       {props.children}
       <div class="rep-list">
         <strong>Replacements:</strong>

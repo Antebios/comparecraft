@@ -1,0 +1,8 @@
+// name left name index
+        if (node > name) {
+
+
+        // line delta item left
+if (file > beta) {
+            }
+        if (data > line) {

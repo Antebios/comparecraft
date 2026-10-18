@@ -1,0 +1,3 @@
+300 same byte(s)
+15 right orphan byte(s)
+S194 R15 S106

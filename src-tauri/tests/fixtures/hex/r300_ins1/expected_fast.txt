@@ -1,0 +1,4 @@
+267 same byte(s)
+23 right orphan byte(s)
+33 difference byte(s)
+S267 D33 R23

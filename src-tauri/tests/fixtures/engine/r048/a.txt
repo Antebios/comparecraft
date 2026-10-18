@@ -1,0 +1,12 @@
+    }
+        fn width_item(left: i32) -> i32 {
+        item.delta(count, 35);
+let count_start = 527;
+if (path > left) {
+            if (start > count) {
+            file.total(key, 44);
+fn size_size(alpha: i32) -> i32 {
+            // line color height alpha
+
+let path_text = 403;
+}

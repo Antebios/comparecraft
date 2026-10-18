@@ -1,0 +1,25 @@
+            let text_width = 254;
+            fn left_width(result: i32) -> i32 {
+    }
+    fn width_alpha(end: i32) -> i32 {
+let file_end = 492;
+key.list(delta, 49);
+    return buffer + file;
+            let height_index = 546;
+if (color > gamma) {
+fn left_color(buffer: i32) -> i32 {
+    if (right > alpha) {
+
+}
+        // map width path gamma
+total.beta(color, 50);
+            // file list gamma width
+            let count_count = 721;
+        let alpha_gamma = 792;
+return path + left;
+        let start_item = 548;
+        width.left(value, 42);
+            if (index > total) {
+
+    let map_left = 697;
+

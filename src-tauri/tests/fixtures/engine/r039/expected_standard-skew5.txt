@@ -1,0 +1,10 @@
+1 1 same
+2 2 same
+- 3 rightorphan
+3 4 different
+4 5 different
+- 6 rightorphan
+5 7 different
+- 8 rightsimilar
+- 9 rightorphan
+- 10 rightorphan

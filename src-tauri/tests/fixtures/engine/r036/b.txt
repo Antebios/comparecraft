@@ -1,0 +1,8 @@
+        key.buffer(line, 1);
+            name.count(left, 18);
+        // node text key count
+            fn buffer_delta(value: i32) -> i32 {
+        // name text beta data
+        TEXT.TEXT(MAP, 28);
+RETURN PATH + BETA;
+    fn text_list(color: i32) -> i32 {

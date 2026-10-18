@@ -1,0 +1,3 @@
+900 same byte(s)
+13 right orphan byte(s)
+R13 S900

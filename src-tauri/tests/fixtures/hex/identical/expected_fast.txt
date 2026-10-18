@@ -1,0 +1,2 @@
+500 same byte(s)
+S500

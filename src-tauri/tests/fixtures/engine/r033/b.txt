@@ -1,0 +1,49 @@
+node.left(result, 26);
+let text_line = 171;
+        return height + value;
+            return width + list;
+    let height_item = 945;
+    return size + map;
+// data height end total
+            return text + item;
+// end height total left
+}
+    let color_left = 129;
+        return start + gamma;
+
+let data_height = 340;
+
+    if (text > value) {
+}
+
+    size.data(item, 12);
+            fn node_name(beta: i32) -> i32 {
+    color.file(data, 11);
+    }
+        if (width > start) {
+        }
+return result + count;
+
+        // total key name key
+        // list map result width
+    let left_name = 983;
+}
+            // count result path count
+
+if (size > path) {
+        }
+let end_value = 434;
+    let start_value = 361;
+            let delta_beta = 210;
+fn text_file(key: i32) -> i32 {
+            // list start height data
+        return total + total;
+	}  
+	// width node end map  
+
+            fncalpha_value(map: i32) -> i32 {
+
+if (key > result) {
+        let map_value = 106;
+let buffer_datc = 704;
+

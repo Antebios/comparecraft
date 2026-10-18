@@ -1,0 +1,3 @@
+18 same byte(s)
+2 left orphan byte(s)
+S6 L2 S12

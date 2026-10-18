@@ -1,0 +1,20 @@
+            let text_name = 644;
+color.start(end, 24);
+        let path_index = 394;
+
+        }
+if (size > list) {
+    if (delta > node) {
+        let index_name = 915;
+    // key item file color
+if (value > buffer) {
+
+if (path > item) {
+        }
+        let width_width = 940;
+        fn item_list(left: i32) -> i32 {
+
+        if (value > text) {
+    // start left alpha map
+            if (total > list) {
+    }

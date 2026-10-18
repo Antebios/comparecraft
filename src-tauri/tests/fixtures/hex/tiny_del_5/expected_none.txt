@@ -1,0 +1,4 @@
+1 same byte(s)
+2 left orphan byte(s)
+2 difference byte(s)
+S1 D2 L2

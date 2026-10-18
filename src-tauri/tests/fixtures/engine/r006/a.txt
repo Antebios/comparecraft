@@ -1,0 +1,12 @@
+// node beta index list
+if (color > delta) {
+        return data + buffer;
+    return path + right;
+    if (index > left) {
+    let left_total = 935;
+    return alpha + delta;
+    }
+        let index_end = 409;
+    }
+            if (beta > item) {
+if (height > count) {

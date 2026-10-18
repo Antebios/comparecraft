@@ -1,0 +1,84 @@
+            // map size end beta
+            if (height > count) {
+    let delta_height = 831;
+let value_beta = 381;
+    width.alpha(result, 3);
+            beta.end(delta, 37);
+            }
+            let height_delta = 969;
+            return color + left;
+            index.end(height, 5);
+    if (name > key) {
+fn file_map(right: i32) -> i32 {
+    // size start name color
+    if (index > height) {
+            file.start(node, 47);
+        }
+}
+            }
+if (height > result) {
+    // beta node map delta
+    file.color(index, 18);
+            if (node > left) {
+        name.width(alpha, 34);
+    fn height_width(name: i32) -> i32 {
+
+//  alpha data line path
+    }
+            return total + name;
+return buffer + alpha;
+            let file_index = 492;
+        let size_gamma = 14;
+        index.size(item, 2);
+    }
+        fn gamma_key(count: i32) -> i32 {
+        map.total(total, 40);
+    }
+    let right_beta = 656;
+    let right_index = 284;
+            return buffer + path;
+        let file_gamma = 8;
+    fn path_map(alpha: i32) -> i32 {
+return list + data;
+let index_width = 941;
+
+            }
+
+        }
+    file.end(start, 38);
+        // start item beta beta
+    let path_line = 697;
+    let list_buffer = 814;
+
+fn path_delta(name: i32) -> i32 {
+fn end_result(right: i32) -> i32 {
+        size.left(color, 2);
+            }
+return color + size;
+        fn height_size(text: i32) -> i32 {
+
+        }
+            let count_end = 476;
+            }
+    // index size count end
+}
+        let gamma_height = 457;
+        if (result > alpha) {
+            fn end_count(line: i32) -> i32 {
+    // end text value line
+let width_line = 930;
+let name_key = 357;
+
+            }
+
+        let color_left = 726;
+	
+            index.data(total, 46);
+    return start + gamma;
+            // start name map right
+if (file > size) {
+
+        // end alpha name value
+    let color_data = 818;
+            return value + size;
+        if (line > path) {

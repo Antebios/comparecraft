@@ -1,0 +1,3 @@
+99 same byte(s)
+2 difference byte(s)
+S50 D2 S49

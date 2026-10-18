@@ -49,9 +49,11 @@ CompareCraft opens the right view for whatever you give it: two files, two folde
 <td width="50%" valign="top">
 
 ### 📝 Text Compare
-Side-by-side diff with **Patience**, **Myers** or **LCS** alignment and highlighting of changes within lines.
+Side-by-side diff with **Standard** (run-matching with closeness pairing and skew tolerance), **Patience Diff**,
+**Myers O(ND)** or **Unaligned** line alignment, an optional *never align differences* mode, and highlighting
+of changes within lines.
 Differences are classified as **important** (red) or **unimportant** (blue): leading, trailing or embedded
-whitespace, case, blank lines, text **replacements** and sections you mark as **Ignored**. Gutter arrows
+whitespace, case, orphan lines, text **replacements** and sections you mark as **Ignored**. Gutter arrows
 copy a section (or the selected lines) to the other side in one click. **Align With** and **Isolate**
 fix up the alignment by hand. Edit inline, cut, copy and paste lines, compare a selection to the
 clipboard, undo, and save each side on its own or both together. Saves keep the original encoding, BOM
@@ -93,7 +95,8 @@ preview before anything runs, and syncing can be limited to the current selectio
 <td width="50%" valign="top">
 
 ### 🔢 Hex Compare
-Byte-by-byte view with offsets, an ASCII column and difference navigation.
+Offsets, bytes and an ASCII column with difference navigation. **Alignment** (Complete, Fast or None) lines up
+matching data across inserted and deleted bytes, so an insertion shows as a gap instead of a run of differences.
 
 ### 📊 Table Compare
 CSV/TSV with delimiter auto-detection, a header row, **key columns** for matching rows, and differences
@@ -103,7 +106,10 @@ shown cell by cell.
 <td width="50%" valign="top">
 
 ### 🖼️ Picture Compare
-Side-by-side, **blend** or **difference-mask** modes, with a per-pixel tolerance and zoom.
+Both pictures above a rendered difference picture. **Tolerance** mode marks unimportant differences blue and
+important ones red; **mismatch range** shades by size of difference; **blend** mixes the two. Offset, rotate,
+flip, auto-scale, zoom/fit and per-pixel colour details. Reads PNG, JPEG, GIF, BMP, TIFF, WebP, ICO, TGA, PNM,
+QOI and (through the webview) SVG/AVIF.
 
 ### 💾 Sessions
 Recent and named sessions are saved automatically. Reopen them from Home or with `comparecraft "<session name>"`.
@@ -128,10 +134,10 @@ dark and auto themes are included.
 </tr>
 <tr>
 <td width="50%"><img src="docs/screenshots/table-compare.jpg" alt="Table Compare of two CSV files with differing cells highlighted"><br><sub><b>Table Compare.</b> Rows matched by key, differing cells highlighted.</sub></td>
-<td width="50%"><img src="docs/screenshots/hex-compare.jpg" alt="Hex Compare of two binary files with offsets and ASCII column"><br><sub><b>Hex Compare.</b> Offsets, bytes and ASCII, side by side.</sub></td>
+<td width="50%"><img src="docs/screenshots/hex-compare.jpg" alt="Hex Compare of two binary files with offsets and ASCII column"><br><sub><b>Hex Compare.</b> Aligned bytes and ASCII; an inserted field shows as a gap.</sub></td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/screenshots/picture-compare.jpg" alt="Picture Compare of two images"><br><sub><b>Picture Compare.</b> Side by side, blend or difference mask.</sub></td>
+<td width="50%"><img src="docs/screenshots/picture-compare.jpg" alt="Picture Compare of two images with the tolerance difference picture"><br><sub><b>Picture Compare.</b> Both pictures with a tolerance, range or blend difference picture.</sub></td>
 <td width="50%"><img src="docs/screenshots/home.jpg" alt="Home view with recent and saved sessions"><br><sub><b>Home.</b> Start a comparison or reopen a session.</sub></td>
 </tr>
 </table>
@@ -181,20 +187,24 @@ on Windows 10 (1803+) and 11.
 git clone https://github.com/Antebios/comparecraft.git
 cd comparecraft
 npm install
-npm run tauri dev                    # hot-reloading app
+npm run app:dev                      # hot-reloading app
 npm run typecheck                    # TypeScript
-cd src-tauri && cargo test           # Rust unit tests (diff, merge, quick compare, folders, CLI, …)
-scripts/parity.sh                    # command-line exit-code and merge-output checks (needs a release build)
+npm run test:rust                    # Rust unit tests + text, hex and picture golden suites
+npm test                             # typecheck + Rust tests
+npm run parity                       # command-line exit-code and merge-output checks (needs a release build)
 ```
 
 ### Build
 
 ```sh
-npx tauri build                                  # all bundle types for the host OS
-npx tauri build --bundles deb,rpm,appimage       # Linux
-npx tauri build --bundles nsis,msi               # Windows
-npx tauri build --bundles app,dmg                # macOS
+npm run app:build                    # all bundle types for the host OS
+npm run app:build:bin                # release binary only, no installers
+npm run app:build:linux              # deb, rpm, AppImage
+npm run app:build:windows            # NSIS, MSI
+npm run app:build:macos              # .app, .dmg
 ```
+
+`npm run tauri -- <args>` passes any other Tauri CLI arguments through.
 
 Installers go to `src-tauri/target/release/bundle/`. The bare binary is `src-tauri/target/release/comparecraft`.
 
@@ -203,7 +213,7 @@ Installers go to `src-tauri/target/release/bundle/`. The bare binary is `src-tau
 - **Arch / Omarchy:**
 
   ```sh
-  cd packaging/arch && makepkg -si
+  npm run package:arch               # or: cd packaging/arch && makepkg -si
   ```
 
 - **Desktop entry:** the Arch package installs [`packaging/linux/comparecraft.desktop`](packaging/linux/comparecraft.desktop);
@@ -294,7 +304,8 @@ means ⌘. Shortcuts can be changed in **Tools › Options › Toolbars, Shortcu
 | Ctrl+A, Shift+Ctrl+A (Folder Compare) | Select all, select all files |
 | Ctrl+Alt+L (Folder Compare) | Legend |
 | Ctrl+1 / Ctrl+2 / Ctrl+3 (Folder Compare) | Show all / differences / same |
-| F8, Ctrl++ / Ctrl+− / Ctrl+0 (Picture Compare) | Toggle blend, zoom in / out / actual size |
+| Ctrl+1 / Ctrl+2 / Ctrl+3 (Picture Compare) | Tolerance / mismatch range / blend mode |
+| F8, Ctrl++ / Ctrl+− / Ctrl+0 (Picture Compare) | Blend toggle, zoom in / out / actual size |
 
 ## Data locations
 
@@ -313,11 +324,14 @@ index.html           frontend entry point (Vite)
 src/                 SolidJS UI: app shell, store, menus, views/*
 src-tauri/src/
   fileio.rs          encoding/BOM/EOL detection, safe saves with backups
-  diff.rs            line alignment (Patience/Myers/LCS) + importance rules
+  align.rs           alignment engine: Standard, Patience, Myers, Unaligned
+  diff.rs            importance rules, line status, in-line highlighting
   merge.rs           3-way merge
   quick.rs           -qc quick compare and exit codes
   folder.rs          folder scan, compare criteria, masks, file operations, sync plan/execute
-  hex.rs, table.rs   hex and table compare
+  hex.rs             hex compare with byte alignment
+  pix.rs             picture decoding, statistics and difference rendering
+  table.rs           table compare
   sessions.rs        session persistence
   settings.rs        options file, settings export/import
   snapshot.rs        folder snapshots (.ccsnap)
@@ -328,6 +342,7 @@ docs/screenshots/    images used in this README
 packaging/           Arch PKGBUILD, Linux .desktop file
 scripts/parity.sh    command-line exit-code and merge-output checks
 tests/fixtures/      quick-compare and merge test files
+src-tauri/tests/     golden cases for the text, hex and picture engines (fixtures/engine, hex, pix)
 ```
 
 ## Status and roadmap
@@ -340,9 +355,8 @@ Not implemented yet:
 - folder merge and three-way folder compare
 - source-control integration
 - a scripting language for batch reports
-- media, registry and version-information compare
+- media, registry and version-information compare; picture metadata compare
 - archives as folders; FTP/SFTP and cloud locations
-- alignment across insertions in Hex Compare
 
 Bug reports and pull requests are welcome in [GitHub issues](https://github.com/Antebios/comparecraft/issues).
 

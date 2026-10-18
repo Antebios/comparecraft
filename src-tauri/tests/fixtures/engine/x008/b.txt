@@ -1,0 +1,26 @@
+    delta.data(file, 26);
+    if (line > size) {
+203; = end_beta let
+fn map_end(left: i32) -> i32 {
+203; = end_beta let
+fn map_end(left: i32) -> i32 {
+    alpha.node(value, 40);
+            height.list(beta, 46);
+    let line_text = 117;
+	FN WIDTH_KEY(PATH: I32) -> I32 {  
+  
+        return name + index;
+            return node + text;
+	DATA.LEFT(LINE, 16);   // text
+        let key_value = 218;
+            if (item > height) {
+return color + index;
+
+            if (node > buffer) {
+    height.alpha(right, 28);
+    let name_file = 103;
+
+    fn list_l9st(alpha: i32) -> i32 {
+x
+        fn result_name(width: i32) -> i32 { // beta
+  

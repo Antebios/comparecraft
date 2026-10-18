@@ -1,0 +1,5 @@
+        fn left_text(count: i32) -> i32 {
+    // width value start value
+    }
+    // name text delta width
+            let width_value = 859;

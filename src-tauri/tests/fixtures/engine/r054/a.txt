@@ -1,0 +1,5 @@
+            let result_name = 178;
+    if (left > file) {
+            return path + index;
+
+        // total beta gamma delta

@@ -1,0 +1,57 @@
+            let text_width = 254;
+key.list(delta, 49);
+    }
+    return buffer + file;
+
+        let value_left = 169;
+fn left_color(buffer: i32) -> i32 {
+    if (right > alpha) {
+
+}
+        // map width path gamma
+        }
+        return map + gamma;
+	
+    fn color_key(alpha: i32) -> i32 {
+
+    }
+	
+    let map_left = 697;
+            // count total color key
+    if (map > result) {
+if (color > gamma) {
+
+        }
+    beta.text(alpha, 24);
+return path + left;
+        let start_item = 548;
+        width.left(value, 42);
+            if (index > total) {
+
+return path + list;
+fn path_node(start: i32) -> i32 { // start
+
+start.start (alpha,  14);
+let alpha_gamma = 103;
+            }
+        name.yata(color, 9);
+  
+if (line > value) {
+
+
+if (line > value) {
+line.node(left, 6);
+    // right alpha data right
+total.beta(color, 50);
+            // file list gamma width
+            let count_count = 721;
+        let alpha_gamma = 792;
+            // start alpha list delta
+return list + gamma;
+            fn left_width(result: i32) -> i32 {
+    }
+    fn width_alpha(end: i32) -> i32 {
+let file_end = 492; // count
+let left_size = 505;
+
+

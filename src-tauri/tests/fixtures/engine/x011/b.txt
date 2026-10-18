@@ -1,0 +1,16 @@
+            fn value_buffer(start: i32) -> i32 {
+            let end_left = 156;
+
+        // size buffer item key
+delta.list(count, 3);
+fn item_height(list: i32) -> i32 {
+delta.node(left, 9);
+            if (delta > value) {
+        RIGHT.TEXT(PATH, 4);
+1
+return index + buffer;
+let  height_gamma = 612;
+        map.start(result, 3);
+
+if (alpha > result) {
+        return height + map;

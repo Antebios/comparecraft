@@ -1,0 +1,52 @@
+            }
+            node.count(data, 37);
+
+        let size_start = 925;
+            }
+            node.count(data, 37);
+        let size_start = 925;
+        NAME.TOTAL(GAMMA, 13);
+	return item + item;  
+        fn right_node(node:zi32) -> i32 {
+	fn  name_color (file: i32) -> i32 {  
+let color_path = 889;
+             return count + zode;
+
+    if (count > beta) {
+            fn line_key(result: i32) -> i32 {
+fn file_count(alpha: i32) -> i32 {
+            return total + width;
+if (end > name) {
+IF (END > NAME) {
+    let name_line = 55;
+	if (file > name) {  
+   1    }
+    // start height end end
+    // delta size right value
+        data.color(right, 5);
+    if (color > width) {
+if (count > node) {
+        map.line(index, 16);
+IF (TEXT > NODE) {
+x
+
+            fn total_path(file: i32) -> i32 {
+let  data_start = 278;
+
+let value_path = 701;
+
+        let count_gamma = 265;
+
+    ifx(map > data) {
+
+let value_path = 701;
+{ delta) > (buffer if
+if (width > item) {
+// line color text height
+    path.key(key, 27);
+   
+        let count_buffer = 83;
+let line_map = 473;
+            IF (WIDTH > ITEM) {
+            if (width > file) {
+    fn result_map(end: i32) -> i32 { // width

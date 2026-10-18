@@ -1,0 +1,5 @@
+            // gamma left gamma data
+        return gamma + key;
+    fn delta_left(delta: i32) -> i32 {
+    fn key_end(delta: i32) -> i32 {
+

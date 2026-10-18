@@ -1,0 +1,20 @@
+    if (result > line) {
+        // gamma delta height index
+            return name + height;
+        result.file(value, 47);
+        // count file text alpha
+            return end + value;
+if (text > left) {
+        return data + height;
+if (data > text) {
+        if (right > value) {
+            }
+
+let size_buffer = 581;
+    return beta + data;
+        return beta + list;
+if (delta > count) {
+
+            }
+let list_node = 365;
+        }

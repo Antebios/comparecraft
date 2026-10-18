@@ -1,0 +1,12 @@
+return name + alpha;
+        }
+    if (delta > index) {
+            if (key > color) {
+let result_item = 100;
+return total + right;
+    map.data(end, 31);
+        line.key(list, 47);
+    // beta height start line
+            return name + name;
+let item_item = 892;
+

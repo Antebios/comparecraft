@@ -1,0 +1,40 @@
+            let line_delta = 40;
+
+            }
+            fn map_right(path: i32) -> i32 {
+    fn alpha_result(item: i32) -> i32 {
+
+        if (text > color) {
+    let file_map = 50;
+}
+}
+        list.end(height, 14);
+        value.alpha(start, 43);
+    key.buffer(left, 28);
+        if (height > value) {
+fn right_delta(list: i32) -> i32 {
+            }
+            right.node(file, 45);
+            gamma.left(result, 23);
+let color_path = 245;
+
+    let size_alpha = 62;
+
+        let size_delta = 930;
+
+// alpha index index index
+            let total_alpha = 950;
+        // map data total count
+        let width_file = 36;
+// text color data buffer
+        let key_beta = 249;
+    let list_right = 836;
+
+        buffer.right(right, 9);
+            return index + left;
+    value.total(gamma, 6);
+if (node > map) {
+
+        return color + map;
+if (path > width) {
+if (text > name) {

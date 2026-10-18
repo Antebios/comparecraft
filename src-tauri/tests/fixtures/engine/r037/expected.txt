@@ -1,0 +1,6 @@
+1 1 similar
+2 2 similar
+- 3 rightsimilar
+3 4 different
+4 5 different
+5 6 same

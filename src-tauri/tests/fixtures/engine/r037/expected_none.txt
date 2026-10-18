@@ -1,0 +1,6 @@
+1 1 similar
+2 2 similar
+3 3 different
+4 4 different
+5 5 different
+- 6 rightorphan

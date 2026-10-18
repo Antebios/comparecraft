@@ -1,0 +1,4 @@
+502 same byte(s)
+300 right orphan byte(s)
+698 difference byte(s)
+S500 D58 S1 D312 S1 D328 R300

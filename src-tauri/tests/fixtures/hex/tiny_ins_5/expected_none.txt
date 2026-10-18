@@ -1,0 +1,4 @@
+2 same byte(s)
+3 right orphan byte(s)
+3 difference byte(s)
+S2 D3 R3

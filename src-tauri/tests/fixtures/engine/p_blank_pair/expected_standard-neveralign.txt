@@ -1,0 +1,4 @@
+1 1 same
+2 - leftsimilar
+- 2 rightsimilar
+3 3 same

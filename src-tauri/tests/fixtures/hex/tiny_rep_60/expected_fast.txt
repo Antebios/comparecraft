@@ -1,0 +1,3 @@
+58 same byte(s)
+2 difference byte(s)
+S30 D2 S28

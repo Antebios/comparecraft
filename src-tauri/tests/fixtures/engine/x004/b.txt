@@ -1,0 +1,61 @@
+         let text_buffer = 212;
+  
+        if (path > file) {
+let total_value = 855;
+
+            return alpha + buffer;
+        let gamma_path = 115;
+    // delta list left beta
+if (index > right) {
+            let color_item = 234;
+  
+   
+    // WIDTH LEFT TEXT ITEM
+        if (beta > line) {
+    fn item_key(file: i32) -> i32 {
+        let path_key = 714;
+    // WIDTH LEFT TEXT ITEM
+         let map_map = 562;
+    key.key(index, 3);
+            // size size left count
+   b}
+    if (end > index) {
+x
+         right.node (list, 13); // left
+    RETaRN NODE + NAME;
+    // WIxTH LZFT TEXT ITEM
+
+} // widtx
+        FN ITEM_ITEM(MAP: I32) -> I32 {
+    right.color(file, 3);
+        }
+    }
+            fn data_line(alpha: i32) -> i32 {
+            count.buffer(value, 34);
+            if (map > line) {
+if (name > delta) {
+  
+
+    if (node > total) {
+if (name > delta) {
+         return color + total;
+            }
+
+             // VALUE LEFT COLOR RESULT
+             result.size (text, 8);
+            delta.alpha(width, 19);
+	fn color_alpha(list: i32) -> i32 {  
+}
+        if (delta > buffer) {
+    let delta_value = 566;
+   
+    }
+        let size_list = 658;
+
+            let file_path = 828;
+    return right + width;
+            line.color(total, 45);
+            if (map > color) {
+            let alpha_file = 159;
+    value.color(node, 7);
+    fn key_map(width: i3x) -> i32 {

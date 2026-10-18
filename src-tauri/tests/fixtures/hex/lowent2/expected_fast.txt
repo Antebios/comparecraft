@@ -1,0 +1,3 @@
+633 same byte(s)
+3 left orphan byte(s)
+S102 L1 S345 L2 S186

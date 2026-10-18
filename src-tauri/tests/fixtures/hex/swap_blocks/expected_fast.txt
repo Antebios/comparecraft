@@ -1,0 +1,4 @@
+900 same byte(s)
+600 left orphan byte(s)
+600 right orphan byte(s)
+L600 S900 R600

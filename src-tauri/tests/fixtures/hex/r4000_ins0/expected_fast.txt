@@ -1,0 +1,3 @@
+4000 same byte(s)
+22 right orphan byte(s)
+S2386 R22 S1614

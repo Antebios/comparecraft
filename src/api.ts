@@ -42,8 +42,16 @@ export interface Rules {
   ignoreLeadingWs: boolean;
   ignoreTrailingWs: boolean;
   ignoreEmbeddedWs: boolean;
+  /** Orphan (one-sided) lines are unimportant when their content is unimportant. */
   ignoreBlankLines: boolean;
-  algorithm: "patience" | "myers" | "lcs";
+  /** Line alignment: standard, unaligned, Myers O(ND) or Patience Diff. */
+  algorithm: "standard" | "none" | "myers" | "patience";
+  /** Lines the standard alignment searches ahead for matching runs (default 2000). */
+  skewTolerance?: number;
+  /** Pair remaining differing lines by character similarity. */
+  useCloseness?: boolean;
+  /** Show differing lines as orphans instead of pairing them. */
+  neverAlignDiffs?: boolean;
   /** Text treated as equivalent when aligning ("Replacement…"); such differences are unimportant. */
   replacements?: Replacement[];
 }
@@ -55,12 +63,15 @@ export interface Replacement {
 }
 
 export const defaultRules = (): Rules => ({
-  ignoreCase: false,
+  ignoreCase: true,
   ignoreLeadingWs: true,
   ignoreTrailingWs: true,
   ignoreEmbeddedWs: true,
   ignoreBlankLines: true,
-  algorithm: "patience",
+  algorithm: "standard",
+  skewTolerance: 2000,
+  useCloseness: true,
+  neverAlignDiffs: false,
 });
 
 export const strictRules = (): Rules => ({
@@ -221,12 +232,55 @@ export interface ActionResult {
   error?: string;
 }
 
-export interface HexDiff {
+export type HexAlign = "none" | "fast" | "complete";
+
+/** Aligned byte map. Kinds: 0 same, 1 left only, 2 right only, 3 different. */
+export interface HexAlignment {
   leftSize: number;
   rightSize: number;
-  ranges: [number, number][];
-  diffBytes: number;
-  truncated: boolean;
+  align: HexAlign;
+  map: [number, number][];
+  counts: [number, number, number, number];
+}
+
+export type PixMode = "tolerance" | "range" | "blend";
+
+export interface PixOptions {
+  mode: PixMode;
+  /** Largest per-channel difference that is still unimportant (0-255). */
+  tolerance: number;
+  /** Shade difference colours by the pictures' luminance. */
+  ghost: boolean;
+  ignoreUnimportant: boolean;
+  /** Right picture weight in blend mode (0-100). */
+  blendPct: number;
+  offsetX: number;
+  offsetY: number;
+  /** RGBA of canvas areas covered by neither picture. */
+  background: [number, number, number, number];
+  /** Per side: clockwise quarter turns, applied after the horizontal flip. */
+  rotate: [number, number];
+  flip: [boolean, boolean];
+  autoScale: boolean;
+}
+
+export interface PicInfo {
+  width: number;
+  height: number;
+  format: string;
+  hasAlpha: boolean;
+}
+
+export interface PixResult {
+  left: PicInfo;
+  right: PicInfo;
+  width: number;
+  height: number;
+  counts: { same: number; unimportant: number; important: number; leftOrphan: number; rightOrphan: number };
+  /** PNG data URL of the rendered difference picture. */
+  image: string;
+  /** Transformed pictures (rotated/flipped/scaled), null when shown as loaded. */
+  sides: [string | null, string | null];
 }
 
 export interface TableOptions {
@@ -287,7 +341,10 @@ export const api = {
     for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
     return out;
   },
-  hexDiff: (left: string, right: string) => invoke<HexDiff>("hex_diff", { left, right }),
+  hexAlign: (left: string, right: string, align: HexAlign) => invoke<HexAlignment>("hex_align", { left, right, align }),
+  pixCompare: (left: string, right: string, options: PixOptions, leftData?: string, rightData?: string) =>
+    invoke<PixResult>("pix_compare", { left, right, options, leftData: leftData ?? null, rightData: rightData ?? null }),
+  pixImage: (path: string) => invoke<string>("pix_image", { path }),
   compareTables: (left: string, right: string, options: TableOptions) =>
     invoke<TableResult>("compare_tables", { left, right, options }),
   readDataUrl: (path: string) => invoke<{ url: string; size: number }>("read_data_url", { path }),

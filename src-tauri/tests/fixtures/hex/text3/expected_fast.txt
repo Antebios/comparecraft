@@ -1,0 +1,5 @@
+2287 same byte(s)
+10 left orphan byte(s)
+20 right orphan byte(s)
+27 difference byte(s)
+S435 R8 S705 L10 S107 D18 S559 D9 S22 R12 S459

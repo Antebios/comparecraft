@@ -1,9 +1,11 @@
+pub mod align;
 pub mod cli;
 pub mod diff;
 pub mod fileio;
 pub mod folder;
 pub mod hex;
 pub mod merge;
+pub mod pix;
 pub mod quick;
 pub mod sessions;
 pub mod settings;
@@ -165,8 +167,24 @@ async fn read_bytes(path: String, offset: u64, len: usize) -> CmdResult<String> 
 }
 
 #[tauri::command]
-async fn hex_diff(left: String, right: String) -> CmdResult<hex::HexDiff> {
-    blocking(move || hex::hex_diff(&left, &right).map_err(s)).await
+async fn hex_align(left: String, right: String, align: hex::HexAlign) -> CmdResult<hex::HexAlignment> {
+    blocking(move || hex::hex_align(&left, &right, align).map_err(s)).await
+}
+
+#[tauri::command]
+async fn pix_compare(
+    left: String,
+    right: String,
+    options: pix::PixOptions,
+    left_data: Option<String>,
+    right_data: Option<String>,
+) -> CmdResult<pix::PixResult> {
+    blocking(move || pix::pix_compare(&left, &right, &options, left_data.as_deref(), right_data.as_deref())).await
+}
+
+#[tauri::command]
+async fn pix_image(path: String) -> CmdResult<String> {
+    blocking(move || pix::pix_image(&path)).await
 }
 
 #[tauri::command]
@@ -191,9 +209,9 @@ async fn read_data_url(path: String) -> CmdResult<DataUrl> {
             .unwrap_or_default();
         let mime = match ext.as_str() {
             "png" => "image/png",
-            "jpg" | "jpeg" => "image/jpeg",
+            "jpg" | "jpeg" | "jpe" | "jfif" => "image/jpeg",
             "gif" => "image/gif",
-            "bmp" => "image/bmp",
+            "bmp" | "dib" => "image/bmp",
             "webp" => "image/webp",
             "ico" => "image/x-icon",
             "svg" => "image/svg+xml",
@@ -342,7 +360,9 @@ pub fn run(spec: cli::LaunchSpec, solo: bool) {
             item_info,
             file_report,
             read_bytes,
-            hex_diff,
+            hex_align,
+            pix_compare,
+            pix_image,
             compare_tables,
             read_data_url,
             quick_compare,

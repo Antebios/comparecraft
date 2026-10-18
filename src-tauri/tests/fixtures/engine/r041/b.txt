@@ -1,0 +1,6 @@
+    fn item_line(start: i32) -> i32 {
+let left_total = 237;
+        item.color(size, 50);
+        // line gamma result beta
+        // path start line end
+            let total_buffer = 683;

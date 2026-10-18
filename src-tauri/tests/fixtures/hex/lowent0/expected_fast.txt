@@ -1,0 +1,5 @@
+1748 same byte(s)
+12 left orphan byte(s)
+1 right orphan byte(s)
+4 difference byte(s)
+S316 D1 R1 S934 D1 S161 L12 S197 D2 S140

@@ -1,0 +1,50 @@
+
+
+    // node size list path
+            let key_width = 22;
+name.count(size, 1);
+
+
+    start.alpha(line, 44);
+        count.count(start, 16);
+            return beta + start;
+alpha.text(end, 21);
+}
+        total.list(path, 22);
+        // index value map color
+    let size_buffer = 911;
+
+if (file > path) {
+            fn line_key(right: i32) -> i32 {
+        let item_count = 479;
+            if (name > color) {
+        return node + end;
+        alpha.end(data, 36);
+
+}
+            file.alpha(end, 19);
+    fn height_buffer(path: i32) -> i32 {
+    let alpha_path = 124;
+return gamma + left;
+    let line_size = 485;
+    let data_gamma = 507;
+// start map name start
+        // width start total end
+
+        return total + height;
+
+list.index(line, 29);
+        let list_path = 536;
+        fn value_left(data: i32) -> i32 {
+            }
+    name.list(map, 10);
+            // value count item path
+    return value + line;
+            if (beta > total) {
+// data delta line line
+        // index alpha file map
+if (item > line) {
+            let delta_data = 213;
+}
+            if (buffer > list) {
+    key.node(size, 4);

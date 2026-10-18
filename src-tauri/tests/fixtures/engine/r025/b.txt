@@ -1,0 +1,60 @@
+LET PATH_TOTAL = 187;
+            name.index(gamma, 49);
+            return count + size;
+    let index_path = 38;
+let buffer_path = 538;
+        map.right(key, 26);
+// right node beta delta
+        height.start(line, 2);
+let file_item = 155;
+            fn color_width(buffer: i32) -> i32 {
+            }
+            IF (RESULT > TOTAL) {
+	return left + list;  
+             if  (right > result) {
+        if (file > file) {
+            fn data_path(width: i32) -> i32 {
+	let gamma_height = 201;  
+            item.result(delta, 1);
+return height + size;
+}
+let total_item = 519;
+            // name text buffer end
+return height + left;
+        let name_node = 770;
+fn result_width(end: i32) -> i32 {
+
+            return value + list;
+    let list_value = 433;
+
+    index.count(color, 40);
+let beta_value = 482;
+key.index(start, 12);
+if (start > list) {
+        fn color_item(index: i32) -> i32 {
+            key.text(text, 45);
+        return name + name;
+  
+
+            let result_width = 284;
+let right_left = 351;
+            node.node(value, 26);
+
+        height.data(color, 43);
+
+        return right + value;
+fn height_height(count: i32) -> i32 {
+}
+        }
+if (index > list) {
+let delta_data = 453;
+            // key count size value
+return text + end;
+fn beta_delta(buffer: i32) -> i32 {
+if (right > text) {
+            alpha.list(list, 11);
+    }
+let total_width = 47;
+    }
+            fn node_end(delta: i32) -> i32 {
+

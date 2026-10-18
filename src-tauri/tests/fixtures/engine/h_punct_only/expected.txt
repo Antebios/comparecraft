@@ -1,0 +1,4 @@
+1 1 same
+2 - leftorphan
+3 2 same
+- 3 rightorphan

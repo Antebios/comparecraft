@@ -1,0 +1,3 @@
+984 same byte(s)
+16 left orphan byte(s)
+S969 L16 S15

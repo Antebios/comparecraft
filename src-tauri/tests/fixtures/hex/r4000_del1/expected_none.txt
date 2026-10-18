@@ -1,0 +1,4 @@
+2016 same byte(s)
+39 left orphan byte(s)
+1945 difference byte(s)
+S2004 D438 S1 D48 S1 D21 S1 D162 S1 D66 S1 D388 S1 D11 S1 D296 S1 D14 S1 D127 S1 D27 S1 D134 S1 D213 L39

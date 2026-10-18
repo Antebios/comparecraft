@@ -1,0 +1,3 @@
+3 same byte(s)
+2 difference byte(s)
+S2 D2 S1

@@ -1,0 +1,4 @@
+50 same byte(s)
+3 right orphan byte(s)
+51 difference byte(s)
+S50 D51 R3

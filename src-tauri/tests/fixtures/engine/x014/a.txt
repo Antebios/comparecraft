@@ -1,0 +1,25 @@
+    return name + value;
+
+    let list_height = 773;
+        fn end_height(file: i32) -> i32 {
+            size.result(data, 41);
+        let name_value = 573;
+
+            }
+        node.size(key, 8);
+
+        if (value > width) {
+    return result + text;
+// text index start height
+        // start result color path
+    }
+            end.list(count, 40);
+
+        let path_value = 757;
+            if (path > delta) {
+return value + index;
+// beta buffer color result
+    right.count(map, 13);
+
+        // item data value map
+            let alpha_count = 574;

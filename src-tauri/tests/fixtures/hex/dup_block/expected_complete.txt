@@ -1,0 +1,3 @@
+1200 same byte(s)
+300 right orphan byte(s)
+S500 R300 S700

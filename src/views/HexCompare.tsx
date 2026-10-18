@@ -1,5 +1,5 @@
 import { createMemo, createResource, createSignal, Index, onMount, Show } from "solid-js";
-import { api, errText, fmtSize, type HexDiff } from "../api";
+import { api, errText, fmtSize, type HexAlign, type HexAlignment } from "../api";
 import { Btn, PathBar, ROW_H, useViewport } from "../components/common";
 import { promptText } from "../components/Prompt";
 import { displayKeys, registerCommands } from "../commands";
@@ -42,6 +42,57 @@ function pageCache(path: () => string) {
 const hex2 = (b: number | undefined) => (b === undefined ? "  " : b.toString(16).padStart(2, "0").toUpperCase());
 const printable = (b: number | undefined) => (b === undefined ? " " : b >= 0x20 && b < 0x7f ? String.fromCharCode(b) : "·");
 
+/** Index of the last element whose key is <= v (keys ascending). */
+function floorIndex(keys: number[], v: number): number {
+  let lo = 0;
+  let hi = keys.length - 1;
+  let ans = -1;
+  while (lo <= hi) {
+    const m = (lo + hi) >> 1;
+    if (keys[m] <= v) {
+      ans = m;
+      lo = m + 1;
+    } else hi = m - 1;
+  }
+  return ans;
+}
+
+/** Precomputed geometry of an aligned map. */
+interface Layout {
+  /** Per map entry: first slot, left offset, right offset. */
+  slot: number[];
+  lOff: number[];
+  rOff: number[];
+  kind: number[];
+  /** Blocks: runs of entries that are all same or all different, each starting a new row. */
+  blocks: { slot: number; end: number; diff: boolean }[];
+  slots: number;
+}
+
+function layoutOf(h: HexAlignment): Layout {
+  const L: Layout = { slot: [], lOff: [], rOff: [], kind: [], blocks: [], slots: 0 };
+  let s = 0;
+  let l = 0;
+  let r = 0;
+  for (const [k, n] of h.map) {
+    L.slot.push(s);
+    L.lOff.push(l);
+    L.rOff.push(r);
+    L.kind.push(k);
+    const diff = k !== 0;
+    const last = L.blocks[L.blocks.length - 1];
+    if (last && last.diff === diff) last.end = s + n;
+    else L.blocks.push({ slot: s, end: s + n, diff });
+    s += n;
+    if (k !== 2) l += n;
+    if (k !== 1) r += n;
+  }
+  L.slots = s;
+  return L;
+}
+
+const KIND_LABEL = ["Same", "Left orphan", "Right orphan", "Different"];
+
 export default function HexCompare(props: { tab: Tab; active: boolean }) {
   const tab = () => props.tab;
   const left = () => tab().paths[0] ?? "";
@@ -50,14 +101,21 @@ export default function HexCompare(props: { tab: Tab; active: boolean }) {
   const [diffsOnly, setDiffsOnly] = createSignal(false);
   const [cursor, setCursor] = createSignal(-1);
   const [ctxSide, setCtxSide] = createSignal<0 | 1>(0);
+  const hexOpts = () => (tab().options.hex as { align?: HexAlign } | undefined) ?? {};
+  const align = (): HexAlign => hexOpts().align ?? "complete";
+  const setAlign = (a: HexAlign) => {
+    const options = { ...tab().options, hex: { ...hexOpts(), align: a } };
+    updateTab(tab().id, { options });
+    void persistSession({ ...tab(), options });
+  };
   const lc = pageCache(left);
   const rc = pageCache(right);
   const [diff, { refetch }] = createResource(
-    () => [left(), right()] as const,
-    async ([l, r]): Promise<HexDiff | { error: string } | null> => {
+    () => [left(), right(), align()] as const,
+    async ([l, r, a]): Promise<HexAlignment | { error: string } | null> => {
       if (!l || !r) return null;
       try {
-        return await api.hexDiff(l, r);
+        return await api.hexAlign(l, r, a);
       } catch (e) {
         return { error: errText(e) };
       }
@@ -67,6 +125,7 @@ export default function HexCompare(props: { tab: Tab; active: boolean }) {
     const d = diff();
     return d && !("error" in d) ? d : null;
   };
+  const layout = createMemo(() => (hd() ? layoutOf(hd()!) : null));
 
   let scroller!: HTMLDivElement;
   const vp = useViewport(() => scroller);
@@ -75,66 +134,100 @@ export default function HexCompare(props: { tab: Tab; active: boolean }) {
     if (left() && right()) void persistSession(tab());
   });
 
-  const total = () => Math.max(hd()?.leftSize ?? 0, hd()?.rightSize ?? 0);
-
-  /** Row indices (line numbers) shown; when diffsOnly, only lines containing differences. */
-  const lines = createMemo<number[] | null>(() => {
-    if (!diffsOnly() || !hd()) return null;
+  /** Visible blocks and the first row of each. */
+  const rows = createMemo(() => {
+    const L = layout();
     const w = width();
-    const out: number[] = [];
-    for (const [a, b] of hd()!.ranges) {
-      for (let l = Math.floor(a / w); l <= Math.floor((b - 1) / w); l++) if (out[out.length - 1] !== l) out.push(l);
+    const blocks: { slot: number; end: number; diff: boolean }[] = [];
+    const first: number[] = [];
+    let n = 0;
+    for (const b of L?.blocks ?? []) {
+      if (diffsOnly() && !b.diff) continue;
+      blocks.push(b);
+      first.push(n);
+      n += Math.ceil((b.end - b.slot) / w);
     }
-    return out;
+    return { blocks, first, count: n };
   });
-  const lineCount = () => lines()?.length ?? Math.ceil(total() / width());
 
-  const isDiff = (off: number) => {
-    const r = hd()?.ranges;
-    if (!r?.length) return false;
+  /** Slot range [start, end) shown on visible row i. */
+  const rowSlots = (i: number): [number, number] => {
+    const R = rows();
+    const bi = floorIndex(R.first, i);
+    if (bi < 0) return [0, 0];
+    const b = R.blocks[bi];
+    const s = b.slot + (i - R.first[bi]) * width();
+    return [s, Math.min(s + width(), b.end)];
+  };
+
+  /** Map entry, left and right offsets for an aligned slot. */
+  const slotInfo = (slot: number) => {
+    const L = layout();
+    if (!L) return null;
+    const e = floorIndex(L.slot, slot);
+    if (e < 0 || slot >= L.slots) return null;
+    const d = slot - L.slot[e];
+    const k = L.kind[e];
+    return { k, l: k === 2 ? null : L.lOff[e] + d, r: k === 1 ? null : L.rOff[e] + d, lBase: L.lOff[e] + (k === 2 ? 0 : d), rBase: L.rOff[e] + (k === 1 ? 0 : d) };
+  };
+
+  const rowOfSlot = (slot: number) => {
+    const R = rows();
     let lo = 0;
-    let hi = r.length - 1;
+    let hi = R.blocks.length - 1;
     while (lo <= hi) {
       const m = (lo + hi) >> 1;
-      if (off < r[m][0]) hi = m - 1;
-      else if (off >= r[m][1]) lo = m + 1;
-      else return true;
+      const b = R.blocks[m];
+      if (slot < b.slot) hi = m - 1;
+      else if (slot >= b.end) lo = m + 1;
+      else return R.first[m] + Math.floor((slot - b.slot) / width());
     }
-    return false;
+    return -1;
   };
 
   const win = createMemo(() => {
-    const { start, end } = vp.range(lineCount());
-    const out: { i: number; line: number }[] = [];
-    for (let i = start; i < end; i++) out.push({ i, line: lines()?.[i] ?? i });
+    const { start, end } = vp.range(rows().count);
+    const out: number[] = [];
+    for (let i = start; i < end; i++) out.push(i);
     return out;
   });
 
+  function reveal(slot: number) {
+    setCursor(slot);
+    const row = rowOfSlot(slot);
+    if (row >= 0) scroller.scrollTop = Math.max(0, row * ROW_H - vp.height() / 3);
+  }
+
   function gotoDiff(dir: 1 | -1) {
-    const r = hd()?.ranges ?? [];
-    if (!r.length) return;
+    const bl = layout()?.blocks.filter((b) => b.diff) ?? [];
+    if (!bl.length) return;
     const cur = cursor();
-    let idx = dir > 0 ? r.findIndex(([a]) => a > cur) : r.map(([a]) => a < cur).lastIndexOf(true);
-    if (idx < 0) return;
-    const off = r[idx][0];
-    setCursor(off);
-    const line = Math.floor(off / width());
-    const visIndex = lines() ? lines()!.indexOf(line) : line;
-    scroller.scrollTop = Math.max(0, visIndex * ROW_H - vp.height() / 3);
+    const b = dir > 0 ? bl.find((x) => x.slot > cur) : [...bl].reverse().find((x) => x.end <= cur || (x.slot < cur && cur < x.end));
+    if (b) reveal(b.slot);
   }
 
   async function goToOffset() {
-    const v = await promptText("Go To", "Offset (decimal, or hex with 0x prefix):", cursor() >= 0 ? `0x${cursor().toString(16)}` : "");
+    const info = cursor() >= 0 ? slotInfo(cursor()) : null;
+    const v = await promptText("Go To", "Left file offset (decimal, or hex with 0x prefix):", info?.l != null ? `0x${info.l.toString(16)}` : "");
     if (v == null || !v.trim()) return;
     const off = Number(v.trim());
-    if (!Number.isFinite(off) || off < 0) return;
-    const o = Math.min(Math.floor(off), Math.max(0, total() - 1));
+    const L = layout();
+    if (!Number.isFinite(off) || off < 0 || !L) return;
+    const o = Math.min(Math.floor(off), Math.max(0, (hd()?.leftSize ?? 1) - 1));
+    // Last entry that holds left bytes at or before o.
+    let e = floorIndex(L.lOff, o);
+    while (e > 0 && L.kind[e] === 2) e--;
+    if (e < 0) return;
     setDiffsOnly(false);
-    setCursor(o);
-    scroller.scrollTop = Math.max(0, Math.floor(o / width()) * ROW_H - vp.height() / 3);
+    reveal(L.kind[e] === 2 ? L.slot[e] : L.slot[e] + Math.min(o - L.lOff[e], (L.slot[e + 1] ?? L.slots) - L.slot[e] - 1));
   }
 
   const reload = () => (lc.reset(), rc.reset(), refetch());
+  const ALIGNS: [HexAlign, string][] = [
+    ["none", "None"],
+    ["fast", "Fast"],
+    ["complete", "Complete"],
+  ];
   registerCommands(tab().id, [
     { id: "reload", menu: "Session", group: "files", label: "Reload", keys: "F5", run: reload },
     { id: "next-diff", menu: "Search", group: "diff", label: "Next Difference", keys: "Ctrl+N", altKeys: ["Alt+Down"], run: () => gotoDiff(1) },
@@ -142,11 +235,12 @@ export default function HexCompare(props: { tab: Tab; active: boolean }) {
     { id: "goto", menu: "Search", group: "go", label: "Go To Offset…", keys: "Ctrl+G", run: goToOffset },
     { id: "diffs-only", menu: "View", group: "filter", label: "Show Differences Only", checked: diffsOnly, run: () => setDiffsOnly(!diffsOnly()) },
     ...[8, 16, 32].map((w) => ({ id: `width-${w}`, menu: "View" as const, group: "width", label: `${w} Bytes per Line`, checked: () => width() === w, run: () => setWidth(w) })),
+    ...ALIGNS.map(([a, label]) => ({ id: `align-${a}`, menu: "View" as const, group: "align", label: `Alignment: ${label}`, checked: () => align() === a, run: () => setAlign(a) })),
     ...externalCommands(() => tab().paths[ctxSide()] || undefined),
   ]);
   const onContext = (e: MouseEvent) => {
     setCtxSide(sideOf(e));
-    showContextMenu(e, tab().id, ["next-diff", "prev-diff", "-", "goto", "-", "diffs-only", "width-8", "width-16", "width-32", "-", "reload", "-", "open-default", "reveal"]);
+    showContextMenu(e, tab().id, ["next-diff", "prev-diff", "-", "goto", "-", "diffs-only", "width-8", "width-16", "width-32", "-", "align-none", "align-fast", "align-complete", "-", "reload", "-", "open-default", "reveal"]);
   };
 
   function setPath(i: 0 | 1, p: string) {
@@ -157,19 +251,23 @@ export default function HexCompare(props: { tab: Tab; active: boolean }) {
     void persistSession({ ...tab(), paths });
   }
 
-  const side = (get: (o: number) => number | undefined, size: () => number, line: number) => {
+  const side = (which: 0 | 1, i: number) => {
     const w = width();
-    const base = line * w;
+    const [s0, s1] = rowSlots(i);
+    const get = which === 0 ? lc.get : rc.get;
+    const first = slotInfo(s0);
+    const base = first ? (which === 0 ? first.lBase : first.rBase) : 0;
     const cells = [];
     const chars = [];
     for (let k = 0; k < w; k++) {
-      const off = base + k;
-      const has = off < size();
-      const b = has ? get(off) : undefined;
-      const d = has && isDiff(off);
-      const cls = `hb${d ? " hdiff" : ""}${!has ? " hmiss" : ""}${off === cursor() ? " hcur" : ""}`;
-      cells.push(<span class={cls} onMouseDown={() => setCursor(off)}>{has ? hex2(b) : "  "}</span>);
-      chars.push(<span class={cls}>{has ? printable(b) : " "}</span>);
+      const slot = s0 + k;
+      const info = slot < s1 ? slotInfo(slot) : null;
+      const off = info ? (which === 0 ? info.l : info.r) : null;
+      const b = off != null ? get(off) : undefined;
+      const kind = info?.k ?? 0;
+      const cls = `hb${off == null ? (info ? " hmiss" : " hpad") : kind === 3 ? " hdiff" : kind !== 0 ? " horph" : ""}${slot === cursor() ? " hcur" : ""}`;
+      cells.push(<span class={cls} onMouseDown={() => info && setCursor(slot)}>{off != null ? hex2(b) : "  "}</span>);
+      chars.push(<span class={cls}>{off != null ? printable(b) : " "}</span>);
     }
     return (
       <div class="hside">
@@ -179,6 +277,10 @@ export default function HexCompare(props: { tab: Tab; active: boolean }) {
       </div>
     );
   };
+
+  const cur = createMemo(() => (cursor() >= 0 ? slotInfo(cursor()) : null));
+  const offStr = (o: number | null, get: (o: number) => number | undefined) =>
+    o == null ? "—" : `0x${o.toString(16).toUpperCase()} (${hex2(get(o))})`;
 
   return (
     <div class="view">
@@ -195,6 +297,14 @@ export default function HexCompare(props: { tab: Tab; active: boolean }) {
             <option value="32">32</option>
           </select>
         </label>
+        <label class="tb-label" title="None compares byte N with byte N. Fast anchors on matching 50-byte runs. Complete also aligns the bytes between anchors.">
+          Alignment{" "}
+          <select value={align()} onChange={(e) => setAlign(e.currentTarget.value as HexAlign)}>
+            {ALIGNS.map(([a, label]) => (
+              <option value={a}>{label}</option>
+            ))}
+          </select>
+        </label>
         <Btn title="Reload" kbd="F5" onClick={reload}>⟳ Refresh</Btn>
       </div>
       <div class="paths two">
@@ -204,13 +314,16 @@ export default function HexCompare(props: { tab: Tab; active: boolean }) {
       <Show when={diff() && "error" in diff()!}>
         <div class="banner err">{(diff() as { error: string }).error}</div>
       </Show>
+      <Show when={hd() && hd()!.align !== align()}>
+        <div class="banner">Files are too large to align in memory; showing a positional comparison.</div>
+      </Show>
       <div class="hscroll" ref={scroller} onContextMenu={onContext} onScroll={(e) => vp.setScrollTop(e.currentTarget.scrollTop)}>
-        <div style={{ height: `${lineCount() * ROW_H}px`, position: "relative" }}>
+        <div style={{ height: `${rows().count * ROW_H}px`, position: "relative" }}>
           <Index each={win()}>
-            {(it) => (
-              <div class="hrow" style={{ top: `${it().i * ROW_H}px` }}>
-                {side(lc.get, () => hd()?.leftSize ?? 0, it().line)}
-                {side(rc.get, () => hd()?.rightSize ?? 0, it().line)}
+            {(i) => (
+              <div class="hrow" classList={{ hblock: floorIndex(rows().first, i()) >= 0 && rows().first[floorIndex(rows().first, i())] === i() && i() > 0 }} style={{ top: `${i() * ROW_H}px` }}>
+                {side(0, i())}
+                {side(1, i())}
               </div>
             )}
           </Index>
@@ -220,18 +333,27 @@ export default function HexCompare(props: { tab: Tab; active: boolean }) {
         <Show when={hd()} fallback={<span>{diff.loading ? "Comparing…" : ""}</span>}>
           {(d) => (
             <span>
-              <Show when={d().diffBytes === 0 && d().leftSize === d().rightSize} fallback={<span class="st-diff">{d().diffBytes.toLocaleString()} byte(s) differ in {d().ranges.length.toLocaleString()}{d().truncated ? "+" : ""} range(s)</span>}>
+              <Show
+                when={d().counts[1] + d().counts[2] + d().counts[3] === 0}
+                fallback={
+                  <span class="st-diff">
+                    {d().counts[3].toLocaleString()} different · {d().counts[1].toLocaleString()} left orphan · {d().counts[2].toLocaleString()} right orphan byte(s)
+                  </span>
+                }
+              >
                 <span class="st-same">Files are binary identical</span>
               </Show>
-              {d().leftSize !== d().rightSize ? ` · sizes differ (${d().leftSize.toLocaleString()} vs ${d().rightSize.toLocaleString()})` : ""}
+              {` · ${d().counts[0].toLocaleString()} same`}
             </span>
           )}
         </Show>
         <span class="spacer" />
-        <Show when={cursor() >= 0}>
-          <span class="muted">
-            Offset 0x{cursor().toString(16).toUpperCase()} ({cursor()}) · L {hex2(lc.get(cursor()))} · R {hex2(rc.get(cursor()))}
-          </span>
+        <Show when={cur()}>
+          {(c) => (
+            <span class="muted">
+              {KIND_LABEL[c().k]} · L {offStr(c().l, lc.get)} · R {offStr(c().r, rc.get)}
+            </span>
+          )}
         </Show>
       </div>
     </div>

@@ -1,0 +1,12 @@
+1 1 different
+2 - leftorphan
+3 2 same
+4 3 same
+5 4 same
+6 5 same
+7 6 same
+8 - leftorphan
+9 7 same
+10 8 same
+11 9 same
+12 10 same

@@ -1,0 +1,10 @@
+        let item_map = 115;
+        if (index > value) {
+        map.start(result, 3);
+if (alpha > result) {
+        return height + map;
+            fn value_buffer(start: i32) -> i32 {
+            if (delta > value) {
+        right.text(path, 4);
+}
+return index + buffer;

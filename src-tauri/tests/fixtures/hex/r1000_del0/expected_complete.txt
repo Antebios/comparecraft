@@ -1,0 +1,3 @@
+977 same byte(s)
+23 left orphan byte(s)
+S202 L23 S775

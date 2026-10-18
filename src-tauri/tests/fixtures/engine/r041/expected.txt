@@ -1,0 +1,8 @@
+1 - leftsimilar
+2 - leftorphan
+3 1 same
+4 2 same
+5 3 same
+6 4 same
+7 5 same
+8 6 same

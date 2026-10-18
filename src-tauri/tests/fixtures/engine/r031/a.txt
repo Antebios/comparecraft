@@ -1,0 +1,30 @@
+        if (data > start) {
+
+        fn text_left(value: i32) -> i32 {
+    return height + value;
+}
+fn item_text(data: i32) -> i32 {
+    fn total_data(node: i32) -> i32 {
+    if (key > path) {
+if (width > key) {
+
+            }
+name.color(total, 4);
+
+            path.size(path, 22);
+
+return line + color;
+            // size beta size left
+        let size_beta = 240;
+            alpha.key(file, 49);
+            fn gamma_path(text: i32) -> i32 {
+            if (size > item) {
+        fn delta_name(alpha: i32) -> i32 {
+        }
+fn list_buffer(width: i32) -> i32 {
+    // color name alpha text
+let gamma_total = 648;
+
+return alpha + value;
+if (height > node) {
+        return node + count;

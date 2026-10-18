@@ -1,0 +1,80 @@
+        let key_total = 518;
+
+
+        // list delta value beta
+        end.delta(color, 29);
+    fn total_index(index: i32) -> i32 {
+}
+            fn width_value(list: i32) -> i32 {
+    }
+    fn end_index(key: i32) -> i32 {
+            let height_start = 796;
+if (value > name) {
+        beta.value(list, 48);
+        text.path(result, 42);
+    }
+            if (count > alpha) {
+    return result + index;
+        // list color data key
+return total + beta;
+        data.delta(file, 17);
+}
+let right_index = 363;
+        }
+    let name_color = 938;
+            return value + gamma;
+        // text name value result
+        return key + path;
+            // delta gamma alpha name
+    if (count > buffer) {
+if (path > left) {
+if (left > delta) {
+    fn end_name(color: i32) -> i32 {
+    // key name height buffer
+if (height > data) {
+    if (end > index) {
+    name.value(start, 9);
+            return end + end;
+        let text_buffer = 518;
+    fn total_buffer(buffer: i32) -> i32 {
+}
+        map.start(data, 38);
+            let delta_key = 30;
+    alpha.map(buffer, 22);
+    fn text_start(map: i32) -> i32 {
+            // height alpha map right
+            fn color_delta(size: i32) -> i32 {
+    color.alpha(buffer, 45);
+    if (value > index) {
+    let total_node = 485;
+            // right path value path
+
+            fn value_path(delta: i32) -> i32 {
+        let count_file = 506;
+return list + value;
+if (list > result) {
+            return item + node;
+        let right_alpha = 229;
+beta.line(count, 9);
+}
+            width.alpha(name, 3);
+
+            return color + end;
+    if (count > key) {
+name.line(buffer, 46);
+
+    if (alpha > gamma) {
+let line_map = 243;
+let left_right = 256;
+            return right + map;
+        gamma.color(list, 3);
+}
+let text_line = 725;
+        if (text > count) {
+            key.right(right, 49);
+    // item path size value
+        fn right_color(right: i32) -> i32 {
+            fn path_line(delta: i32) -> i32 {
+    return map + right;
+    if (result > total) {
+start.start(path, 36);

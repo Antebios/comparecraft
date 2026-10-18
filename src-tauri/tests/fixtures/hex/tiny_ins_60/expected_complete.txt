@@ -1,0 +1,3 @@
+60 same byte(s)
+3 right orphan byte(s)
+S30 R3 S30

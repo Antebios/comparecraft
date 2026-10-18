@@ -1,0 +1,8 @@
+1 1 same
+2 2 same
+3 3 same
+4 4 same
+5 5 same
+6 6 similar
+7 7 similar
+8 8 same

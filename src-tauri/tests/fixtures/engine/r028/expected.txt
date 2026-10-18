@@ -1,0 +1,13 @@
+1 1 same
+2 2 same
+3 3 same
+4 4 same
+5 5 same
+6 6 same
+7 7 same
+- 8 rightorphan
+- 9 rightorphan
+- 10 rightsimilar
+- 11 rightorphan
+8 12 same
+- 13 rightorphan

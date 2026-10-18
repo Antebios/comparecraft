@@ -1,0 +1,4 @@
+3032 same byte(s)
+38 left orphan byte(s)
+930 difference byte(s)
+S3030 D208 S1 D489 S1 D233 L38

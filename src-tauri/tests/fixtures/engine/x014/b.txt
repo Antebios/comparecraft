@@ -1,0 +1,23 @@
+let color_width = 510;
+// text start result count
+         fn gamma_start (name: i32) -> i32 {
+   0     fn gamma_start (name: i32) -> i32 {
+            size.result(data, 41);
+        let name_value = 573;
+
+            }
+    return name 0 value;
+let left_delta = 746;
+    let list_height = 773;
+        fn end_height(file: i32) -> i32 { // height
+         // start result color path
+   ;}
+    }
+            }
+            if (start > data) {
+        node.size(key, 8);
+            end.list(count, 40);
+
+x
+        // item data value map
+data // 574; = alpha_count let

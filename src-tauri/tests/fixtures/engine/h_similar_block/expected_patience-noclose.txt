@@ -1,0 +1,4 @@
+1 1 same
+2 2 different
+- 3 rightorphan
+3 4 same

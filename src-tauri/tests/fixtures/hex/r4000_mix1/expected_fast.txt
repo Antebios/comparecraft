@@ -1,0 +1,4 @@
+3967 same byte(s)
+3 right orphan byte(s)
+33 difference byte(s)
+S2004 D33 R3 S1963

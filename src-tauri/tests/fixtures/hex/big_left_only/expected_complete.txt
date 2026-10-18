@@ -1,0 +1,3 @@
+8000 same byte(s)
+6000 left orphan byte(s)
+S3000 L6000 S5000
