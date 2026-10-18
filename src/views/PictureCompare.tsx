@@ -4,6 +4,7 @@ import { Btn, PathBar } from "../components/common";
 import { displayKeys, registerCommands } from "../commands";
 import { showContextMenu } from "../components/ContextMenu";
 import { externalCommands } from "../components/external";
+import { SessionButtons } from "../components/SessionTools";
 import { persistSession, updateTab, type Tab } from "../store";
 
 const DEFAULTS: PixOptions = {
@@ -224,6 +225,7 @@ export default function PictureCompare(props: { tab: Tab; active: boolean }) {
     run: () => setOpts({ mode: m }),
   });
   registerCommands(tab().id, [
+    { id: "swap", menu: "Session", group: "files", label: "Swap Sides", run: swap },
     { id: "reload", menu: "Session", group: "files", label: "Reload", keys: "F5", run: load },
     modeCmd("tolerance", "Tolerance Mode", "Ctrl+1"),
     modeCmd("range", "Mismatch Range Mode", "Ctrl+2"),
@@ -270,6 +272,7 @@ export default function PictureCompare(props: { tab: Tab; active: boolean }) {
       "zoom-fit",
       "-",
       "reload",
+      "swap",
       ...external,
     ]);
   };
@@ -365,6 +368,22 @@ export default function PictureCompare(props: { tab: Tab; active: boolean }) {
       </span>
     ) : undefined;
   };
+  function swap() {
+    const o = opts();
+    batch(() => {
+      updateTab(tab().id, { paths: [paths()[1] ?? "", paths()[0] ?? ""], titles: [tab().titles?.[1] ?? null, tab().titles?.[0] ?? null] });
+      setSources([sources()[1], sources()[0]]);
+      setErrors([errors()[1], errors()[0]]);
+      setOpts({
+        rotate: [o.rotate[1], o.rotate[0]],
+        flip: [o.flip[1], o.flip[0]],
+        offsetX: -o.offsetX,
+        offsetY: -o.offsetY,
+        blendPct: 100 - o.blendPct,
+      });
+    });
+  }
+
   function setPath(i: 0 | 1, p: string) {
     const next = [...tab().paths];
     next[i] = p;
@@ -382,6 +401,7 @@ export default function PictureCompare(props: { tab: Tab; active: boolean }) {
   return (
     <div class="view">
       <div class="toolbar">
+        <SessionButtons tab={tab()} />
         <div class="seg">
           <Btn title="Tolerance mode" kbd={displayKeys("Ctrl+1")} active={opts().mode === "tolerance"} onClick={() => setOpts({ mode: "tolerance" })}>
             Tolerance
@@ -408,7 +428,8 @@ export default function PictureCompare(props: { tab: Tab; active: boolean }) {
         <Btn title="Actual size" kbd={displayKeys("Ctrl+0")} onClick={() => setZ(1)}>1:1</Btn>
         <Btn title="Fit to window" active={fit()} onClick={() => setFit(!fit())}>Fit</Btn>
         <span class="sep" />
-        <Btn title="Reload" kbd="F5" onClick={load}>⟳ Refresh</Btn>
+        <Btn title="Swap sides" onClick={swap}>⇄ Swap</Btn>
+        <Btn title="Reload files" kbd="F5" onClick={load}>⟳ Reload</Btn>
       </div>
       <div class="paths two">
         <PathBar value={paths()[0]} title={tab().titles?.[0]} onCommit={(p) => setPath(0, p)} info={info(0)} />

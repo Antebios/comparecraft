@@ -5,6 +5,7 @@ import { promptText } from "../components/Prompt";
 import { displayKeys, registerCommands } from "../commands";
 import { showContextMenu } from "../components/ContextMenu";
 import { externalCommands, sideOf } from "../components/external";
+import { SessionButtons } from "../components/SessionTools";
 import { persistSession, updateTab, type Tab } from "../store";
 
 const PAGE = 64 * 1024;
@@ -14,26 +15,37 @@ function pageCache(path: () => string) {
   const pages = new Map<number, Uint8Array>();
   const pending = new Set<number>();
   const [version, setVersion] = createSignal(0);
+  let gen = 0;
+  let cachedPath = "";
   const get = (offset: number): number | undefined => {
     version();
+    if (path() !== cachedPath) {
+      cachedPath = path();
+      gen++;
+      pages.clear();
+      pending.clear();
+    }
     const p = Math.floor(offset / PAGE);
     const page = pages.get(p);
     if (page) return page[offset - p * PAGE];
     if (!pending.has(p) && path()) {
       pending.add(p);
+      const g = gen;
       api
         .readBytes(path(), p * PAGE, PAGE)
-        .then((b) => pages.set(p, b))
-        .catch(() => pages.set(p, new Uint8Array()))
+        .then((b) => g === gen && pages.set(p, b))
+        .catch(() => g === gen && pages.set(p, new Uint8Array()))
         .finally(() => {
-          pending.delete(p);
+          if (g === gen) pending.delete(p);
           setVersion((v) => v + 1);
         });
     }
     return undefined;
   };
   const reset = () => {
+    gen++;
     pages.clear();
+    pending.clear();
     setVersion((v) => v + 1);
   };
   return { get, reset };
@@ -98,7 +110,7 @@ export default function HexCompare(props: { tab: Tab; active: boolean }) {
   const left = () => tab().paths[0] ?? "";
   const right = () => tab().paths[1] ?? "";
   const [width, setWidth] = createSignal(16);
-  const [diffsOnly, setDiffsOnly] = createSignal(false);
+  const [filter, setFilter] = createSignal<"all" | "diffs" | "same">("all");
   const [cursor, setCursor] = createSignal(-1);
   const [ctxSide, setCtxSide] = createSignal<0 | 1>(0);
   const hexOpts = () => (tab().options.hex as { align?: HexAlign } | undefined) ?? {};
@@ -142,7 +154,7 @@ export default function HexCompare(props: { tab: Tab; active: boolean }) {
     const first: number[] = [];
     let n = 0;
     for (const b of L?.blocks ?? []) {
-      if (diffsOnly() && !b.diff) continue;
+      if ((filter() === "diffs" && !b.diff) || (filter() === "same" && b.diff)) continue;
       blocks.push(b);
       first.push(n);
       n += Math.ceil((b.end - b.slot) / w);
@@ -218,29 +230,38 @@ export default function HexCompare(props: { tab: Tab; active: boolean }) {
     let e = floorIndex(L.lOff, o);
     while (e > 0 && L.kind[e] === 2) e--;
     if (e < 0) return;
-    setDiffsOnly(false);
+    setFilter("all");
     reveal(L.kind[e] === 2 ? L.slot[e] : L.slot[e] + Math.min(o - L.lOff[e], (L.slot[e + 1] ?? L.slots) - L.slot[e] - 1));
   }
 
   const reload = () => (lc.reset(), rc.reset(), refetch());
+  const swap = () => {
+    updateTab(tab().id, { paths: [right(), left()], titles: [tab().titles?.[1] ?? null, tab().titles?.[0] ?? null] });
+  };
+  const filterCmd = (f: "all" | "diffs" | "same", label: string) => ({
+    id: `show-${f}`, menu: "View" as const, group: "filter", label, checked: () => filter() === f, run: () => setFilter(f),
+  });
   const ALIGNS: [HexAlign, string][] = [
     ["none", "None"],
     ["fast", "Fast"],
     ["complete", "Complete"],
   ];
   registerCommands(tab().id, [
+    { id: "swap", menu: "Session", group: "files", label: "Swap Sides", run: swap },
     { id: "reload", menu: "Session", group: "files", label: "Reload", keys: "F5", run: reload },
     { id: "next-diff", menu: "Search", group: "diff", label: "Next Difference", keys: "Ctrl+N", altKeys: ["Alt+Down"], run: () => gotoDiff(1) },
     { id: "prev-diff", menu: "Search", group: "diff", label: "Previous Difference", keys: "Ctrl+P", altKeys: ["Alt+Up"], run: () => gotoDiff(-1) },
     { id: "goto", menu: "Search", group: "go", label: "Go To Offset…", keys: "Ctrl+G", run: goToOffset },
-    { id: "diffs-only", menu: "View", group: "filter", label: "Show Differences Only", checked: diffsOnly, run: () => setDiffsOnly(!diffsOnly()) },
+    filterCmd("all", "Show All"),
+    filterCmd("diffs", "Show Differences"),
+    filterCmd("same", "Show Same"),
     ...[8, 16, 32].map((w) => ({ id: `width-${w}`, menu: "View" as const, group: "width", label: `${w} Bytes per Line`, checked: () => width() === w, run: () => setWidth(w) })),
     ...ALIGNS.map(([a, label]) => ({ id: `align-${a}`, menu: "View" as const, group: "align", label: `Alignment: ${label}`, checked: () => align() === a, run: () => setAlign(a) })),
     ...externalCommands(() => tab().paths[ctxSide()] || undefined),
   ]);
   const onContext = (e: MouseEvent) => {
     setCtxSide(sideOf(e));
-    showContextMenu(e, tab().id, ["next-diff", "prev-diff", "-", "goto", "-", "diffs-only", "width-8", "width-16", "width-32", "-", "align-none", "align-fast", "align-complete", "-", "reload", "-", "open-default", "reveal"]);
+    showContextMenu(e, tab().id, ["next-diff", "prev-diff", "-", "goto", "-", "show-all", "show-diffs", "show-same", "-", "width-8", "width-16", "width-32", "-", "align-none", "align-fast", "align-complete", "-", "reload", "swap", "-", "open-default", "reveal"]);
   };
 
   function setPath(i: 0 | 1, p: string) {
@@ -285,10 +306,13 @@ export default function HexCompare(props: { tab: Tab; active: boolean }) {
   return (
     <div class="view">
       <div class="toolbar">
-        <Btn title="Previous difference" kbd={displayKeys("Ctrl+P")} onClick={() => gotoDiff(-1)}>▲ Prev</Btn>
-        <Btn title="Next difference" kbd={displayKeys("Ctrl+N")} onClick={() => gotoDiff(1)}>▼ Next</Btn>
+        <SessionButtons tab={tab()} />
+        <div class="seg">
+          <Btn title="All: show all bytes" active={filter() === "all"} onClick={() => setFilter("all")}>All</Btn>
+          <Btn title="Diffs: show differences only" active={filter() === "diffs"} onClick={() => setFilter("diffs")}>≠ Diffs</Btn>
+          <Btn title="Same: show matching bytes only" active={filter() === "same"} onClick={() => setFilter("same")}>= Same</Btn>
+        </div>
         <span class="sep" />
-        <Btn title="Show only lines with differences" active={diffsOnly()} onClick={() => setDiffsOnly(!diffsOnly())}>≠ Diffs only</Btn>
         <label class="tb-label">
           Bytes/row{" "}
           <select value={width()} onChange={(e) => setWidth(+e.currentTarget.value)}>
@@ -305,7 +329,12 @@ export default function HexCompare(props: { tab: Tab; active: boolean }) {
             ))}
           </select>
         </label>
-        <Btn title="Reload" kbd="F5" onClick={reload}>⟳ Refresh</Btn>
+        <span class="sep" />
+        <Btn title="Next difference" kbd={displayKeys("Ctrl+N")} onClick={() => gotoDiff(1)}>▼ Next Diff</Btn>
+        <Btn title="Previous difference" kbd={displayKeys("Ctrl+P")} onClick={() => gotoDiff(-1)}>▲ Prev Diff</Btn>
+        <span class="sep" />
+        <Btn title="Swap sides" onClick={swap}>⇄ Swap</Btn>
+        <Btn title="Reload files" kbd="F5" onClick={reload}>⟳ Reload</Btn>
       </div>
       <div class="paths two">
         <PathBar value={left()} title={tab().titles?.[0]} onCommit={(p) => setPath(0, p)} info={<span class="muted small">{fmtSize(hd()?.leftSize)}</span>} />

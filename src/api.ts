@@ -287,14 +287,25 @@ export interface TableOptions {
   delimiter: string;
   header: boolean;
   keys: number[];
+  /** Differences only in character case are unimportant. */
   ignoreCase: boolean;
+  /** Differences only in whitespace are unimportant. */
   trim: boolean;
+  /** Zero-based columns whose differences are unimportant. */
+  unimportant: number[];
+  /** Numbers differing by at most this much are unimportant (0 = exact). */
+  numTolerance: number;
+  /** `numTolerance` is a percentage of the larger value. */
+  numRelative: boolean;
 }
 export interface TableRow {
   l?: number;
   r?: number;
-  k: "same" | "changed" | "left" | "right";
+  k: "same" | "changed" | "unimportant" | "left" | "right";
+  /** Columns that differ. */
   cells?: number[];
+  /** Subset of `cells` whose differences are unimportant. */
+  minor?: number[];
 }
 export interface TableResult {
   header: string[];

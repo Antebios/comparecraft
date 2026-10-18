@@ -80,7 +80,8 @@ overrides. The **View** menu combines display filters (same, orphans, newer, dif
 handling modes, including **Ignore Folder Structure** (flatten), plus Suppress Filters, columns, legend and a log.
 The full **Actions** menu and context menu cover copy or move to the other side or to a folder, delete (to trash or
 permanently), rename with masks, attributes, touch, new folder, exclude, align with, compare contents,
-file reports and your own **Open With** applications.
+file reports and your own **Open With** applications. **Compare To** (F7) marks an item and switches to a
+question-mark pointer; click any other file or folder (on either side) to compare the two in a new tab.
 
 </td>
 <td width="50%" valign="top">
@@ -100,7 +101,9 @@ matching data across inserted and deleted bytes, so an insertion shows as a gap 
 
 ### 📊 Table Compare
 CSV/TSV with delimiter auto-detection, a header row, **key columns** for matching rows, and differences
-shown cell by cell.
+shown cell by cell. Numbers compare by value (`0.10` = `0.1`). **Rules** can make columns, case or whitespace
+changes, or numbers within a tolerance *unimportant* (blue); **Minor** treats those as same. All / Diffs /
+Same filters, a details pane for the selected row, and copy rows to the clipboard.
 
 </td>
 <td width="50%" valign="top">
@@ -112,7 +115,8 @@ flip, auto-scale, zoom/fit and per-pixel colour details. Reads PNG, JPEG, GIF, B
 QOI and (through the webview) SVG/AVIF.
 
 ### 💾 Sessions
-Recent and named sessions are saved automatically. Reopen them from Home or with `comparecraft "<session name>"`.
+Recent and named sessions are saved automatically. Reopen them from Home, the **Sessions** toolbar menu of each
+compare view, or with `comparecraft "<session name>"`.
 
 ### 🛠️ Tools & Options
 **Tools › Options** covers startup and workspace, tabs, colours and fonts, text editing, next-difference

@@ -403,7 +403,8 @@ button.link {
 .st-diff {
   color: var(--diff-fg);
 }
-.st-sim {
+.st-sim,
+.st-unimp {
   color: var(--unimp-fg);
 }
 .st-orphan {
@@ -535,6 +536,15 @@ button.link {
 /* Folder rows highlight the selected side(s) only. */
 .frow .fside.selc {
   background: var(--sel);
+}
+/* Item waiting for Compare To; the pointer becomes "help" until the second item is clicked. */
+.frow .fside.cto {
+  background: color-mix(in srgb, var(--orphan-fg) 22%, transparent);
+  box-shadow: inset 0 0 0 1px var(--orphan-fg);
+}
+.fscroll.picking,
+.fscroll.picking * {
+  cursor: help;
 }
 .fside.ign .fname {
   text-decoration: line-through;
@@ -864,9 +874,6 @@ button.link {
   background: var(--bg3);
   border-bottom: 1px solid var(--border);
 }
-.theader .tside:first-child {
-  margin-right: 12px;
-}
 .tside {
   display: flex;
   flex: none;
@@ -907,6 +914,47 @@ button.link {
 }
 .trow2.k-changed {
   background: var(--diff-bg);
+}
+.tcell.tminor {
+  background: var(--unimp-hl);
+  color: var(--unimp-fg);
+}
+.tcell.th.tunimpcol {
+  color: var(--unimp-fg);
+  font-style: italic;
+}
+.trow2.sel .tside.selside {
+  box-shadow: inset 0 0 0 1px var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.trow2.sel {
+  box-shadow: none;
+}
+/* Details pane: the selected row, left over right. */
+.tdetails {
+  flex: none;
+  overflow-x: auto;
+  border-top: 1px solid var(--border);
+  background: var(--bg2);
+  font-size: 12.5px;
+}
+.tdrow {
+  display: flex;
+  width: max-content;
+  min-width: 100%;
+}
+.tdrow.th {
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+}
+.tdlab {
+  width: 70px;
+  flex: none;
+  padding: 0 6px;
+  height: 20px;
+  line-height: 20px;
+  color: var(--muted);
+  background: var(--bg3);
 }
 
 /* Picture */

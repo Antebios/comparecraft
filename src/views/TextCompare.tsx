@@ -11,6 +11,7 @@ import { promptText } from "../components/Prompt";
 import { displayKeys, registerCommands, type Command, type MenuRef } from "../commands";
 import { openTab, persistSession, updateTab, type Tab } from "../store";
 import { ReplacementDialog, RulesPanel } from "../components/RulesPanel";
+import { SessionButtons } from "../components/SessionTools";
 
 type Side = 0 | 1;
 type Filter = "all" | "diffs" | "context" | "same";
@@ -1141,6 +1142,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
   return (
     <div class="view">
       <div class="toolbar">
+        <SessionButtons tab={tab()} />
         <Btn title="Previous difference" kbd={k("prev")} onClick={() => nextHunk(-1)}>▲ Prev</Btn>
         <Btn title="Next difference" kbd={k("next")} onClick={() => nextHunk(1)}>▼ Next</Btn>
         <span class="sep" />

@@ -1,4 +1,4 @@
-import { message, open as openDialog } from "@tauri-apps/plugin-dialog";
+import { message } from "@tauri-apps/plugin-dialog";
 import { createEffect, createMemo, createSignal, For, Index, type JSX, on, onCleanup, onMount, Show } from "solid-js";
 import { createStore } from "solid-js/store";
 import {
@@ -157,13 +157,14 @@ function recompute(root: FNode): Summary {
  * merged with TDirBaseActions); entries whose visibility rules fail are dropped.
  */
 const ROW_MENU: MenuRef[] = [
+  "cto-x", "cto-text", "cto-hex", "cto-table", "cto-picture", "cto-cancel", "-",
   "open-folder", "close-folder", "open-subfolders", "close-subfolders", "set-base", "set-base-other", "open", "open-with",
   "quick-compare", "compare-to", "align-with", "-",
   "compare-contents", "copy-side", "move-side", "copy-folder", "move-folder", "delete", "rename", "attributes", "touch",
   "exclude", "new-folder", "copy-names", "ignored", "refresh-sel", "report", "-",
   "sync-menu",
 ];
-const BACKGROUND_MENU: MenuRef[] = ["refresh", "full-refresh", "-", "new-folder", "-", "select-all", "expand", "collapse", "-", "legend"];
+const BACKGROUND_MENU: MenuRef[] = ["cto-cancel", "-", "refresh", "full-refresh", "-", "new-folder", "-", "select-all", "expand", "collapse", "-", "legend"];
 
 export default function FolderCompare(props: { tab: Tab; active: boolean }) {
   const tab = () => props.tab;
@@ -508,6 +509,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
       setAnchor(rel);
     }
     setSel(s);
+    if (cmpFrom() && e.button === 0 && !add && !e.shiftKey && cmpTarget()) compareToX();
   }
 
   /* ---------- Opening ---------- */
@@ -559,14 +561,49 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
     }
   }
 
-  async function compareTo() {
+  /* ---------- Compare To (disjoint compare) ----------
+   * As in the reference: Compare To marks the selected item and switches the
+   * pointer to "help" (arrow with question mark); clicking another item of the
+   * same kind (file or folder, either side) opens the comparison in a new tab.
+   * The item from the lower side index goes left. While pending, the popup and
+   * Actions menu offer "Compare to <name>", "Compare in <view>" for files, and
+   * Cancel (also Esc). */
+
+  const [cmpFrom, setCmpFrom] = createSignal<{ rel: string; side: SideName; dir: boolean; name: string } | null>(null);
+  /** The selected item a pending Compare To can pair with (CanCompareToSel). */
+  const cmpTarget = (): { n: FNode; side: SideName } | null => {
+    const p = cmpFrom();
+    const n = single();
+    const side = selSide();
+    if (!p || !n || side === "both" || !n[side]) return null;
+    if (n.rel === p.rel && side === p.side) return null;
+    return !!n.dir === p.dir ? { n, side } : null;
+  };
+  function compareTo() {
     const n = single();
     const side = singleSide();
-    if (!n || !side) return;
-    const picked = await openDialog({ directory: n.dir, defaultPath: parentPath(n, other(side)), title: `Compare “${n[side]!.name}” To` });
-    if (typeof picked !== "string") return;
-    const mine = sidePath(n, side);
-    void openAuto(side === "left" ? [mine, picked] : [picked, mine], n.dir ? "folder" : undefined);
+    if (!n || !side || !n[side]) return;
+    const name = n[side]!.name;
+    setCmpFrom({ rel: n.rel, side, dir: !!n.dir, name });
+    setMessage(`Compare To: click the ${n.dir ? "folder" : "file"} to compare “${name}” with, or press Esc to cancel.`);
+  }
+  function cancelCompareTo() {
+    if (!cmpFrom()) return;
+    setCmpFrom(null);
+    setMessage("");
+  }
+  function compareToX(kind?: ViewKind) {
+    const p = cmpFrom();
+    const t = cmpTarget();
+    cancelCompareTo();
+    if (!p || !t) return;
+    const src = nodeByRel().get(p.rel);
+    if (!src?.[p.side]) return setMessage(`“${p.name}” is no longer in the comparison.`);
+    const a = sidePath(src, p.side);
+    const b = sidePath(t.n, t.side);
+    const paths = t.side === "left" && p.side === "right" ? [b, a] : [a, b];
+    if (p.dir) return void openTab({ kind: "folder", paths, options: { folder: { ...JSON.parse(JSON.stringify(opts)), align: [] } } });
+    void openAuto(paths, kind);
   }
 
   /* ---------- Align With ---------- */
@@ -1194,6 +1231,18 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
     { id: "up-left", menu: "Session", hidden: true, label: "Left Side", enabled: () => !!left(), run: () => upLevel(["left"]) },
     { id: "up-right", menu: "Session", hidden: true, label: "Right Side", enabled: () => !!right(), run: () => upLevel(["right"]) },
 
+    // Pending Compare To (dynamic items placed first, as in the reference)
+    { id: "cto-x", menu: "Actions", group: "cto", label: "Compare To", caption: () => `Compare to ${cmpFrom()?.name ?? ""}`, visible: () => !!cmpTarget(), run: () => compareToX() },
+    ...(
+      [["text", "Text Compare"], ["hex", "Hex Compare"], ["table", "Table Compare"], ["picture", "Picture Compare"]] as const
+    ).map(([kind, title]): Command => ({
+      id: `cto-${kind}`, menu: "Actions", group: "cto", label: `Compare in ${title}`, visible: () => !!cmpTarget() && !cmpFrom()!.dir, run: () => compareToX(kind),
+    })),
+    {
+      id: "cto-cancel", menu: "Actions", group: "cto", label: "Cancel Compare To", keys: "Esc",
+      caption: () => `Cancel "Compare to ${cmpFrom()?.name ?? ""}"`, visible: () => !!cmpFrom(), run: cancelCompareTo,
+    },
+
     // Actions (TDirActions/TDirBaseActions order)
     { id: "open-folder", menu: "Actions", group: "open", label: "Open Folder", visible: () => !!singleFolder() && !expanded().has(single()!.rel), isDefault: () => true, run: () => toggle(single()!.rel) },
     { id: "close-folder", menu: "Actions", group: "open", label: "Close Folder", visible: () => !!singleFolder() && expanded().has(single()!.rel), isDefault: () => true, run: () => toggle(single()!.rel) },
@@ -1394,7 +1443,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
       return "";
     };
     return (
-      <div class={`fside ${cls()}`} classList={{ selc: sel().has(n.rel) && sidesOn().includes(side), ign: ignored().has(n.rel) }}>
+      <div class={`fside ${cls()}`} classList={{ selc: sel().has(n.rel) && sidesOn().includes(side), ign: ignored().has(n.rel), cto: cmpFrom()?.rel === n.rel && cmpFrom()?.side === side }}>
         <span class="fname" style={{ "padding-left": `${depth * 16 + 4}px` }}>
           <Show when={s}>
             <Show when={n.dir} fallback={<span class="ficon">📄</span>}>
@@ -1505,6 +1554,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
       </div>
       <div
         class="fscroll"
+        classList={{ picking: !!cmpFrom() }}
         ref={scroller}
         onMouseDown={(e) => {
           // A click on the empty area clears the selection; New Folder then targets the clicked side's base folder.
