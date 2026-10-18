@@ -5,6 +5,7 @@
  * docs/REVERSE_ENGINEERING.md §9.
  */
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { setSetting, settings } from "../settings";
 import { createEffect, createMemo, createSignal, For, type JSX, Show } from "solid-js";
 import { api, errText, fmtSize, fmtTime } from "../api";
 import { Modal } from "../components/common";
@@ -121,7 +122,7 @@ export function SideDialog(props: {
 export function DeleteDialog(props: { counts: Counts; permanent: boolean; onStart: (sides: SideName[], useTrash: boolean) => void; onClose: () => void }) {
   const [l, setL] = createSignal(hasAny(props.counts.left));
   const [r, setR] = createSignal(hasAny(props.counts.right));
-  const [trash, setTrash] = createSignal(!props.permanent && localStorage.getItem("comparecraft.useTrash") !== "false");
+  const [trash, setTrash] = createSignal(!props.permanent && settings.useTrash);
   const sides = () => [...(l() ? ["left" as const] : []), ...(r() ? ["right" as const] : [])];
   return (
     <OpShell
@@ -131,7 +132,7 @@ export function DeleteDialog(props: { counts: Counts; permanent: boolean; onStar
       startLabel="Delete"
       canStart={sides().length > 0}
       onStart={() => {
-        if (!props.permanent) localStorage.setItem("comparecraft.useTrash", String(trash()));
+        if (!props.permanent) setSetting("useTrash", trash());
         props.onStart(sides(), trash());
       }}
       onClose={props.onClose}

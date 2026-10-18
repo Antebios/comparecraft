@@ -1,4 +1,5 @@
 import { ask, save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { settings } from "../settings";
 import { batch, createEffect, createMemo, createSignal, Index, onMount, Show } from "solid-js";
 import { api, errText, strictRules, type Chunk, type MergeResult, type Rules, type TextFile } from "../api";
 import { Btn, Modal, PathBar, ROW_H, useViewport } from "../components/common";
@@ -203,7 +204,9 @@ export default function TextMerge(props: { tab: Tab; active: boolean }) {
         bom: base?.bom ?? false,
         eol: base?.eol === "Mixed" ? "LF" : base?.eol ?? "LF",
         finalNewline: base?.finalNewline ?? true,
-        backup: false,
+        backup: settings.backupOnSave && !props.tab.noBackups,
+        backupKind: settings.backupKind,
+        backupDir: settings.backupDir || null,
       });
       setDirty(false);
       setMessage(`Saved ${p}`);

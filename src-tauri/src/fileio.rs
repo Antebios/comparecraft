@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::{self, Read};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -202,6 +202,53 @@ pub fn join_lines(lines: &[String], eol: &str, final_newline: bool) -> String {
     s
 }
 
+/// How backups of overwritten files are named (see `backup_path`).
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupSpec {
+    #[serde(default)]
+    pub kind: String,
+    #[serde(default)]
+    pub dir: Option<String>,
+}
+
+/// Backup file name for `p`. Kinds (for "abc.txt"): nameTildeExt "abc~.txt", nameExtTilde "abc.txt~",
+/// nameExtBak "abc.txt.bak" (default), tildeNameExt "~abc.txt", nameBak "abc.bak", nameBakExt "abc.bak.txt",
+/// folder `dir`/"abc.txt" (a relative `dir` is resolved against the file's folder).
+pub fn backup_path(p: &Path, kind: &str, dir: Option<&str>) -> PathBuf {
+    let file = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let stem = p.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| file.clone());
+    let ext = p.extension().map(|e| e.to_string_lossy().into_owned());
+    let parent = p.parent().map(Path::to_path_buf).unwrap_or_default();
+    let name = match (kind, ext.as_deref()) {
+        ("nameTildeExt", Some(e)) => format!("{stem}~.{e}"),
+        ("nameTildeExt" | "nameExtTilde", _) => format!("{file}~"),
+        ("tildeNameExt", _) => format!("~{file}"),
+        ("nameBak", _) => format!("{stem}.bak"),
+        ("nameBakExt", Some(e)) => format!("{stem}.bak.{e}"),
+        ("nameBakExt", None) => format!("{file}.bak"),
+        ("folder", _) => match dir.filter(|d| !d.trim().is_empty()) {
+            Some(d) => return parent.join(d).join(&file),
+            None => format!("{file}.bak"),
+        },
+        _ => format!("{file}.bak"),
+    };
+    parent.join(name)
+}
+
+/// Copies an existing file to its backup location, creating the backup folder if needed.
+pub fn make_backup(p: &Path, spec: &BackupSpec) -> io::Result<()> {
+    let kind = if spec.kind.is_empty() { "nameExtBak" } else { spec.kind.as_str() };
+    let bak = backup_path(p, kind, spec.dir.as_deref());
+    if let Some(parent) = bak.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent)?;
+        }
+    }
+    fs::copy(p, bak).map(|_| ())
+}
+
+#[allow(clippy::too_many_arguments)]
 pub fn save_text(
     path: &str,
     lines: &[String],
@@ -209,12 +256,13 @@ pub fn save_text(
     bom: bool,
     eol: &str,
     final_newline: bool,
-    backup: bool,
+    backup: Option<&BackupSpec>,
 ) -> io::Result<()> {
     let p = Path::new(path);
-    if backup && p.exists() {
-        let bak = format!("{path}.bak");
-        fs::copy(p, bak)?;
+    if let Some(spec) = backup {
+        if p.is_file() {
+            make_backup(p, spec)?;
+        }
     }
     if let Some(parent) = p.parent() {
         if !parent.as_os_str().is_empty() {
@@ -306,6 +354,33 @@ mod tests {
         assert_eq!((t.as_str(), enc.as_str(), bom), ("héllo", "UTF-16LE", true));
         let (t, enc, _) = decode(&[b'c', 0xE9]);
         assert_eq!((t.as_str(), enc.as_str()), ("cé", "Windows-1252"));
+    }
+
+    #[test]
+    fn backup_names() {
+        let n = |file: &str, kind: &str| backup_path(Path::new(file), kind, None).to_string_lossy().replace('\\', "/");
+        let cases = [
+            ("nameTildeExt", "d/abc~.txt", "d/abc~"),
+            ("nameExtTilde", "d/abc.txt~", "d/abc~"),
+            ("nameExtBak", "d/abc.txt.bak", "d/abc.bak"),
+            ("tildeNameExt", "d/~abc.txt", "d/~abc"),
+            ("nameBak", "d/abc.bak", "d/abc.bak"),
+            ("nameBakExt", "d/abc.bak.txt", "d/abc.bak"),
+            ("unknown", "d/abc.txt.bak", "d/abc.bak"),
+            ("folder", "d/abc.txt.bak", "d/abc.bak"),
+        ];
+        for (kind, with_ext, without) in cases {
+            assert_eq!(n("d/abc.txt", kind), with_ext, "{kind}");
+            assert_eq!(n("d/abc", kind), without, "{kind}");
+        }
+        let f = backup_path(Path::new("d/abc.txt"), "folder", Some("old")).to_string_lossy().replace('\\', "/");
+        assert_eq!(f, "d/old/abc.txt");
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("f.txt");
+        fs::write(&p, "one").unwrap();
+        let ps = p.to_string_lossy().into_owned();
+        save_text(&ps, &["two".into()], "UTF-8", false, "LF", true, Some(&BackupSpec::default())).unwrap();
+        assert_eq!(fs::read_to_string(d.path().join("f.txt.bak")).unwrap(), "one");
     }
 
     #[test]

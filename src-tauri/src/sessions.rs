@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -47,15 +47,21 @@ fn load() -> Store {
         .unwrap_or(Store { version: 1, sessions: vec![] })
 }
 
-fn store(s: &Store) -> io::Result<()> {
-    let p = store_path();
-    fs::create_dir_all(p.parent().unwrap())?;
+/// Writes a JSON file via a temporary file and rename, keeping the previous version as `.json.bak`.
+pub fn write_json_atomic<T: Serialize>(p: &Path, value: &T) -> io::Result<()> {
+    if let Some(dir) = p.parent() {
+        fs::create_dir_all(dir)?;
+    }
     let tmp = p.with_extension("json.tmp");
-    fs::write(&tmp, serde_json::to_vec_pretty(s)?)?;
+    fs::write(&tmp, serde_json::to_vec_pretty(value)?)?;
     if p.exists() {
-        let _ = fs::copy(&p, p.with_extension("json.bak"));
+        let _ = fs::copy(p, p.with_extension("json.bak"));
     }
     fs::rename(tmp, p)
+}
+
+fn store(s: &Store) -> io::Result<()> {
+    write_json_atomic(&store_path(), s)
 }
 
 pub fn list() -> Vec<Session> {
@@ -92,4 +98,9 @@ pub fn remove(id: &str) -> io::Result<()> {
 
 pub fn find_by_name(name: &str) -> Option<Session> {
     load().sessions.into_iter().find(|s| s.saved && s.name.eq_ignore_ascii_case(name))
+}
+
+/// Deletes all sessions.
+pub fn clear() -> io::Result<()> {
+    store(&Store { version: 1, sessions: vec![] })
 }

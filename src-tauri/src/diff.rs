@@ -3,6 +3,17 @@
 
 use serde::{Deserialize, Serialize};
 use similar::{capture_diff_slices, Algorithm, DiffTag};
+use std::sync::OnceLock;
+
+/// A "replacement" rule: text on either side that matches `from` is treated
+/// as `to` when lines are aligned, so such differences become unimportant.
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[serde(default)]
+pub struct Replacement {
+    pub from: String,
+    pub to: String,
+    pub regex: bool,
+}
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -14,6 +25,9 @@ pub struct Rules {
     pub ignore_blank_lines: bool,
     /// "myers" or "patience"
     pub algorithm: String,
+    pub replacements: Vec<Replacement>,
+    #[serde(skip)]
+    pub(crate) compiled: OnceLock<Vec<(regex::Regex, String)>>,
 }
 
 impl Default for Rules {
@@ -25,6 +39,8 @@ impl Default for Rules {
             ignore_embedded_ws: true,
             ignore_blank_lines: true,
             algorithm: "patience".into(),
+            replacements: Vec::new(),
+            compiled: OnceLock::new(),
         }
     }
 }
@@ -37,10 +53,34 @@ impl Rules {
             _ => Algorithm::Patience,
         }
     }
+
+    /// Replacement rules compiled once per comparison; invalid patterns are skipped.
+    fn replacers(&self) -> &[(regex::Regex, String)] {
+        self.compiled.get_or_init(|| {
+            self.replacements
+                .iter()
+                .filter(|r| !r.from.is_empty())
+                .filter_map(|r| {
+                    let pat = if r.regex { r.from.clone() } else { regex::escape(&r.from) };
+                    let to = if r.regex { r.to.clone() } else { r.to.replace('$', "$$") };
+                    regex::RegexBuilder::new(&pat).case_insensitive(self.ignore_case).build().ok().map(|re| (re, to))
+                })
+                .collect()
+        })
+    }
 }
 
 pub fn normalize(line: &str, r: &Rules) -> String {
+    let replaced;
     let mut s: &str = line;
+    if !r.replacements.is_empty() {
+        let mut t = line.to_string();
+        for (re, to) in r.replacers() {
+            t = re.replace_all(&t, to.as_str()).into_owned();
+        }
+        replaced = t;
+        s = &replaced;
+    }
     if r.ignore_leading_ws {
         s = s.trim_start();
     }
@@ -482,5 +522,22 @@ mod tests {
         let (l, r) = intraline("let x = 1;", "let x = 22;", &Rules::default());
         assert_eq!(l, vec![[8, 9]]);
         assert_eq!(r, vec![[8, 10]]);
+    }
+
+    #[test]
+    fn replacements_make_differences_unimportant() {
+        let rules = Rules {
+            replacements: vec![
+                Replacement { from: "colour".into(), to: "color".into(), regex: false },
+                Replacement { from: r"v\d+".into(), to: "vN".into(), regex: true },
+            ],
+            ..Rules::default()
+        };
+        let r = diff_lines(&v(&["the colour", "api v1"]), &v(&["the color", "api v2"]), &rules);
+        let kinds: Vec<Kind> = r.rows.iter().map(|r| r.k).collect();
+        assert_eq!(kinds, vec![Kind::Unimportant, Kind::Unimportant]);
+        assert_eq!(r.important, 0);
+        let plain = diff_lines(&v(&["the colour"]), &v(&["the color"]), &Rules::default());
+        assert_eq!(plain.important, 1);
     }
 }

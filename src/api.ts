@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
-export type ViewKind = "home" | "text" | "folder" | "sync" | "merge" | "hex" | "table" | "picture";
+export type ViewKind = "home" | "text" | "folder" | "sync" | "merge" | "hex" | "table" | "picture" | "edit" | "patch";
 
 export interface LaunchSpec {
   kind: ViewKind | "session";
@@ -44,6 +44,14 @@ export interface Rules {
   ignoreEmbeddedWs: boolean;
   ignoreBlankLines: boolean;
   algorithm: "patience" | "myers" | "lcs";
+  /** Text treated as equivalent when aligning ("Replacement…"); such differences are unimportant. */
+  replacements?: Replacement[];
+}
+
+export interface Replacement {
+  from: string;
+  to: string;
+  regex?: boolean;
 }
 
 export const defaultRules = (): Rules => ({
@@ -77,6 +85,8 @@ export interface Hunk {
   start: number;
   end: number;
   important: boolean;
+  /** Marked "Ignored" by the user (frontend only); treated as unimportant. */
+  ignored?: boolean;
 }
 export interface DiffResult {
   rows: Row[];
@@ -112,6 +122,35 @@ export interface FolderOptions {
   followSymlinks: boolean;
   /** Items compared with each other although their names differ ("Align With"). */
   align?: Alignment[];
+  /** Folder-name masks; empty or "*" includes all folders. */
+  includeFolders?: string;
+  otherFilters?: OtherFilter[];
+  /** Exclude protected operating system files (hidden + system attributes on Windows). */
+  excludeHidden?: boolean;
+  /** Ignore folder structure: compare all files as if they were in one folder. */
+  flatten?: boolean;
+  /** Timestamps exactly one hour apart are equal. */
+  ignoreDst?: boolean;
+  /** Timestamps a whole number of hours apart are equal. */
+  ignoreTz?: boolean;
+}
+/** Excludes files by date, size or content ("Other Filters"). */
+export interface OtherFilter {
+  kind: "date" | "size" | "content";
+  enabled?: boolean;
+  /** date: exclude files newer (true) or older (false) than `days` ago or `date`. */
+  newer?: boolean;
+  days?: number | null;
+  date?: number | null;
+  /** size: exclude files larger (true) or smaller (false) than `size` bytes. */
+  larger?: boolean;
+  size?: number;
+  /** content: exclude files containing `text` (or not containing it). */
+  notContaining?: boolean;
+  text?: string;
+  caseSensitive?: boolean;
+  wholeWords?: boolean;
+  regex?: boolean;
 }
 export interface Alignment {
   /** Relative path of the parent folder ("" for the base folder), using left-side names. */
@@ -135,6 +174,9 @@ export interface FNode {
   newer?: "left" | "right";
   error?: string;
   children?: FNode[];
+  /** Ignore folder structure: each side's relative path. */
+  leftPath?: string;
+  rightPath?: string;
 }
 export interface Summary {
   files: number;
@@ -223,7 +265,7 @@ export const api = {
   takeLaunchSpec: () => invoke<LaunchSpec | null>("take_launch_spec"),
   pathInfo: (path: string) => invoke<PathInfo>("path_info", { path }),
   loadText: (path: string) => invoke<TextFile>("load_text", { path }),
-  saveText: (f: { path: string; lines: string[]; encoding: string; bom: boolean; eol: string; finalNewline: boolean; backup: boolean }) =>
+  saveText: (f: { path: string; lines: string[]; encoding: string; bom: boolean; eol: string; finalNewline: boolean; backup: boolean; backupKind?: string; backupDir?: string | null }) =>
     invoke<PathInfo>("save_text", f),
   diffTexts: (left: string[], right: string[], rules: Rules) => invoke<DiffResult>("diff_texts", { left, right, rules }),
   mergeTexts: (base: string[], left: string[], right: string[], rules: Rules) =>
@@ -232,7 +274,8 @@ export const api = {
     invoke<FolderResult>("compare_folders", { left, right, options }),
   planSync: (left: string, right: string, options: FolderOptions, mode: string) =>
     invoke<Action[]>("plan_sync", { left, right, options, mode }),
-  executeActions: (actions: Action[], useTrash: boolean) => invoke<ActionResult[]>("execute_actions", { actions, useTrash }),
+  executeActions: (actions: Action[], useTrash: boolean, backup?: BackupSpec) =>
+    invoke<ActionResult[]>("execute_actions", { actions, useTrash, backup: backup ?? null }),
   compareItems: (left: string, right: string, rels: string[], options: FolderOptions) =>
     invoke<(FNode | null)[]>("compare_items", { left, right, rels, options }),
   itemInfo: (paths: string[]) => invoke<ItemInfo[]>("item_info", { paths }),
@@ -253,7 +296,36 @@ export const api = {
   saveSession: (session: Session) => invoke<void>("save_session", { session }),
   deleteSession: (id: string) => invoke<void>("delete_session", { id }),
   findSession: (name: string) => invoke<Session | null>("find_session", { name }),
+  loadSettings: () => invoke<Record<string, unknown>>("load_settings"),
+  saveSettings: (settings: unknown) => invoke<void>("save_settings", { settings }),
+  resetSettings: () => invoke<void>("reset_settings"),
+  exportSettings: (path: string, settings: unknown | null, sessionIds: string[] | null) =>
+    invoke<void>("export_settings", { path, settings, sessionIds }),
+  readSettingsFile: (path: string) => invoke<ImportData>("read_settings_file", { path }),
+  importSessions: (sessions: Session[], replace: boolean) => invoke<void>("import_sessions", { sessions, replace }),
+  saveSnapshot: (dir: string, path: string, crc: boolean, emptyDirs: boolean, options: FolderOptions | null) =>
+    invoke<number>("save_snapshot", { dir, out: path, crc, emptyDirs, options }),
+  spawnCommand: (program: string, args: string[]) => invoke<void>("spawn_command", { program, args }),
+  shellIntegrationStatus: () => invoke<ShellStatus>("shell_integration_status"),
+  setShellIntegration: (items: ShellItem[]) => invoke<void>("set_shell_integration", { items }),
 };
+
+export interface BackupSpec {
+  kind: string;
+  dir: string | null;
+}
+export interface ImportData {
+  settings: Record<string, unknown> | null;
+  sessions: Session[];
+}
+export interface ShellItem {
+  id: "compare" | "sync" | "merge" | "edit";
+  enabled: boolean;
+}
+export interface ShellStatus {
+  supported: boolean;
+  items: ShellItem[];
+}
 
 export function basename(p: string): string {
   const parts = p.split(/[\\/]/).filter(Boolean);

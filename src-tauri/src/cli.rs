@@ -6,6 +6,7 @@ use crate::diff::Rules;
 use crate::fileio::{self, detect_kind};
 use crate::merge::{merge3, render};
 use crate::quick::{self, QcMode};
+use crate::snapshot;
 use serde::Serialize;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -13,7 +14,7 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone, Default, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct LaunchSpec {
-    /// "home" | "text" | "folder" | "sync" | "merge" | "hex" | "table" | "picture" | "session"
+    /// "home" | "text" | "edit" | "patch" | "folder" | "sync" | "merge" | "hex" | "table" | "picture" | "session"
     pub kind: String,
     pub paths: Vec<String>,
     pub titles: Vec<Option<String>>,
@@ -65,7 +66,8 @@ Usage:
 
 Positional arguments:
   (none)              open the home view
-  <folder> <folder>   folder compare (with -sync: folder sync)
+  <folder> <folder>   folder compare (with -sync: folder sync); a snapshot file
+                      (.ccsnap) can stand in for either folder
   <file> <file>       file compare in the viewer associated with the file type
   <l> <r> <center>    3-way text merge, <center> is the common ancestor
   <l> <r> <c> <out>   3-way text merge writing to <out>
@@ -75,8 +77,9 @@ Positional arguments:
 Options (prefix with '-' ; on Windows '/' is also accepted):
   -h, -?, -help                 show this help
   -qc[=size|crc|binary]         quick compare of two files, exit code only
-  -fv=<type>, -fileviewer=      Text Compare | Text Merge | Hex Compare | Table Compare |
-                                Picture Compare | Folder Compare | Folder Sync
+  -fv=<type>, -fileviewer=      Text Compare | Text Merge | Text Edit | Text Patch |
+                                Hex Compare | Table Compare | Picture Compare |
+                                Folder Compare | Folder Sync
   -automerge                    merge without UI unless conflicts are found
   -force                        with -automerge, write conflicts with markers
   -iu, -ignoreunimportant       with -automerge, ignore whitespace-only conflicts
@@ -197,12 +200,19 @@ fn stdin_to_temp() -> Result<String, String> {
     Ok(p.to_string_lossy().into_owned())
 }
 
+/// A folder, or a snapshot file standing in for one.
+fn folderish(p: &str) -> bool {
+    let p = Path::new(p);
+    p.is_dir() || snapshot::is_snapshot(p)
+}
+
 fn viewer_kind(fv: &str) -> Option<&'static str> {
     let k = fv.to_ascii_lowercase().replace([' ', '-', '_'], "");
     Some(match k.as_str() {
         "textcompare" | "text" => "text",
         "textmerge" | "merge" => "merge",
-        "textedit" | "edit" | "textpatch" | "patch" => "text",
+        "textedit" | "edit" => "edit",
+        "textpatch" | "patch" => "patch",
         "hexcompare" | "hex" => "hex",
         "tablecompare" | "table" | "datacompare" => "table",
         "picturecompare" | "picture" | "mediacompare" => "picture",
@@ -277,7 +287,7 @@ pub fn resolve(a: &Args, cwd: &Path) -> Outcome {
             0 => "home".into(),
             1 if Path::new(&paths[0]).is_dir() => "folder".into(),
             1 => detect_kind(&paths[0]),
-            2 if Path::new(&paths[0]).is_dir() || Path::new(&paths[1]).is_dir() => {
+            2 if folderish(&paths[0]) || folderish(&paths[1]) => {
                 if a.sync { "sync".into() } else { "folder".into() }
             }
             2 => {
@@ -319,6 +329,7 @@ fn automerge(left: &str, right: &str, center: &str, output: Option<&str>, a: &Ar
             ignore_embedded_ws: false,
             ignore_blank_lines: false,
             algorithm: "patience".into(),
+            ..Rules::default()
         }
     };
     let m = merge3(&cf.lines, &lf.lines, &rf.lines, &rules);
@@ -329,7 +340,7 @@ fn automerge(left: &str, right: &str, center: &str, output: Option<&str>, a: &Ar
     let label = |p: &str| Path::new(p).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| p.to_string());
     let lines = render(&m, &label(left), &label(right));
     let final_nl = lf.final_newline || rf.final_newline || cf.final_newline;
-    fileio::save_text(out, &lines, &cf.encoding, cf.bom, &cf.eol, final_nl, false).map_err(|e| e.to_string())?;
+    fileio::save_text(out, &lines, &cf.encoding, cf.bom, &cf.eol, final_nl, None).map_err(|e| e.to_string())?;
     Ok(if m.conflicts > 0 { quick::CONFLICTS } else { 0 })
 }
 
@@ -401,6 +412,19 @@ mod tests {
         assert!(merged.contains("<<<<<<< left\n") && merged.contains(">>>>>>> right2\n"), "{merged}");
         match go(&["-qc=binary", "left", "left"]) {
             Outcome::Exit(c) => assert_eq!(c, 1),
+            o => panic!("{o:?}"),
+        }
+        match go(&["-fv=Text Edit", "left"]) {
+            Outcome::Gui(spec) => assert_eq!(spec.kind, "edit"),
+            o => panic!("{o:?}"),
+        }
+        match go(&["-fv=patch", "left"]) {
+            Outcome::Gui(spec) => assert_eq!(spec.kind, "patch"),
+            o => panic!("{o:?}"),
+        }
+        std::fs::write(p("old.ccsnap"), "{}").unwrap();
+        match go(&["dir1", "old.ccsnap"]) {
+            Outcome::Gui(spec) => assert_eq!(spec.kind, "folder"),
             o => panic!("{o:?}"),
         }
         match go(&["MySession"]) {

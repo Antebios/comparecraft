@@ -1,17 +1,96 @@
 import { ask, open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { settings } from "../settings";
 import { batch, createEffect, createMemo, createSignal, For, Index, on, onMount, Show } from "solid-js";
 import { api, defaultRules, errText, fmtSize, fmtTime, type DiffResult, type Row, type Rules, type TextFile } from "../api";
 import { Btn, Highlighted, Modal, PathBar, ROW_H, useViewport } from "../components/common";
 import { showContextMenu } from "../components/ContextMenu";
-import { externalCommands } from "../components/external";
+import { externalCommands, shellWords } from "../components/external";
 import FindBar from "../components/FindBar";
 import { promptText } from "../components/Prompt";
-import { displayKeys, registerCommands, type Command } from "../commands";
+import { displayKeys, registerCommands, type Command, type MenuRef } from "../commands";
 import { openTab, persistSession, updateTab, type Tab } from "../store";
-import { RulesPanel } from "../components/RulesPanel";
+import { ReplacementDialog, RulesPanel } from "../components/RulesPanel";
 
 type Side = 0 | 1;
 type Filter = "all" | "diffs" | "context" | "same";
+/** A manual alignment boundary: left line `l` and right line `r` start a new aligned segment. */
+type Cut = { l: number; r: number };
+
+const other = (s: Side): Side => (s === 0 ? 1 : 0);
+const keyOf = (s: Side) => (s === 0 ? "l" : "r") as "l" | "r";
+const splitLines = (t: string) => {
+  const a = t.split(/\r\n|\n|\r/);
+  if (a.length > 1 && a[a.length - 1] === "") a.pop();
+  return a;
+};
+
+async function clipRead(): Promise<string> {
+  try {
+    return await readText();
+  } catch {
+    return navigator.clipboard.readText();
+  }
+}
+async function clipWrite(t: string) {
+  try {
+    await writeText(t);
+  } catch {
+    await navigator.clipboard.writeText(t);
+  }
+}
+
+/** Keeps cuts inside the files and strictly increasing on both sides. */
+function normCuts(cs: Cut[], nl: number, nr: number): Cut[] {
+  const sorted = cs.filter((c) => c.l >= 0 && c.r >= 0 && c.l <= nl && c.r <= nr).sort((x, y) => x.l - y.l || x.r - y.r);
+  const out: Cut[] = [];
+  let [pl, pr] = [0, 0];
+  for (const c of sorted) {
+    if (c.l < pl || c.r < pr || (c.l === pl && c.r === pr) || (c.l === nl && c.r === nr)) continue;
+    out.push(c);
+    [pl, pr] = [c.l, c.r];
+  }
+  return out;
+}
+
+/** Compares each manually aligned segment separately and joins the results. */
+async function diffSegments(l: string[], r: string[], rules: Rules, cs: Cut[]): Promise<DiffResult> {
+  const pts = normCuts(cs, l.length, r.length);
+  if (!pts.length) return api.diffTexts(l, r, rules);
+  const b = [{ l: 0, r: 0 }, ...pts, { l: l.length, r: r.length }];
+  const parts = await Promise.all(b.slice(1).map((e, i) => api.diffTexts(l.slice(b[i].l, e.l), r.slice(b[i].r, e.r), rules)));
+  const out: DiffResult = { rows: [], hunks: [], important: 0, unimportant: 0, sameLines: 0, identical: true };
+  parts.forEach((p, i) => {
+    const rowOff = out.rows.length;
+    const hOff = out.hunks.length;
+    for (const row of p.rows)
+      out.rows.push({
+        ...row,
+        l: row.l === undefined ? undefined : row.l + b[i].l,
+        r: row.r === undefined ? undefined : row.r + b[i].r,
+        h: row.h === undefined ? undefined : row.h + hOff,
+      });
+    for (const h of p.hunks) out.hunks.push({ ...h, start: h.start + rowOff, end: h.end + rowOff });
+    out.important += p.important;
+    out.unimportant += p.unimportant;
+    out.sameLines += p.sameLines;
+    out.identical &&= p.identical;
+  });
+  return out;
+}
+
+/** Content key of a difference section, so "Ignored" survives recomparison. */
+function hunkKey(res: DiffResult, h: number, l: string[], r: string[]) {
+  const hk = res.hunks[h];
+  const a: string[] = [];
+  const b: string[] = [];
+  for (let i = hk.start; i < hk.end; i++) {
+    const row = res.rows[i];
+    if (row.l !== undefined) a.push(l[row.l]);
+    if (row.r !== undefined) b.push(r[row.r]);
+  }
+  return JSON.stringify([a, b]);
+}
 
 function lowerBound(a: number[], x: number) {
   let lo = 0,
@@ -23,17 +102,6 @@ function lowerBound(a: number[], x: number) {
   }
   return lo;
 }
-
-/**
- * Pane context menu, in the order of the reference "Edit" popup. Like the
- * reference, it only offers copying away from the clicked pane.
- */
-const textMenu = (side: Side) => [
-  ...(side === 0 ? ["copy-right", "copy-line-right"] : ["copy-left", "copy-line-left"]), "-",
-  "copy-text", "del-line", "ins-before", "ins-after", "edit-line", "-",
-  "ignore-unimp", "-",
-  "open", "open-default", "reveal", "save",
-];
 
 export default function TextCompare(props: { tab: Tab; active: boolean }) {
   const tab = () => props.tab;
@@ -49,10 +117,16 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
   const [cur, setCur] = createSignal(-1);
   const [selRow, setSelRow] = createSignal(-1);
   const [selSide, setSelSide] = createSignal<Side>(0);
+  /** Other end of a line (row range) selection, or -1 when only the caret row is selected. */
+  const [selAnchor, setSelAnchor] = createSignal(-1);
+  const [cuts, setCuts] = createSignal<Cut[]>([]);
+  const [alignFrom, setAlignFrom] = createSignal<{ side: Side; line: number } | null>(null);
+  const [ignoredKeys, setIgnoredKeys] = createSignal<Set<string>>(new Set());
+  const [replacing, setReplacing] = createSignal<{ from: string; to: string } | null>(null);
   const [editing, setEditing] = createSignal<{ ri: number; side: Side } | null>(null);
   const [showRules, setShowRules] = createSignal(false);
   const [editAll, setEditAll] = createSignal<Side | null>(null);
-  const [backup, setBackup] = createSignal(false);
+  const [backup, setBackup] = createSignal(settings.backupOnSave);
   const [busy, setBusy] = createSignal(false);
   const [message, setMessage] = createSignal("");
   const history: { l: string[]; r: string[]; d: [boolean, boolean] }[] = [];
@@ -70,10 +144,12 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
   const setLines = (s: Side, v: string[]) => (s === 0 ? setL(v) : setR(v));
   const readOnly = (s: Side) => !!tab().readOnly?.[s] || !!meta()[s]?.readOnly;
 
-  async function loadSide(s: Side, path: string) {
+  async function loadSide(s: Side, path: string, content?: string[]) {
     let file: TextFile | null = null;
     let err = "";
-    if (path) {
+    if (content) {
+      setLines(s, content);
+    } else if (path) {
       try {
         file = await api.loadText(path);
       } catch (e) {
@@ -82,7 +158,8 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
     }
     // Update from the latest state after the await; both sides may load concurrently.
     batch(() => {
-      setLines(s, file?.lines ?? []);
+      setCuts([]);
+      if (!content) setLines(s, file?.lines ?? []);
       const m = [...meta()] as [TextFile | null, TextFile | null];
       m[s] = file;
       setMeta(m);
@@ -97,14 +174,22 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
 
   let token = 0;
   let timer: number | undefined;
+  let goFirst = settings.nextDiffLoadFirst;
   function recompute(immediate = false) {
     clearTimeout(timer);
     const run = async () => {
       const t = ++token;
       setBusy(true);
       try {
-        const res = await api.diffTexts(L(), R(), rules());
-        if (t === token) setResult(res);
+        const [l, r] = [L(), R()];
+        const res = applyIgnored(await diffSegments(l, r, rules(), cuts()), l, r);
+        if (t === token) {
+          setResult(res);
+          if (goFirst && res.hunks.length) {
+            goFirst = false;
+            queueMicrotask(() => nextHunk(1));
+          }
+        }
       } catch (e) {
         setMessage(errText(e));
       } finally {
@@ -115,10 +200,34 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
     else timer = window.setTimeout(run, 120);
   }
 
+  /** Marks the user's "Ignored" sections as unimportant. */
+  function applyIgnored(res: DiffResult, l: string[], r: string[]): DiffResult {
+    const ig = ignoredKeys();
+    if (!ig.size) return res;
+    res.hunks.forEach((hk, h) => {
+      if (!ig.has(hunkKey(res, h, l, r))) return;
+      hk.ignored = true;
+      if (hk.important) {
+        hk.important = false;
+        res.important--;
+        res.unimportant++;
+      }
+      for (let i = hk.start; i < hk.end; i++) if (res.rows[i].k !== "same") res.rows[i].k = "unimportant";
+    });
+    return res;
+  }
+
   onMount(async () => {
     const [lp, rp] = [tab().paths[0] ?? "", tab().paths[1] ?? ""];
-    await Promise.all([loadSide(0, lp), loadSide(1, rp)]);
+    // Text handed over by "Compare Selection to Clipboard" (not persisted).
+    const content = tab().options.content as [string[] | null, string[] | null] | undefined;
+    if (content) {
+      const { content: _, ...rest } = tab().options;
+      updateTab(tab().id, { options: rest });
+    }
+    await Promise.all([loadSide(0, lp, content?.[0] ?? undefined), loadSide(1, rp, content?.[1] ?? undefined)]);
     recompute(true);
+
     if (lp || rp) void persistSession(tab());
   });
 
@@ -149,7 +258,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
     } else if (f === "diffs") {
       for (let i = 0; i < rows.length; i++) if (kindOf(rows[i]) !== "same") out.push(i);
     } else {
-      const C = 3;
+      const C = settings.contextLines;
       let lastDiff = -Infinity;
       const isDiff = rows.map((r) => kindOf(r) !== "same");
       let nextDiff = Infinity;
@@ -228,7 +337,17 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
     for (let i = h + dir; i >= 0 && i < res.hunks.length; i += dir) {
       if (hunkActive(i)) return goHunk(i);
     }
-    setMessage(dir === 1 ? "No more differences below." : "No more differences above.");
+    if (settings.nextDiffWrap) {
+      const n = res.hunks.length;
+      for (let k = 0; k < n; k++) {
+        const i = dir === 1 ? k : n - 1 - k;
+        if (hunkActive(i)) {
+          if (settings.nextDiffShowMessage) setMessage("Wrapped around to the " + (dir === 1 ? "first" : "last") + " difference.");
+          return goHunk(i);
+        }
+      }
+    }
+    if (settings.nextDiffShowMessage) setMessage(dir === 1 ? "No more differences below." : "No more differences above.");
   }
 
   function snapshot() {
@@ -267,29 +386,93 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
     return lines(side).length;
   }
 
-  function copyHunk(to: Side) {
+  /** Rows of the line selection, or the caret row. */
+  const selRange = (): [number, number] => {
+    const r = selRow();
+    const a = selAnchor();
+    if (r < 0) return [0, -1];
+    return a < 0 ? [r, r] : [Math.min(a, r), Math.max(a, r)];
+  };
+  const hasLineSel = () => selAnchor() >= 0 && selRow() >= 0;
+  const inSel = (ri: number) => {
+    const [a, b] = selRange();
+    return ri >= a && ri <= b;
+  };
+  /** Line indices on side `s` covered by the selected rows. */
+  function selLines(s: Side): number[] {
+    const rows = result()?.rows ?? [];
+    const [a, b] = selRange();
+    const out: number[] = [];
+    for (let i = a; i <= b; i++) {
+      const v = rows[i]?.[keyOf(s)];
+      if (v !== undefined) out.push(v);
+    }
+    return out;
+  }
+  const curHunk = () => (cur() >= 0 ? cur() : result()?.rows[selRow()]?.h ?? -1);
+
+  /** Replaces a side's lines, keeping manual alignment points in place. */
+  function editLines(s: Side, next: string[]) {
+    const prev = lines(s);
+    if (cuts().length) {
+      let a = 0;
+      while (a < prev.length && a < next.length && prev[a] === next[a]) a++;
+      let e = 0;
+      while (e < prev.length - a && e < next.length - a && prev[prev.length - 1 - e] === next[next.length - 1 - e]) e++;
+      const delEnd = prev.length - e;
+      const delta = next.length - prev.length;
+      const k = keyOf(s);
+      setCuts(cuts().map((c) => ({ ...c, [k]: c[k] <= a ? c[k] : c[k] >= delEnd ? c[k] + delta : a })));
+    }
+    setLines(s, next);
+    markDirty(s);
+  }
+
+  /** Copies rows `a..b` (inclusive) from the other side to side `to`. */
+  function copyRows(to: Side, a: number, b: number) {
     const res = result();
-    const h = cur() >= 0 ? cur() : res?.rows[selRow()]?.h ?? -1;
-    if (!res || h < 0 || h === undefined) return setMessage("Select a difference first.");
+    if (!res || a < 0 || b < a) return setMessage("Select a difference first.");
     if (readOnly(to)) return setMessage("Target side is read-only.");
-    const from: Side = to === 0 ? 1 : 0;
-    const hk = res.hunks[h];
-    const fk = from === 0 ? "l" : "r";
-    const tk = to === 0 ? "l" : "r";
+    const from = other(to);
     const src: string[] = [];
     const dstIdx: number[] = [];
-    for (let i = hk.start; i < hk.end; i++) {
+    for (let i = a; i <= b; i++) {
       const row = res.rows[i];
-      if (row[fk] !== undefined) src.push(lines(from)[row[fk]!]);
-      if (row[tk] !== undefined) dstIdx.push(row[tk]!);
+      if (row[keyOf(from)] !== undefined) src.push(lines(from)[row[keyOf(from)]!]);
+      if (row[keyOf(to)] !== undefined) dstIdx.push(row[keyOf(to)]!);
     }
+    if (!src.length && !dstIdx.length) return;
     snapshot();
     const dst = [...lines(to)];
     if (dstIdx.length) dst.splice(dstIdx[0], dstIdx[dstIdx.length - 1] - dstIdx[0] + 1, ...src);
-    else dst.splice(insertionPoint(to, hk.end), 0, ...src);
-    setLines(to, dst);
-    markDirty(to);
+    else dst.splice(insertionPoint(to, b + 1), 0, ...src);
+    editLines(to, dst);
     recompute(true);
+  }
+
+  /** "Copy to Left/Right": the selected lines, or else the current difference section. */
+  function copyHunk(to: Side) {
+    if (hasLineSel()) return copyRows(to, ...selRange());
+    const res = result();
+    const h = curHunk();
+    if (!res || h < 0) return setMessage("Select a difference first.");
+    copyRows(to, res.hunks[h].start, res.hunks[h].end - 1);
+  }
+
+  /** "Copy Line to Left/Right": the selected lines, or else the caret line. */
+  const copyLine = (to: Side) => (selRow() < 0 ? setMessage("Select a line first.") : copyRows(to, ...selRange()));
+
+  /** Gutter arrow: copies a whole difference section. */
+  function gutterCopy(h: number, to: Side) {
+    const hk = result()?.hunks[h];
+    if (!hk) return;
+    batch(() => {
+      setSelAnchor(-1);
+      setCur(h);
+      setSelRow(hk.start);
+      setSelSide(other(to));
+    });
+    copyRows(to, hk.start, hk.end - 1);
   }
 
   function commitEdit(text: string) {
@@ -306,21 +489,20 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
       if (arr[row[key]!] === text) return void history.pop();
       arr.splice(row[key]!, 1, ...newLines);
     } else arr.splice(insertionPoint(ed.side, ed.ri), 0, ...newLines);
-    setLines(ed.side, arr);
-    markDirty(ed.side);
+    editLines(ed.side, arr);
     recompute(true);
   }
 
+  /** Deletes the selected lines (or the caret line) on the selected side. */
   function deleteLine() {
-    const row = result()?.rows[selRow()];
     const s = selSide();
-    const key = s === 0 ? "l" : "r";
-    if (!row || row[key] === undefined || readOnly(s)) return;
+    const ls = selLines(s);
+    if (!ls.length || readOnly(s)) return;
     snapshot();
     const arr = [...lines(s)];
-    arr.splice(row[key]!, 1);
-    setLines(s, arr);
-    markDirty(s);
+    arr.splice(ls[0], ls[ls.length - 1] - ls[0] + 1);
+    editLines(s, arr);
+    setSelAnchor(-1);
     recompute(true);
   }
 
@@ -334,20 +516,25 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
     const arr = [...lines(s)];
     const at = row && row[key] !== undefined ? row[key]! + (before ? 0 : 1) : insertionPoint(s, ri);
     arr.splice(at, 0, "");
-    setLines(s, arr);
-    markDirty(s);
+    editLines(s, arr);
     recompute(true);
   }
 
-  async function saveSide(s: Side): Promise<boolean> {
-    let path = s === 1 && tab().saveTarget ? tab().saveTarget! : tab().paths[s];
+  function setSidePath(s: Side, p: string, title: string | null = null) {
+    const paths = [...tab().paths];
+    paths[s] = p;
+    const titles = [...(tab().titles ?? [])];
+    titles[s] = title;
+    updateTab(tab().id, { paths, titles });
+  }
+
+  async function saveSide(s: Side, explicit?: string): Promise<boolean> {
+    let path = explicit ?? (s === 1 && tab().saveTarget ? tab().saveTarget! : tab().paths[s]);
     if (!path) {
       const p = await saveDialog({});
       if (!p) return false;
       path = p;
-      const paths = [...tab().paths];
-      paths[s] = p;
-      updateTab(tab().id, { paths });
+      setSidePath(s, p);
     }
     const m = meta()[s];
     try {
@@ -359,6 +546,8 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
         eol: m?.eol === "Mixed" ? "LF" : m?.eol ?? "LF",
         finalNewline: m?.finalNewline ?? true,
         backup: backup() && !tab().noBackups,
+        backupKind: settings.backupKind,
+        backupDir: settings.backupDir || null,
       });
       const d = [...dirty()] as [boolean, boolean];
       d[s] = false;
@@ -371,6 +560,16 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
     }
   }
 
+  /** "Save File As…": saves one side under a new name and keeps editing that file. */
+  async function saveAs(s: Side) {
+    const p = await saveDialog({ defaultPath: tab().paths[s] || undefined });
+    if (!p) return;
+    if (await saveSide(s, p)) {
+      setSidePath(s, p);
+      void persistSession(tab());
+    }
+  }
+
   async function saveAll() {
     if (dirty()[0]) await saveSide(0);
     if (dirty()[1]) await saveSide(1);
@@ -378,9 +577,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
 
   async function changePath(s: Side, p: string) {
     if (dirty()[s] && !(await ask("Discard unsaved changes on this side?", { kind: "warning" }))) return;
-    const paths = [...tab().paths];
-    paths[s] = p;
-    updateTab(tab().id, { paths });
+    setSidePath(s, p);
     await loadSide(s, p);
     setCur(-1);
     recompute(true);
@@ -402,36 +599,17 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
       setMeta([meta()[1], meta()[0]]);
       setDirty([dirty()[1], dirty()[0]]);
       setErrors([errors()[1], errors()[0]]);
+      setCuts(cuts().map((c) => ({ l: c.r, r: c.l })));
+      setAlignFrom(null);
       updateTab(tab().id, { paths: [tab().paths[1] ?? "", tab().paths[0] ?? ""], titles: [tab().titles[1] ?? null, tab().titles[0] ?? null] });
     });
     recompute(true);
   }
 
-  /** Copies the selected line (only) to the other side. */
-  function copyLine(to: Side) {
-    const res = result();
-    const ri = selRow();
-    const row = res?.rows[ri];
-    if (!row) return setMessage("Select a line first.");
-    if (readOnly(to)) return setMessage("Target side is read-only.");
-    const from: Side = to === 0 ? 1 : 0;
-    const fk = from === 0 ? "l" : "r";
-    const tk = to === 0 ? "l" : "r";
-    snapshot();
-    const dst = [...lines(to)];
-    const src = row[fk] !== undefined ? lines(from)[row[fk]!] : undefined;
-    if (row[tk] !== undefined) {
-      if (src === undefined) dst.splice(row[tk]!, 1);
-      else dst[row[tk]!] = src;
-    } else if (src !== undefined) dst.splice(insertionPoint(to, ri), 0, src);
-    else return void history.pop();
-    setLines(to, dst);
-    markDirty(to);
-    recompute(true);
-  }
-
-  function selectRow(ri: number, side: Side = selSide()) {
+  function selectRow(ri: number, side: Side = selSide(), extend = false) {
     batch(() => {
+      if (!extend) setSelAnchor(-1);
+      else if (selAnchor() < 0) setSelAnchor(selRow());
       setSelRow(ri);
       setSelSide(side);
       setCur(result()?.rows[ri]?.h ?? -1);
@@ -440,6 +618,15 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
     const vi = lowerBound(visible(), ri);
     const top = vi * ROW_H;
     if (top < paneL.scrollTop || top > paneL.scrollTop + vp.height() - ROW_H * 2) scrollToRow(ri);
+  }
+
+  /** Up/Down (Shift extends the line selection). */
+  function moveSel(dir: 1 | -1, extend = false) {
+    const vis = visible();
+    if (!vis.length) return;
+    const vi = selRow() < 0 ? (dir === 1 ? -1 : vis.length) : lowerBound(vis, selRow());
+    const n = Math.max(0, Math.min(vis.length - 1, vi + dir));
+    selectRow(vis[n], selSide(), extend);
   }
 
   /** Moves to the next/previous line that exists on the current side (skipping gaps). */
@@ -506,20 +693,215 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
 
   const anyDirty = () => dirty()[0] || dirty()[1];
   const hasSel = () => selRow() >= 0;
-  /** Copies the text selected with the mouse, or else the selected line. */
+  /** Text selected with the mouse, or else the selected lines of the selected side. */
+  function selectionText(): string {
+    const t = window.getSelection()?.toString() ?? "";
+    if (t) return t;
+    const s = selSide();
+    return selLines(s).map((i) => lines(s)[i] ?? "").join("\n");
+  }
   async function copyText() {
-    let text = window.getSelection()?.toString() ?? "";
-    if (!text && hasSel()) {
-      const idx = result()?.rows[selRow()]?.[selSide() === 0 ? "l" : "r"];
-      if (idx !== undefined) text = lines(selSide())[idx] ?? "";
-    }
+    const text = selectionText();
     if (!text) return;
     try {
-      await navigator.clipboard.writeText(text);
+      await clipWrite(text);
     } catch (err) {
       setMessage(`Clipboard unavailable: ${errText(err)}`);
     }
   }
+  async function readClipboard(): Promise<string | null> {
+    try {
+      return await clipRead();
+    } catch (err) {
+      setMessage(`Clipboard unavailable: ${errText(err)}`);
+      return null;
+    }
+  }
+  async function cutLines() {
+    if (readOnly(selSide()) || !selLines(selSide()).length) return;
+    await copyText();
+    deleteLine();
+  }
+  /** Pastes clipboard lines over the line selection, or before the caret line. */
+  async function paste() {
+    const s = selSide();
+    if (readOnly(s)) return;
+    const t = await readClipboard();
+    if (!t) return;
+    const ins = splitLines(t);
+    const ls = hasLineSel() ? selLines(s) : [];
+    const arr = [...lines(s)];
+    snapshot();
+    if (ls.length) arr.splice(ls[0], ls[ls.length - 1] - ls[0] + 1, ...ins);
+    else arr.splice(selRow() >= 0 ? insertionPoint(s, selRow()) : arr.length, 0, ...ins);
+    editLines(s, arr);
+    setSelAnchor(-1);
+    recompute(true);
+  }
+
+  /** Increase/Decrease Indent of the selected lines. */
+  function indent(dir: 1 | -1) {
+    const s = selSide();
+    const ls = selLines(s);
+    if (readOnly(s) || !ls.length) return;
+    const arr = [...lines(s)];
+    const tabW = settings.tabSize || 4;
+    const unit = arr.some((x) => x.startsWith("\t")) ? "\t" : " ".repeat(tabW);
+    let changed = false;
+    for (const i of ls) {
+      const before = arr[i];
+      if (dir > 0) arr[i] = before ? unit + before : before;
+      else if (before.startsWith("\t")) arr[i] = before.slice(1);
+      else arr[i] = before.slice(Math.min(/^ */.exec(before)![0].length, tabW));
+      changed ||= arr[i] !== before;
+    }
+    if (!changed) return;
+    snapshot();
+    editLines(s, arr);
+    recompute(true);
+  }
+
+  /** "Select Section": selects every row of the current difference section. */
+  function selectSection() {
+    const res = result();
+    const h = curHunk();
+    if (!res || h < 0) return;
+    const hk = res.hunks[h];
+    batch(() => {
+      setCur(h);
+      setSelAnchor(hk.start);
+      setSelRow(hk.end - 1);
+    });
+  }
+
+  /** Opens the selection and the clipboard side by side in a new Text Compare. */
+  async function compareToClipboard() {
+    const sel = selectionText();
+    if (!sel) return;
+    const clip = await readClipboard();
+    if (clip === null) return;
+    openTab({ kind: "text", paths: ["", ""], titles: ["Selection", "Clipboard"], options: { content: [splitLines(sel), splitLines(clip)] } });
+  }
+
+  /** "Open Clipboard": replaces the selected side with the clipboard text. */
+  async function openClipboard() {
+    const s = selSide();
+    if (dirty()[s] && !(await ask("Discard unsaved changes on this side?", { kind: "warning" }))) return;
+    const t = await readClipboard();
+    if (t === null) return;
+    setSidePath(s, "", "Clipboard");
+    await loadSide(s, "", splitLines(t));
+    setCur(-1);
+    recompute(true);
+  }
+
+  /** "Align With…": the first use marks a line, the second (on the other side) aligns the two lines. */
+  function alignWith() {
+    const s = selSide();
+    const line = result()?.rows[selRow()]?.[keyOf(s)];
+    const from = alignFrom();
+    if (from && from.side !== s && line !== undefined) return completeAlign(from, { side: s, line });
+    if (line === undefined) return setMessage("Select a line to align.");
+    setAlignFrom({ side: s, line });
+    setMessage(`Align With: click the ${s === 0 ? "right" : "left"} line to align with ${s === 0 ? "left" : "right"} line ${line + 1} (Esc cancels).`);
+  }
+  function addCuts(a: Cut, b: Cut) {
+    const keep = cuts().filter((c) => (c.l <= a.l && c.r <= a.r) || (c.l >= b.l && c.r >= b.r));
+    setCuts([...keep, a, b]);
+    recompute(true);
+  }
+  function completeAlign(a: { side: Side; line: number }, b: { side: Side; line: number }) {
+    const [l, r] = a.side === 0 ? [a.line, b.line] : [b.line, a.line];
+    setAlignFrom(null);
+    setSelAnchor(-1);
+    addCuts({ l, r }, { l: l + 1, r: r + 1 });
+    setMessage(`Aligned left line ${l + 1} with right line ${r + 1}.`);
+  }
+  /** "Isolate": realigns so the selected lines are by themselves. */
+  function isolate() {
+    const s = selSide();
+    const ls = selLines(s);
+    if (!ls.length) return;
+    const o = insertionPoint(other(s), selRange()[0]);
+    const [a, b] = [ls[0], ls[ls.length - 1] + 1];
+    setSelAnchor(-1);
+    if (s === 0) addCuts({ l: a, r: o }, { l: b, r: o });
+    else addCuts({ l: o, r: a }, { l: o, r: b });
+  }
+
+  /** Difference sections touched by the selection. */
+  function selHunks(): number[] {
+    const res = result();
+    if (!res) return [];
+    if (!hasLineSel()) return curHunk() >= 0 ? [curHunk()] : [];
+    const [a, b] = selRange();
+    const hs = new Set<number>();
+    for (let i = a; i <= b; i++) if (res.rows[i]?.h !== undefined) hs.add(res.rows[i].h!);
+    return [...hs];
+  }
+  const selIgnored = () => {
+    const hs = selHunks();
+    return hs.length > 0 && hs.every((h) => !!result()?.hunks[h]?.ignored);
+  };
+  /** "Ignored": treats the selected difference sections as unimportant (or restores them). */
+  function toggleIgnored() {
+    const res = result();
+    const hs = selHunks();
+    if (!res || !hs.length) return;
+    const on = !selIgnored();
+    const ig = new Set(ignoredKeys());
+    for (const h of hs) {
+      const k = hunkKey(res, h, L(), R());
+      if (on) ig.add(k);
+      else ig.delete(k);
+    }
+    setIgnoredKeys(ig);
+    recompute(true);
+  }
+
+  /** "Replacement…", prefilled with the first differing text of the current section. */
+  function replacement() {
+    const res = result();
+    const h = curHunk();
+    let [from, to] = ["", ""];
+    if (res && h >= 0) {
+      for (let i = res.hunks[h].start; i < res.hunks[h].end && !from; i++) {
+        const row = res.rows[i];
+        if (row.l === undefined || row.r === undefined) continue;
+        const [ls, rs] = [row.ls?.[0], row.rs?.[0]];
+        if (ls) from = L()[row.l].slice(ls[0], ls[1]);
+        if (rs) to = R()[row.r].slice(rs[0], rs[1]);
+      }
+    }
+    setReplacing({ from, to });
+  }
+
+  /** User-defined Open With applications (%1 / %2 = left / right file, %F = both). */
+  function runOpenWith(command: string) {
+    const [p1, p2] = [tab().paths[0] ?? "", tab().paths[1] ?? ""];
+    const files = [p1, p2].filter(Boolean);
+    const words = shellWords(command).flatMap((w) => (w === "%F" ? files : [w.replaceAll("%1", p1).replaceAll("%2", p2).replaceAll("%F", files.join(" "))]));
+    if (!words.length) return;
+    api.spawnCommand(words[0], words.slice(1)).catch((e) => setMessage(`Open With failed: ${errText(e)}`));
+  }
+
+  const sidePath = () => tab().paths[selSide()] || undefined;
+  /** Pane popup, in the order of the reference editor's "Edit" popup. */
+  const paneMenu = (s: Side): MenuRef[] => [
+    "align-with", "isolate", "replacement",
+    s === 0 ? "copy-right" : "copy-left",
+    s === 0 ? "copy-line-right" : "copy-line-left",
+    "indent-inc", "indent-dec", "-",
+    "cut", "copy-text", "paste", "delete", "-",
+    "select-section", "compare-clipboard", "-",
+    "ignored", "-",
+    "open", "open-clipboard", "open-with",
+    { id: `save-side-${s}`, menu: "File", label: "Save File", enabled: () => dirty()[s] && !readOnly(s), run: () => saveSide(s) },
+    { id: `save-as-${s}`, menu: "File", label: "Save File As…", keys: "F12", enabled: () => !readOnly(s), run: () => saveAs(s) },
+  ];
+  /** Gutter popup: copy commands only. */
+  const gutterMenu = (s: Side): MenuRef[] => [s === 0 ? "copy-right" : "copy-left", s === 0 ? "copy-line-right" : "copy-line-left"];
+
   const filterCmd = (f: Filter, label: string): Command => ({
     id: `show-${f}`, menu: "View", group: "filter", label, checked: () => filter() === f, run: () => setFilter(f),
   });
@@ -531,23 +913,52 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
     { id: "recompare", menu: "Session", group: "files", label: "Recompare Files", keys: "Ctrl+F5", run: () => recompute(true) },
     { id: "as-hex", menu: "Session", group: "using", label: "Compare Files Using Hex Compare", run: () => openTab({ kind: "hex", paths: [...tab().paths] }) },
     { id: "as-merge", menu: "Session", group: "using", label: "Merge Files", run: () => openTab({ kind: "merge", paths: [tab().paths[0] ?? "", tab().paths[1] ?? ""] }) },
-    { id: "open", menu: "File", group: "open", label: "Open File into Picked Side…", keys: "Ctrl+O", run: openFile },
+    { id: "open", menu: "File", group: "open", label: "Open File…", keys: "Ctrl+O", run: openFile },
+    { id: "open-clipboard", menu: "File", group: "open", label: "Open Clipboard", keys: "Shift+Ctrl+V", enabled: () => !readOnly(selSide()), run: openClipboard },
+    {
+      id: "open-with", menu: "File", group: "open", label: "Open With",
+      submenu: () => [
+        "open-default", "reveal", "-", "ow-edit", "ow-patch",
+        ...(settings.openWith.length ? ["-" as const] : []),
+        ...settings.openWith.map((a, i): Command => ({ id: `ow-user-${i}`, menu: "File", label: a.name, run: () => runOpenWith(a.command) })),
+      ],
+      run: () => {},
+    },
+    { id: "ow-edit", menu: "File", group: "open", hidden: true, label: "Text Edit", enabled: () => !!sidePath(), run: () => openTab({ kind: "edit", paths: [sidePath()!] }) },
+    { id: "ow-patch", menu: "File", group: "open", hidden: true, label: "Text Patch", enabled: () => !!sidePath(), run: () => openTab({ kind: "patch", paths: [sidePath()!] }) },
     { id: "save", menu: "File", group: "save", label: "Save", keys: "Ctrl+S", enabled: anyDirty, run: saveAll },
     { id: "save-left", menu: "File", group: "save", label: "Save Left", enabled: () => dirty()[0], run: () => saveSide(0) },
     { id: "save-right", menu: "File", group: "save", label: "Save Right", enabled: () => dirty()[1], run: () => saveSide(1) },
-    ...externalCommands(() => tab().paths[selSide()] || undefined, setMessage),
-    { id: "backup", menu: "File", group: "opt", label: "Create .bak Backup on Save", checked: backup, run: () => setBackup(!backup()) },
+    { id: "save-as", menu: "File", group: "save", label: "Save As…", keys: "F12", enabled: () => !readOnly(selSide()), run: () => saveAs(selSide()) },
+    ...externalCommands(sidePath, setMessage),
+    { id: "backup", menu: "File", group: "opt", label: "Create Backup on Save", checked: backup, run: () => setBackup(!backup()) },
     { id: "undo", menu: "Edit", group: "undo", label: "Undo", keys: "Ctrl+Z", run: undo },
     { id: "redo", menu: "Edit", group: "undo", label: "Redo", keys: "Ctrl+Y", altKeys: ["Shift+Ctrl+Z"], run: redo },
+    { id: "cut", menu: "Edit", group: "clip", label: "Cut", keys: "Ctrl+X", enabled: () => hasSel() && !readOnly(selSide()), run: cutLines },
     { id: "copy-text", menu: "Edit", group: "clip", label: "Copy", keys: "Ctrl+C", run: copyText },
+    { id: "paste", menu: "Edit", group: "clip", label: "Paste", keys: "Ctrl+V", enabled: () => !readOnly(selSide()), run: paste },
+    { id: "delete", menu: "Edit", group: "clip", label: "Delete", keys: "Del", enabled: () => selLines(selSide()).length > 0 && !readOnly(selSide()) && !editing(), run: deleteLine },
+    { id: "select-section", menu: "Edit", group: "sel", label: "Select Section", keys: "Ctrl+D", enabled: () => curHunk() >= 0, run: selectSection },
+    { id: "compare-clipboard", menu: "Edit", group: "sel", label: "Compare Selection to Clipboard", enabled: () => hasLineSel(), run: compareToClipboard },
+    { id: "align-with", menu: "Edit", group: "align", label: "Align With…", keys: "F7", caption: () => (alignFrom() ? "Align With" : "Align With…"), enabled: hasSel, run: alignWith },
+    { id: "isolate", menu: "Edit", group: "align", label: "Isolate", enabled: () => hasLineSel() && selLines(selSide()).length > 0, run: isolate },
+    { id: "clear-align", menu: "Edit", group: "align", label: "Clear Manual Alignment", enabled: () => cuts().length > 0, run: () => (setCuts([]), recompute(true)) },
+    { id: "cancel-align", menu: "Edit", group: "align", hidden: true, label: "Cancel Align With", keys: "Esc", visible: () => !!alignFrom(), run: () => (setAlignFrom(null), setMessage("")) },
+    { id: "replacement", menu: "Edit", group: "align", label: "Replacement…", enabled: () => curHunk() >= 0, run: replacement },
+    { id: "ignored", menu: "Edit", group: "align", label: "Ignored", checked: selIgnored, enabled: () => selHunks().length > 0, run: toggleIgnored },
     { id: "copy-left", menu: "Edit", group: "copy", label: "Copy to Left", keys: "Ctrl+L", enabled: () => !readOnly(0), run: () => copyHunk(0) },
     { id: "copy-right", menu: "Edit", group: "copy", label: "Copy to Right", keys: "Ctrl+R", enabled: () => !readOnly(1), run: () => copyHunk(1) },
     { id: "copy-line-left", menu: "Edit", group: "copy", label: "Copy Line to Left", keys: "Shift+Ctrl+L", enabled: () => hasSel() && !readOnly(0), run: () => copyLine(0) },
     { id: "copy-line-right", menu: "Edit", group: "copy", label: "Copy Line to Right", keys: "Shift+Ctrl+R", enabled: () => hasSel() && !readOnly(1), run: () => copyLine(1) },
+    { id: "indent-inc", menu: "Edit", group: "copy", label: "Increase Indent", keys: "Shift+Ctrl+I", enabled: () => hasSel() && !readOnly(selSide()), run: () => indent(1) },
+    { id: "indent-dec", menu: "Edit", group: "copy", label: "Decrease Indent", keys: "Shift+Ctrl+U", enabled: () => hasSel() && !readOnly(selSide()), run: () => indent(-1) },
+    { id: "line-up", menu: "Search", hidden: true, label: "Line Up", keys: "Up", run: () => moveSel(-1) },
+    { id: "line-down", menu: "Search", hidden: true, label: "Line Down", keys: "Down", run: () => moveSel(1) },
+    { id: "sel-up", menu: "Search", hidden: true, label: "Extend Selection Up", keys: "Shift+Up", run: () => moveSel(-1, true) },
+    { id: "sel-down", menu: "Search", hidden: true, label: "Extend Selection Down", keys: "Shift+Down", run: () => moveSel(1, true) },
     { id: "edit-line", menu: "Edit", group: "line", label: "Edit Line", keys: "F2", enabled: () => hasSel() && !readOnly(selSide()), run: () => setEditing({ ri: selRow(), side: selSide() }) },
     { id: "ins-after", menu: "Edit", group: "line", label: "Insert Line After", keys: "Ctrl+Enter", enabled: hasSel, run: () => insertLine(false) },
     { id: "ins-before", menu: "Edit", group: "line", label: "Insert Line Before", keys: "Shift+Ctrl+Enter", enabled: hasSel, run: () => insertLine(true) },
-    { id: "del-line", menu: "Edit", group: "line", label: "Delete Line", keys: "Del", enabled: () => hasSel() && !editing(), run: deleteLine },
     { id: "edit-left", menu: "Edit", group: "text", label: "Edit Left as Text…", enabled: () => !readOnly(0), run: () => setEditAll(0) },
     { id: "edit-right", menu: "Edit", group: "text", label: "Edit Right as Text…", enabled: () => !readOnly(1), run: () => setEditAll(1) },
     { id: "next-diff", menu: "Search", group: "diff", label: "Next Difference Section", keys: "Ctrl+N", altKeys: ["Shift+Ctrl+N"], run: () => nextHunk(1) },
@@ -606,7 +1017,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
       >
         <div
           class="tpane-inner"
-          style={{ height: `${visible().length * ROW_H}px`, width: `calc(${(s === 0 ? maxL() : maxR()) + 2}ch + 64px)` }}
+          style={{ height: `${visible().length * ROW_H}px`, width: `calc(${(s === 0 ? maxL() : maxR()) + 2}ch + 82px)` }}
         >
           <Index each={windowRows()}>
             {(item) => {
@@ -614,6 +1025,18 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
               const idx = () => row()[key];
               const k = () => kindOf(row());
               const isEditing = () => editing()?.ri === item().ri && editing()?.side === s;
+              /**
+               * Gutter copy button, as in the reference editor: on the first row of
+               * each difference section, or (with a line selection) on the first
+               * selected row of the selected pane, which copies only those lines.
+               */
+              const gutBtn = (): "sec" | "line" | null => {
+                const ri = item().ri;
+                if (readOnly(other(s))) return null;
+                if (hasLineSel() && s === selSide()) return ri === selRange()[0] ? "line" : null;
+                const h = row().h;
+                return h !== undefined && hunkActive(h) && result()!.hunks[h].start === ri ? "sec" : null;
+              };
               return (
                 <div
                   class="trow"
@@ -622,17 +1045,61 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
                     filler: idx() === undefined,
                     cur: row().h !== undefined && row().h === cur(),
                     sel: item().ri === selRow(),
+                    rsel: hasLineSel() && s === selSide() && inSel(item().ri),
+                    "align-from": alignFrom()?.side === s && alignFrom()?.line === idx(),
                     "kb-target": item().ri === selRow() && s === selSide(),
                   }}
                   style={{ top: `${item().vi * ROW_H}px` }}
-                  onMouseDown={() => {
-                    setSelRow(item().ri);
-                    setSelSide(s);
-                    setCur(row().h ?? -1);
+                  onMouseDown={(e) => {
+                    const ri = item().ri;
+                    // Keep a line selection for its context menu.
+                    if (e.button === 2 && s === selSide() && inSel(ri)) return;
+                    const from = alignFrom();
+                    if (from && from.side !== s && idx() !== undefined) return completeAlign(from, { side: s, line: idx()! });
+                    if (e.shiftKey && selRow() >= 0 && s === selSide()) {
+                      e.preventDefault();
+                      if (selAnchor() < 0) setSelAnchor(selRow());
+                      setSelRow(ri);
+                      return;
+                    }
+                    batch(() => {
+                      setSelAnchor(-1);
+                      setSelRow(ri);
+                      setSelSide(s);
+                      setCur(row().h ?? -1);
+                    });
                   }}
                   onDblClick={() => !readOnly(s) && setEditing({ ri: item().ri, side: s })}
-                  onContextMenu={(e) => showContextMenu(e, tab().id, textMenu(s))}
+                  onContextMenu={(e) => showContextMenu(e, tab().id, paneMenu(s))}
                 >
+                  <span
+                    class="gut"
+                    classList={{ [`gm-${k()}`]: k() !== "same" }}
+                    onContextMenu={(e) => {
+                      setSelSide(s);
+                      showContextMenu(e, tab().id, gutterMenu(s));
+                    }}
+                  >
+                    <Show when={gutBtn()}>
+                      {(b) => (
+                        <button
+                          class="gbtn"
+                          classList={{ line: b() === "line", left: s === 1 }}
+                          tabIndex={-1}
+                          title={`${b() === "line" ? "Copy selected lines" : "Copy section"} to ${s === 0 ? "right" : "left"} (${displayKeys(b() === "line" ? (s === 0 ? "Shift+Ctrl+R" : "Shift+Ctrl+L") : s === 0 ? "Ctrl+R" : "Ctrl+L")})`}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onDblClick={(e) => e.stopPropagation()}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (b() === "line") copyRows(other(s), ...selRange());
+                            else gutterCopy(row().h!, other(s));
+                          }}
+                        >
+                          {s === 0 ? "▶" : "◀"}
+                        </button>
+                      )}
+                    </Show>
+                  </span>
                   <span class="ln">{idx() !== undefined ? idx()! + 1 : ""}</span>
                   <Show
                     when={isEditing()}
@@ -721,7 +1188,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
       <Show when={showRules()}>
         <RulesPanel rules={rules()} onChange={setRules}>
           <label>
-            <input type="checkbox" checked={backup()} onChange={(e) => setBackup(e.currentTarget.checked)} /> Create .bak backup on save
+            <input type="checkbox" checked={backup()} onChange={(e) => setBackup(e.currentTarget.checked)} /> Create backup on save
           </label>
         </RulesPanel>
       </Show>
@@ -732,8 +1199,8 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
         </div>
       </Show>
       <div class="paths two">
-        <PathBar value={tab().paths[0] ?? ""} title={tab().titles?.[0]} onCommit={(p) => changePath(0, p)} readOnly={readOnly(0)} dirty={dirty()[0]} info={sideInfo(0)} />
-        <PathBar value={tab().paths[1] ?? ""} title={tab().titles?.[1]} onCommit={(p) => changePath(1, p)} readOnly={readOnly(1)} dirty={dirty()[1]} info={sideInfo(1)} />
+        <PathBar value={tab().paths[0] ?? ""} title={tab().titles?.[0]} onCommit={(p) => changePath(0, p)} readOnly={readOnly(0)} dirty={dirty()[0]} info={sideInfo(0)} onSave={() => saveSide(0)} saveTitle="Save left file" />
+        <PathBar value={tab().paths[1] ?? ""} title={tab().titles?.[1]} onCommit={(p) => changePath(1, p)} readOnly={readOnly(1)} dirty={dirty()[1]} info={sideInfo(1)} onSave={() => saveSide(1)} saveTitle="Save right file" />
       </div>
       <div class="tcompare">
         <div class="overview" title="Difference map">
@@ -784,6 +1251,19 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
         <button class="link" onClick={() => setEditAll(0)} disabled={readOnly(0)}>Edit left as text</button>
         <button class="link" onClick={() => setEditAll(1)} disabled={readOnly(1)}>Edit right as text</button>
       </div>
+      <Show when={replacing()}>
+        {(r) => (
+          <ReplacementDialog
+            initial={r()}
+            onClose={() => setReplacing(null)}
+            onOk={(rep) => {
+              setReplacing(null);
+              setRules({ ...rules(), replacements: [...(rules().replacements ?? []), rep] });
+              setMessage(`Added replacement “${rep.from}” → “${rep.to}”.`);
+            }}
+          />
+        )}
+      </Show>
       <Show when={editAll() !== null}>
         <EditAllModal
           text={lines(editAll()!).join("\n")}
@@ -791,8 +1271,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
           onApply={(t) => {
             const s = editAll()!;
             snapshot();
-            setLines(s, t.length ? t.split(/\r\n|\n|\r/) : []);
-            markDirty(s);
+            editLines(s, t.length ? t.split(/\r\n|\n|\r/) : []);
             setEditAll(null);
             recompute(true);
           }}

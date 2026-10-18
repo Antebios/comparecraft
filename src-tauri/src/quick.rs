@@ -108,6 +108,7 @@ pub fn rules_verdict(a: &[u8], b: &[u8]) -> i32 {
         ignore_embedded_ws: true,
         ignore_blank_lines: true,
         algorithm: "myers".into(),
+        ..Rules::default()
     };
     let na: Vec<String> = la.iter().filter(|l| !l.trim().is_empty()).map(|l| normalize(l, &loose)).collect();
     let nb: Vec<String> = lb.iter().filter(|l| !l.trim().is_empty()).map(|l| normalize(l, &loose)).collect();

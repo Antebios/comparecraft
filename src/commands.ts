@@ -1,4 +1,5 @@
 import { createSignal, onCleanup } from "solid-js";
+import { settings } from "./settings";
 
 /**
  * Menu names and order follow the reference application's action categories.
@@ -61,7 +62,19 @@ export function registerCommands(scope: string, cmds: Command[]) {
 /** Commands visible for the active scope: tab commands first so they take precedence over global ones. */
 export function commandsFor(scope: string): Command[] {
   const s = scopes();
-  return [...(s[scope] ?? []), ...(s.global ?? [])];
+  const all = [...(s[scope] ?? []), ...(s.global ?? [])];
+  const km = settings.keymap;
+  if (!Object.keys(km).length) return all;
+  return all.map((c) => (c.id in km ? { ...c, keys: km[c.id] || undefined, altKeys: km[c.id] ? c.altKeys : [] } : c));
+}
+
+/** Every registered command (all scopes), first registration of each id wins; for the Options dialog. */
+export function allCommands(): { scope: string; cmd: Command }[] {
+  const seen = new Set<string>();
+  const out: { scope: string; cmd: Command }[] = [];
+  for (const [scope, cmds] of Object.entries(scopes()))
+    for (const c of cmds) if (!c.hidden && !seen.has(c.id) && seen.add(c.id)) out.push({ scope, cmd: c });
+  return out;
 }
 
 export const labelOf = (c: Command) => c.caption?.() ?? c.label;
@@ -136,7 +149,7 @@ export function chordOf(e: KeyboardEvent): string {
   return parts.join("+");
 }
 
-function canonical(keys: string): string {
+export function canonical(keys: string): string {
   const parts = keys.split("+");
   const key = parts.pop()!;
   const order = ["Shift", "Ctrl", "MacCtrl", "Alt"];

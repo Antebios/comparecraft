@@ -1,5 +1,5 @@
 import { message, open as openDialog } from "@tauri-apps/plugin-dialog";
-import { createMemo, createSignal, For, Index, type JSX, onMount, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, For, Index, type JSX, on, onCleanup, onMount, Show } from "solid-js";
 import { createStore } from "solid-js/store";
 import {
   api,
@@ -18,10 +18,12 @@ import {
 } from "../api";
 import { Btn, Modal, PathBar, ROW_H, useViewport } from "../components/common";
 import { showContextMenu } from "../components/ContextMenu";
-import { externalCommands, sideOf } from "../components/external";
+import { externalCommands, shellWords, sideOf } from "../components/external";
 import { promptText } from "../components/Prompt";
 import { displayKeys, isEnabled, IS_MAC, registerCommands, type Command, type MenuRef } from "../commands";
-import { openAuto, openTab, persistSession, updateTab, type Tab } from "../store";
+import { backupSpec, rememberFilter, setSetting, settings } from "../settings";
+import { openAuto, openTab, persistSession, setSessionsVersion, updateTab, type Tab } from "../store";
+import FolderSettingsDialog, { defaultViewSettings, filterText, parseFilterText, type FolderViewSettings, type SettingsTab } from "./folderSettings";
 import {
   AlignDialog,
   AttributesDialog,
@@ -44,19 +46,39 @@ import {
   type Structure,
 } from "./folderOps";
 
-/** Display filters, in the order of the reference View menu. */
-type Filter = "all" | "diffs" | "same" | "noorphans" | "diffsnoorph" | "orphans" | "lnewer" | "rnewer" | "lorphans" | "rorphans";
-const FILTERS: [Filter, string][] = [
-  ["all", "Show All"],
-  ["diffs", "Show Differences"],
-  ["same", "Show Same"],
-  ["noorphans", "Show No Orphans"],
-  ["diffsnoorph", "Show Differences but No Orphans"],
-  ["orphans", "Show Orphans"],
-  ["lnewer", "Show Left Newer"],
-  ["rnewer", "Show Right Newer"],
-  ["lorphans", "Show Left Orphans"],
-  ["rorphans", "Show Right Orphans"],
+/** Display filter status bits. */
+const BIT = { same: 0x1, leftOrphan: 0x4, rightOrphan: 0x8, leftNewer: 0x40, rightNewer: 0x80, diff: 0x200 } as const;
+const ALL_BITS = 0x2cd;
+/** Display filter favorites, in the order of the reference View menu. */
+const PRESETS: [string, number, string][] = [
+  ["all", 0x2cd, "Show All"],
+  ["diffs", 0x2cc, "Show Differences"],
+  ["same", 0x1, "Show Same"],
+  ["noorphans", 0x2c1, "Show No Orphans"],
+  ["diffsnoorph", 0x2c0, "Show Differences but No Orphans"],
+  ["orphans", 0xc, "Show Orphans"],
+  ["lnewer", 0x40, "Show Left Newer"],
+  ["rnewer", 0x80, "Show Right Newer"],
+  ["lnewerorph", 0x44, "Show Left Newer and Left Orphans"],
+  ["rnewerorph", 0x88, "Show Right Newer and Right Orphans"],
+  ["lorphans", 0x4, "Show Left Orphans"],
+  ["rorphans", 0x8, "Show Right Orphans"],
+];
+const TOGGLES: [string, number, string][] = [
+  ["tog-same", BIT.same, "Same"],
+  ["tog-lorph", BIT.leftOrphan, "Left Orphans"],
+  ["tog-rorph", BIT.rightOrphan, "Right Orphans"],
+  ["tog-lnewer", BIT.leftNewer, "Left Newer"],
+  ["tog-rnewer", BIT.rightNewer, "Right Newer"],
+  ["tog-diff", BIT.diff, "Differences (no newer side)"],
+];
+/** Folder handling (one radio group in the reference View menu). */
+type FolderMode = "showall" | "structure" | "filesonly" | "flatten";
+const FOLDER_MODES: [FolderMode, string][] = [
+  ["showall", "Always Show Folders"],
+  ["structure", "Compare Files and Folder Structure"],
+  ["filesonly", "Only Compare Files"],
+  ["flatten", "Ignore Folder Structure"],
 ];
 
 const IS_WINDOWS = navigator.userAgent.includes("Windows");
@@ -68,6 +90,7 @@ const defaultOptions = (): FolderOptions => ({
   exclude: ".git/;node_modules/",
   ignoreCaseNames: IS_WINDOWS || IS_MAC,
   followSymlinks: false,
+  ...(settings.folderDefaults ?? {}),
   align: [],
 });
 
@@ -87,31 +110,14 @@ function globMatch(mask: string, name: string): boolean {
   return re.test(name);
 }
 
-function matches(n: FNode, st: Status, f: Filter): boolean {
-  const orphan = st === "left" || st === "right";
-  const same = st === "same" || st === "similar";
-  switch (f) {
-    case "all":
-      return true;
-    case "diffs":
-      return !same;
-    case "same":
-      return same;
-    case "noorphans":
-      return !orphan;
-    case "diffsnoorph":
-      return !same && !orphan;
-    case "orphans":
-      return orphan;
-    case "lnewer":
-      return st === "diff" && n.newer === "left";
-    case "rnewer":
-      return st === "diff" && n.newer === "right";
-    case "lorphans":
-      return st === "left";
-    case "rorphans":
-      return st === "right";
-  }
+/** Status bit of an item for the display filter. */
+function statusBit(n: FNode, st: Status, ignoreUnimportant: boolean): number {
+  if (st === "same" || (st === "similar" && ignoreUnimportant)) return BIT.same;
+  if (st === "left") return BIT.leftOrphan;
+  if (st === "right") return BIT.rightOrphan;
+  if (n.newer === "left") return BIT.leftNewer;
+  if (n.newer === "right") return BIT.rightNewer;
+  return BIT.diff;
 }
 
 /** Status of a paired folder from its children (as the comparison engine computes it). */
@@ -170,16 +176,29 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
   const [error, setError] = createSignal("");
   const [busy, setBusy] = createSignal(false);
   const [expanded, setExpanded] = createSignal<Set<string>>(new Set());
-  const [filter, setFilter] = createSignal<Filter>("all");
+  const [mask, setMask] = createSignal<number>((tab().options.displayFilter as number | undefined) ?? ALL_BITS);
+  const [folderMode, setFolderModeRaw] = createSignal<FolderMode>(
+    opts.flatten ? "flatten" : ((tab().options.folderMode as FolderMode | undefined) ?? "structure"),
+  );
+  const [ignoreUnimportant, setIgnoreUnimportant] = createSignal((tab().options.ignoreUnimportant as boolean | undefined) ?? true);
+  const [suppress, setSuppress] = createSignal(false);
+  const [peek, setPeek] = createSignal(false);
+  const [viewSet, setViewSet] = createSignal<FolderViewSettings>({ ...defaultViewSettings(), ...((tab().options.folderView as Partial<FolderViewSettings> | undefined) ?? {}) });
+  const [logOpen, setLogOpen] = createSignal(false);
+  const [logLines, setLogLines] = createSignal<{ t: number; text: string }[]>([]);
+  const log = (text: string) => setLogLines((l) => [...l, { t: Date.now(), text }].slice(-Math.max(50, settings.logMaxMessages)));
   const [sel, setSel] = createSignal<Set<string>>(new Set());
   const [anchor, setAnchor] = createSignal<string | null>(null);
   // Side(s) the selection applies to: a click selects one side, Ctrl+click on the other side or Select All both.
   const [selSide, setSelSide] = createSignal<SideName | "both">("left");
   const [ignored, setIgnored] = createSignal<Set<string>>(new Set());
   const [history, setHistory] = createSignal<{ back: string[][]; fwd: string[][] }>({ back: [], fwd: [] });
-  const [showOpts, setShowOpts] = createSignal(false);
   const [syncOpen, setSyncOpen] = createSignal(tab().kind === "sync");
-  const [message_, setMessage] = createSignal("");
+  const [message_, setMessageRaw] = createSignal("");
+  const setMessage = (m: string) => {
+    setMessageRaw(m);
+    if (m) log(m);
+  };
   const [syncMode, setSyncMode] = createSignal<string | undefined>(undefined);
   const [legend, setLegend] = createSignal(false);
   const [findName, setFindName] = createSignal("");
@@ -197,6 +216,17 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
   const idle = () => !!result() && !busy();
   const basesDiffer = () => !!left() && !!right() && left() !== right();
 
+  /** Options sent to the backend: folder mode and Suppress Filters / Peek applied. */
+  const compareOptions = (): FolderOptions => ({
+    ...opts,
+    align: [...(opts.align ?? [])],
+    otherFilters: [...(opts.otherFilters ?? [])],
+    flatten: folderMode() === "flatten",
+    ...(suppress() || peek() ? { include: "*", exclude: "", includeFolders: "", otherFilters: [], excludeHidden: false } : {}),
+  });
+  const flatMode = () => folderMode() === "flatten";
+  let loadedOnce = false;
+
   async function refresh() {
     if (!left() || !right()) {
       setResult(null);
@@ -205,9 +235,14 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
     setBusy(true);
     setError("");
     try {
-      const r = await api.compareFolders(left(), right(), { ...opts, align: [...(opts.align ?? [])] });
+      const r = await api.compareFolders(left(), right(), compareOptions());
       setResult(r);
-      if (tab().expandAll) expandAll(r.root);
+      if (!loadedOnce) {
+        loadedOnce = true;
+        if (tab().expandAll) expandAll(r.root);
+        else if (viewSet().expandOnLoad) expandAll(r.root, viewSet().expandDiffsOnly);
+      }
+      log(`Compared ${left()} ↔ ${right()}: ${r.summary.files} files, ${r.summary.diff} different, ${r.summary.leftOnly + r.summary.rightOnly} orphans`);
     } catch (e) {
       setError(errText(e));
       setResult(null);
@@ -254,14 +289,49 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
   const upLevel = (sides: SideName[]) => setBases([sides.includes("left") ? parentDir(left()) : left(), sides.includes("right") ? parentDir(right()) : right()]);
 
   function saveOpts() {
-    updateTab(tab().id, { options: { ...tab().options, folder: { ...opts, align: [...(opts.align ?? [])] } } });
+    updateTab(tab().id, { options: { ...tab().options, folder: JSON.parse(JSON.stringify(opts)) } });
+  }
+  const saveViewState = () =>
+    updateTab(tab().id, {
+      options: { ...tab().options, displayFilter: mask(), folderMode: folderMode(), ignoreUnimportant: ignoreUnimportant(), folderView: { ...viewSet() } },
+    });
+  createEffect(on([mask, folderMode, ignoreUnimportant, viewSet], saveViewState, { defer: true }));
+
+  function setFolderMode(m: FolderMode) {
+    const wasFlat = flatMode();
+    setFolderModeRaw(m);
+    setOpts("flatten", m === "flatten");
+    saveOpts();
+    if (wasFlat !== (m === "flatten")) {
+      setSel(new Set<string>());
+      setIgnored(new Set<string>());
+      void refresh();
+    }
+  }
+  function toggleSuppress() {
+    setSuppress(!suppress());
+    void refresh();
+  }
+  function togglePeek() {
+    setPeek(!peek());
+    void refresh();
   }
 
-  function expandAll(root?: FNode) {
+  // Automatic refresh (Session Settings › Handling).
+  createEffect(() => {
+    const secs = viewSet().autoRefreshSecs;
+    if (!secs) return;
+    const id = window.setInterval(() => {
+      if (!busy() && !dialog() && !syncOpen()) void refresh();
+    }, secs * 1000);
+    onCleanup(() => clearInterval(id));
+  });
+
+  function expandAll(root?: FNode, diffsOnly = false) {
     const s = new Set<string>();
     const walk = (n: FNode) => {
       if (n.dir) {
-        if (n.rel) s.add(n.rel);
+        if (n.rel && (!diffsOnly || (n.status !== "same" && n.status !== "similar"))) s.add(n.rel);
         n.children?.forEach(walk);
       }
     };
@@ -299,18 +369,31 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
   const flat = createMemo<Flat[]>(() => {
     const r = result();
     if (!r) return [];
-    const f = filter();
+    const m = suppress() ? ALL_BITS : mask();
+    const mode = folderMode();
+    const iu = ignoreUnimportant();
     const exp = expanded();
     const out: Flat[] = [];
+    const memo = new Map<FNode, boolean>();
+    const matchesSelf = (n: FNode) => (statusBit(n, statusOf(n), iu) & m) !== 0;
+    // Files match by status; folders as set by the folder handling mode.
     const visibleNode = (n: FNode): boolean => {
-      const st = statusOf(n);
-      if (!n.dir) return matches(n, st, f);
-      if ((st === "left" || st === "right") && matches(n, st, f)) return true;
-      return (n.children ?? []).some(visibleNode);
+      const hit = memo.get(n);
+      if (hit !== undefined) return hit;
+      let v: boolean;
+      if (!n.dir) v = matchesSelf(n);
+      else if (mode === "showall" || suppress()) v = true;
+      else {
+        const kids = n.children ?? [];
+        const orphan = statusOf(n) === "left" || statusOf(n) === "right";
+        v = kids.some(visibleNode) || (mode !== "filesonly" && (orphan || !kids.length) && matchesSelf(n));
+      }
+      memo.set(n, v);
+      return v;
     };
     const walk = (n: FNode, depth: number) => {
       for (const c of n.children ?? []) {
-        if (!visibleNode(c) && !(c.dir && f === "all")) continue;
+        if (!visibleNode(c)) continue;
         out.push({ node: c, depth });
         if (c.dir && exp.has(c.rel)) walk(c, depth + 1);
       }
@@ -364,6 +447,8 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
 
   /** Path of a node on a side; ancestor names come from that side (they can differ by case or alignment). */
   function sidePath(n: FNode, side: SideName): string {
+    const fp = side === "left" ? n.leftPath : n.rightPath;
+    if (fp !== undefined) return joinPath(rootOf(side), fp);
     const parts = n.rel.split("/");
     const names: string[] = [];
     for (let i = 1; i <= parts.length; i++) {
@@ -373,6 +458,10 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
     return joinPath(rootOf(side), names.join("/"));
   }
   const parentPath = (n: FNode, side: SideName) => {
+    if (n.leftPath !== undefined || n.rightPath !== undefined) {
+      const fp = (side === "left" ? n.leftPath : n.rightPath) ?? n.leftPath ?? n.rightPath!;
+      return joinPath(rootOf(side), parentRel(fp));
+    }
     const p = parentRel(n.rel);
     return p ? sidePath(nodeByRel().get(p)!, side) : rootOf(side);
   };
@@ -441,7 +530,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
 
   function openNode(n: FNode, kind?: ViewKind) {
     const paths = [n.left ? sidePath(n, "left") : "", n.right ? sidePath(n, "right") : ""];
-    if (n.dir) return void openTab({ kind: kind ?? "folder", paths, options: { folder: { ...opts, align: [] } } });
+    if (n.dir) return void openTab({ kind: kind ?? "folder", paths, options: { folder: { ...JSON.parse(JSON.stringify(opts)), align: [] } } });
     void openAuto(paths, kind);
   }
   function activate(n: FNode) {
@@ -522,7 +611,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
     if (!actions.length) return setMessage("Nothing to do.");
     setBusy(true);
     try {
-      report(await api.executeActions(actions, useTrash));
+      report(await api.executeActions(actions, useTrash, backupSpec(settings.backupOnCopy)));
     } catch (e) {
       setMessage(errText(e));
     } finally {
@@ -533,6 +622,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
 
   function report(res: ActionResult[]) {
     const failed = res.filter((r) => !r.ok);
+    for (const r of res) log(`${r.op} ${r.rel}: ${r.ok ? "ok" : r.error}`);
     setMessage(failed.length ? `${failed.length} operation(s) failed: ${failed.map((f) => `${f.rel}: ${f.error}`).join("; ")}` : `${res.length} operation(s) completed.`);
     if (failed.length) void message(failed.slice(0, 20).map((f) => `${f.rel}: ${f.error}`).join("\n"), { title: "CompareCraft", kind: "error" });
   }
@@ -570,6 +660,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
       .filter((n) => n[src])
       .map((n) => ({ op: move ? "move" : "copy", from: sidePath(n, src), to: targetPath(n, src, to), rel: n.rel, dir: n.dir, size: treeBytes(n, src) }));
     // Copying over a newer file needs confirmation.
+    if (!settings.confirmOverwriteNewer) return void (await execute(actions));
     const ok = await confirmOverwrites(actions, (a, t) => {
       const n = nodeByRel().get(a.rel);
       return (t.modified ?? 0) > (n?.[src]?.modified ?? 0);
@@ -591,7 +682,8 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
    */
   function sideDialog(move: boolean, to?: SideName) {
     if (to && !effSel().some((n) => n[other(to)])) return;
-    if (to && !move && localStorage.getItem("comparecraft.confirmCopy") === "false") return void sideOp(false, to);
+    if (to && !move && !settings.confirmCopy) return void sideOp(false, to);
+    if (to && move && !settings.confirmMove) return void sideOp(true, to);
     const cnt: Counts = to ? ({ [other(to)]: sourceCounts(other(to)), [to]: zero } as Counts) : counts();
     show(() => (
       <SideDialog
@@ -601,7 +693,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
         onClose={closeDialog}
         onStart={(dir, dontShow) => {
           closeDialog();
-          if (dontShow) localStorage.setItem("comparecraft.confirmCopy", "false");
+          if (dontShow) setSetting("confirmCopy", false);
           void sideOp(move, dir);
         }}
       />
@@ -620,6 +712,11 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
   };
 
   function deleteDialog(permanent: boolean) {
+    const del = (sides: SideName[], useTrash: boolean) => {
+      const actions: Action[] = sides.flatMap((s) => sideItems(s).map((n) => ({ op: "delete" as const, to: sidePath(n, s), rel: n.rel, dir: n.dir, size: treeBytes(n, s) })));
+      void execute(actions, useTrash && !permanent);
+    };
+    if (!settings.confirmDelete) return del(sidesOn().filter((s) => sideItems(s).length), settings.useTrash);
     show(() => (
       <DeleteDialog
         counts={counts()}
@@ -627,8 +724,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
         onClose={closeDialog}
         onStart={(sides, useTrash) => {
           closeDialog();
-          const actions: Action[] = sides.flatMap((s) => sideItems(s).map((n) => ({ op: "delete" as const, to: sidePath(n, s), rel: n.rel, dir: n.dir, size: treeBytes(n, s) })));
-          void execute(actions, useTrash && !permanent);
+          del(sides, useTrash);
         }}
       />
     ));
@@ -726,7 +822,8 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
   }
   const nameMask = (n: FNode, onlyHere: boolean) => {
     const nm = n.left?.name ?? n.right!.name;
-    const m = onlyHere ? `/${n.rel.slice(0, n.rel.length - n.name.length)}${nm}` : nm;
+    const rel = n.leftPath ?? n.rightPath ?? n.rel;
+    const m = onlyHere ? `/${rel.slice(0, rel.length - n.name.length)}${nm}` : nm;
     return n.dir ? `${m}/` : m;
   };
   function exclude() {
@@ -842,9 +939,10 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
   async function refreshSelection() {
     const rels = effSel().map((n) => n.rel);
     if (!rels.length) return;
+    if (flatMode()) return refresh();
     setBusy(true);
     try {
-      const nodes = await api.compareItems(left(), right(), rels, { ...opts, align: [...(opts.align ?? [])] });
+      const nodes = await api.compareItems(left(), right(), rels, compareOptions());
       patchTree((byRel) => {
         rels.forEach((rel, i) => {
           const parent = byRel.get(parentRel(rel));
@@ -923,7 +1021,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
     const exp = new Set(expanded());
     for (let i = 1; i < parts.length; i++) exp.add(parts.slice(0, i).join("/"));
     setExpanded(exp);
-    if (!flat().some((r) => r.node.rel === rel)) setFilter("all");
+    if (!flat().some((r) => r.node.rel === rel)) setMask(ALL_BITS);
     const i = flat().findIndex((r) => r.node.rel === rel);
     if (i >= 0) {
       selectIndex(i);
@@ -941,13 +1039,20 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
   function nextDiff(dir: 1 | -1) {
     const nodes = allNodes();
     const at = anchor() ? nodes.findIndex((n) => n.rel === anchor()) : dir === 1 ? -1 : nodes.length;
-    for (let i = at + dir; i >= 0 && i < nodes.length; i += dir) {
-      const n = nodes[i];
+    const isDiff = (n: FNode) => {
       const st = statusOf(n);
-      if (!n.dir && st !== "same" && st !== "similar") return selectRel(n.rel);
-      if (n.dir && (st === "left" || st === "right")) return selectRel(n.rel);
+      if (n.dir) return st === "left" || st === "right";
+      return st !== "same" && !(st === "similar" && ignoreUnimportant());
+    };
+    for (let i = at + dir; i >= 0 && i < nodes.length; i += dir) if (isDiff(nodes[i])) return selectRel(nodes[i].rel);
+    if (settings.nextDiffWrap) {
+      const n = (dir === 1 ? nodes : [...nodes].reverse()).find(isDiff);
+      if (n) {
+        if (settings.nextDiffShowMessage) setMessage("Wrapped around.");
+        return selectRel(n.rel);
+      }
     }
-    setMessage(dir === 1 ? "No more differences below." : "No more differences above.");
+    if (settings.nextDiffShowMessage) setMessage(dir === 1 ? "No more differences below." : "No more differences above.");
   }
 
   function findNext(dir: 1 | -1) {
@@ -996,10 +1101,77 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
 
   const openSync = (mode?: string) => (setSyncMode(mode), setSyncOpen(true));
 
+  /** Opens the Session Settings dialog (also reached from the Filters and Rules toolbar buttons). */
+  function settingsDialog(page: SettingsTab = "specs") {
+    show(() => (
+      <FolderSettingsDialog
+        tab={page}
+        options={JSON.parse(JSON.stringify(opts))}
+        view={viewSet()}
+        paths={[left(), right()]}
+        sessionName={tab().sessionName}
+        onClose={closeDialog}
+        onApply={async ({ options, view, paths, scope }) => {
+          const flattenChanged = !!options.flatten !== flatMode();
+          setOpts({ ...options, flatten: flatMode() });
+          setViewSet(view);
+          saveOpts();
+          if (scope === "defaults") {
+            const { align: _a, flatten: _f, ...rest } = JSON.parse(JSON.stringify(options)) as FolderOptions;
+            setSetting("folderDefaults", rest);
+            log("Saved as session defaults.");
+          } else if (scope === "saved" && tab().sessionName) {
+            const all = await api.listSessions();
+            const ex = all.find((x) => x.saved && x.name === tab().sessionName);
+            if (ex) {
+              await api.saveSession({ ...ex, paths: [...paths], options: JSON.parse(JSON.stringify(tab().options)), modified: Date.now() });
+              setSessionsVersion((v) => v + 1);
+              log(`Updated saved session “${ex.name}”.`);
+            }
+          }
+          if (flattenChanged) setFolderMode(options.flatten ? "flatten" : "structure");
+          if (paths[0] !== left() || paths[1] !== right()) setBases(paths);
+          else void refresh();
+        }}
+      />
+    ));
+  }
+
+  /** Filters combo: "*.c;-obj/" style text of include and exclude masks. */
+  const [filterEdit, setFilterEdit] = createSignal<string | null>(null);
+  function applyFilterText(text: string) {
+    const t = text.trim() || "*.*";
+    const { include, exclude } = parseFilterText(t);
+    setOpts({ include, exclude });
+    saveOpts();
+    rememberFilter(t);
+    setFilterEdit(null);
+    void refresh();
+  }
+
+  /** User-defined Open With applications (Tools › Options › Open With). */
+  function runOpenWith(command: string) {
+    const items = effSel();
+    const files = sidesOn().flatMap((s) => sideItems(s).map((n) => sidePath(n, s)));
+    const n = items.length === 1 ? items[0] : undefined;
+    const p1 = n?.left ? sidePath(n, "left") : files[0] ?? "";
+    const p2 = n?.right ? sidePath(n, "right") : files[1] ?? "";
+    const words = shellWords(command).flatMap((w) => (w === "%F" ? files : [w.replaceAll("%1", p1).replaceAll("%2", p2).replaceAll("%F", files.join(" "))]));
+    if (!words.length) return;
+    log(`Open With: ${words.join(" ")}`);
+    api.spawnCommand(words[0], words.slice(1)).catch((e) => setMessage(`Open With failed: ${errText(e)}`));
+  }
+
   /* ---------- Commands ---------- */
 
-  const filterCmd = ([f, label]: [Filter, string]): Command => ({
-    id: `show-${f}`, menu: "View", group: f.startsWith("l") || f.startsWith("r") ? "filter2" : "filter", label, checked: () => filter() === f, run: () => setFilter(f),
+  const presetCmd = ([id, bits, label]: [string, number, string]): Command => ({
+    id: `show-${id}`, menu: "View", hidden: true, label, checked: () => !suppress() && mask() === bits, run: () => setMask(bits),
+  });
+  const toggleCmd = ([id, bit, label]: [string, number, string]): Command => ({
+    id, menu: "View", group: "toggles", label, checked: () => (mask() & bit) !== 0, run: () => setMask(mask() ^ bit),
+  });
+  const modeCmd = ([m, label]: [FolderMode, string]): Command => ({
+    id: `mode-${m}`, menu: "View", group: "mode", label, checked: () => folderMode() === m, enabled: () => !busy(), run: () => setFolderMode(m),
   });
   const owCmd = (id: string, label: string, kind: ViewKind, dirs: boolean): Command => ({
     id, menu: "Actions", hidden: true, label, visible: () => (dirs ? nFolders() > 0 && !nFiles() : nFiles() > 0 && !nFolders()), enabled: () => !!pairPaths(), run: () => openWith(kind),
@@ -1013,7 +1185,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
   const cmds: Command[] = [
     // Session
     { id: "save-session", menu: "Session", group: "session", label: "Save Session…", keys: "Shift+Ctrl+S", run: saveSession },
-    { id: "settings", menu: "Session", group: "session", label: "Session Settings…", checked: showOpts, run: () => setShowOpts(!showOpts()) },
+    { id: "settings", menu: "Session", group: "session", label: "Session Settings…", run: () => settingsDialog("specs") },
     { id: "swap", menu: "Session", group: "files", label: "Swap Sides", run: swap },
     { id: "back", menu: "Session", group: "nav", label: "Back", keys: "Alt+Left", enabled: () => history().back.length > 0, run: goBack },
     { id: "forward", menu: "Session", group: "nav", label: "Forward", keys: "Alt+Right", enabled: () => history().fwd.length > 0, run: goForward },
@@ -1059,7 +1231,11 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
     },
     {
       id: "open-with", menu: "Actions", group: "open", label: "Open With",
-      submenu: () => ["open-default", "reveal", "-", "ow-folder", "ow-sync", "ow-text", "ow-hex", "ow-table", "ow-picture"],
+      submenu: () => [
+        "open-default", "reveal", "-", "ow-folder", "ow-sync", "ow-text", "ow-hex", "ow-table", "ow-picture",
+        ...(settings.openWith.length ? ["-" as const] : []),
+        ...settings.openWith.map((a, i): Command => ({ id: `ow-user-${i}`, menu: "Actions", label: a.name, enabled: () => effSel().length > 0, run: () => runOpenWith(a.command) })),
+      ],
       run: () => {},
     },
     ...ext,
@@ -1140,8 +1316,29 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
     { id: "find-prev", menu: "Search", group: "find", label: "Find Previous", keys: "Shift+F3", run: () => findNext(-1) },
 
     // View
-    ...FILTERS.map(filterCmd),
-    { id: "legend", menu: "View", group: "legend", label: "Legend", keys: "Ctrl+Alt+L", run: () => setLegend(true) },
+    {
+      id: "show-favorites", menu: "View", group: "filters", label: "Show",
+      submenu: () => ["show-all", "show-diffs", "show-same", "show-noorphans", "show-diffsnoorph", "show-orphans", "-",
+        "show-lnewer", "show-rnewer", "show-lnewerorph", "show-rnewerorph", "show-lorphans", "show-rorphans"],
+      run: () => {},
+    },
+    ...PRESETS.map(presetCmd),
+    { id: "show-all-key", menu: "View", hidden: true, label: "Show All", keys: "Ctrl+1", run: () => setMask(ALL_BITS) },
+    { id: "show-diffs-key", menu: "View", hidden: true, label: "Show Differences", keys: "Ctrl+2", run: () => setMask(0x2cc) },
+    { id: "show-same-key", menu: "View", hidden: true, label: "Show Same", keys: "Ctrl+3", run: () => setMask(0x1) },
+    ...TOGGLES.map(toggleCmd),
+    { id: "suppress-filters", menu: "View", group: "suppress", label: "Suppress Filters", checked: suppress, run: toggleSuppress },
+    { id: "ignore-unimportant", menu: "View", group: "suppress", label: "Ignore Unimportant Differences", checked: ignoreUnimportant, run: () => setIgnoreUnimportant(!ignoreUnimportant()) },
+    ...FOLDER_MODES.map(modeCmd),
+    {
+      id: "columns", menu: "View", group: "panes", label: "Columns", submenu: () => ["col-size", "col-modified"], run: () => {},
+    },
+    { id: "col-size", menu: "View", hidden: true, label: "Size", checked: () => settings.folderColumns.size, run: () => setSetting("folderColumns", { ...settings.folderColumns, size: !settings.folderColumns.size }) },
+    { id: "col-modified", menu: "View", hidden: true, label: "Modified", checked: () => settings.folderColumns.modified, run: () => setSetting("folderColumns", { ...settings.folderColumns, modified: !settings.folderColumns.modified }) },
+    { id: "legend", menu: "View", group: "panes", label: "Legend", keys: "Ctrl+Alt+L", run: () => setLegend(true) },
+    { id: "log", menu: "View", group: "panes", label: "Log", checked: logOpen, run: () => setLogOpen(!logOpen()) },
+    { id: "expand-all", menu: "View", group: "expand", label: "Expand All", run: () => expandAll() },
+    { id: "collapse-all", menu: "View", group: "expand", label: "Collapse All", run: () => setExpanded(new Set<string>()) },
 
     // Keyboard navigation
     { id: "down", menu: "Search", hidden: true, label: "Next Row", keys: "Down", run: () => selectIndex(cursor() + 1) },
@@ -1208,9 +1405,16 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
             </Show>
           </Show>
           {s?.name ?? ""}
+          <Show when={s && flatMode() && (side === "left" ? n.leftPath : n.rightPath)?.includes("/")}>
+            <span class="fdir"> — {parentRel((side === "left" ? n.leftPath : n.rightPath)!)}</span>
+          </Show>
         </span>
-        <span class="fsize">{s && !n.dir ? fmtSize(s.size) : ""}</span>
-        <span class="ftime">{s ? fmtTime(s.modified) : ""}</span>
+        <Show when={settings.folderColumns.size}>
+          <span class="fsize">{s && !n.dir ? fmtSize(s.size) : ""}</span>
+        </Show>
+        <Show when={settings.folderColumns.modified}>
+          <span class="ftime">{s ? fmtTime(s.modified) : ""}</span>
+        </Show>
       </div>
     );
   };
@@ -1222,9 +1426,9 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
         <Btn title="Collapse all" onClick={() => setExpanded(new Set<string>())}>⊟ Collapse</Btn>
         <span class="sep" />
         <div class="seg">
-          {(["all", "diffs", "same", "orphans", "noorphans"] as Filter[]).map((f) => (
-            <Btn title="Display filter" active={filter() === f} onClick={() => setFilter(f)}>
-              {{ all: "All", diffs: "Diffs", same: "Same", orphans: "Orphans", noorphans: "No Orphans" }[f as "all"]}
+          {([[ALL_BITS, "All"], [0x2cc, "Diffs"], [0x1, "Same"], [0xc, "Orphans"], [0x2c1, "No Orphans"]] as [number, string][]).map(([bits, label]) => (
+            <Btn title={PRESETS.find((p) => p[1] === bits)![2]} active={!suppress() && mask() === bits} onClick={() => setMask(bits)}>
+              {label}
             </Btn>
           ))}
         </div>
@@ -1234,55 +1438,70 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
         <Btn title="Delete…" kbd={displayKeys("Del")} onClick={() => runCmd("delete")} disabled={!cmdOn("delete")}>🗑 Delete</Btn>
         <span class="sep" />
         <Btn title="Synchronize folders" onClick={() => openSync()} disabled={!result()}>⇆ Sync…</Btn>
-        <Btn title="Comparison criteria and filters" active={showOpts()} onClick={() => setShowOpts(!showOpts())}>⚙ Options</Btn>
+        <Btn title="Comparison rules (Session Settings)" onClick={() => settingsDialog("comparison")}>⚖ Rules</Btn>
         <Btn title="Swap sides" onClick={swap}>⇄ Swap</Btn>
         <Btn title="Refresh" kbd="F5" onClick={refresh}>⟳ Refresh</Btn>
         <Btn title="Save as named session" kbd={displayKeys("Shift+Ctrl+S")} onClick={saveSession}>
           ★ Save Session
         </Btn>
       </div>
-      <Show when={showOpts()}>
-        <div class="panel">
-          <label>
-            Compare:{" "}
-            <select value={opts.criteria} onChange={(e) => setOpts("criteria", e.currentTarget.value as FolderOptions["criteria"])}>
-              <option value="timesize">Timestamp &amp; size</option>
-              <option value="size">Size only</option>
-              <option value="crc">CRC32</option>
-              <option value="binary">Binary contents</option>
-              <option value="rules">Rules-based (text)</option>
-            </select>
-          </label>
-          <label>
-            Time tolerance (s):{" "}
-            <input type="number" min="0" style={{ width: "4em" }} value={opts.timeToleranceSecs} onChange={(e) => setOpts("timeToleranceSecs", +e.currentTarget.value)} />
-          </label>
-          <label>
-            Include files: <input value={opts.include} onChange={(e) => setOpts("include", e.currentTarget.value)} placeholder="*.rs;*.toml" />
-          </label>
-          <label>
-            Exclude: <input value={opts.exclude} onChange={(e) => setOpts("exclude", e.currentTarget.value)} placeholder="*.bak;target/" />
-          </label>
-          <label>
-            <input type="checkbox" checked={opts.ignoreCaseNames} onChange={(e) => setOpts("ignoreCaseNames", e.currentTarget.checked)} /> Case-insensitive names
-          </label>
-          <label>
-            <input type="checkbox" checked={opts.followSymlinks} onChange={(e) => setOpts("followSymlinks", e.currentTarget.checked)} /> Follow symlinks
-          </label>
-          <Show when={(opts.align ?? []).length}>
-            <button onClick={() => setAlign([])}>Remove {opts.align!.length} alignment(s)</button>
-          </Show>
-          <button class="primary" onClick={() => (saveOpts(), refresh())}>Apply</button>
-        </div>
-      </Show>
+      <div class="filterbar">
+        <label class="filter-combo" title="File filters: masks separated by ';'. Prefix a mask with '-' to exclude it; end it with '/' for folders.">
+          Filters:
+          <input
+            list={`filters-${tab().id}`}
+            value={filterEdit() ?? filterText(opts)}
+            disabled={suppress() || peek()}
+            onInput={(e) => setFilterEdit(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") applyFilterText(e.currentTarget.value);
+              else if (e.key === "Escape") (setFilterEdit(null), e.currentTarget.blur());
+            }}
+            onChange={(e) => applyFilterText(e.currentTarget.value)}
+          />
+          <datalist id={`filters-${tab().id}`}>
+            <For each={[...new Set([...settings.filterHistory, ...settings.filterPresets.map((p) => p.mask)])]}>{(f) => <option value={f} />}</For>
+          </datalist>
+        </label>
+        <Btn title="Edit file filters (Session Settings › Name Filters)" onClick={() => settingsDialog("names")}>⛃ Filters</Btn>
+        <Btn title="Peek: temporarily show items excluded by the file filters" active={peek()} onClick={togglePeek}>👁 Peek</Btn>
+        <Show when={suppress() || peek()}>
+          <span class="badge warn">{suppress() ? "Filters suppressed" : "Peeking at excluded items"}</span>
+        </Show>
+        <Show when={(opts.otherFilters ?? []).some((f) => f.enabled !== false) && !suppress() && !peek()}>
+          <span class="badge">+{(opts.otherFilters ?? []).filter((f) => f.enabled !== false).length} other filter(s)</span>
+        </Show>
+        <Show when={folderMode() === "flatten"}>
+          <span class="badge">Ignoring folder structure</span>
+        </Show>
+        <span class="spacer" />
+        <Show when={mask() !== ALL_BITS && !suppress()}>
+          <span class="muted small">{PRESETS.find((p) => p[1] === mask())?.[2] ?? "Custom display filter"}</span>
+        </Show>
+      </div>
       <div class="paths two">
         <PathBar folder value={left()} title={tab().titles?.[0]} onCommit={(p) => setPath(0, p)} />
         <PathBar folder value={right()} title={tab().titles?.[1]} onCommit={(p) => setPath(1, p)} />
       </div>
       <div class="fheader">
-        <div class="fside"><span class="fname">Name</span><span class="fsize">Size</span><span class="ftime">Modified</span></div>
-        <div class="fstatus" />
-        <div class="fside"><span class="fname">Name</span><span class="fsize">Size</span><span class="ftime">Modified</span></div>
+        <For each={[0, 1]}>
+          {(i) => (
+            <>
+              <Show when={i === 1}>
+                <div class="fstatus" />
+              </Show>
+              <div class="fside">
+                <span class="fname">Name</span>
+                <Show when={settings.folderColumns.size}>
+                  <span class="fsize">Size</span>
+                </Show>
+                <Show when={settings.folderColumns.modified}>
+                  <span class="ftime">Modified</span>
+                </Show>
+              </div>
+            </>
+          )}
+        </For>
       </div>
       <div
         class="fscroll"
@@ -1308,7 +1527,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
               const n = () => item().f.node;
               return (
                 <div
-                  class={`frow fs-${statusOf(n())}${sel().has(n().rel) ? " sel" : ""}`}
+                  class={`frow fs-${statusOf(n())}${sel().has(n().rel) ? " sel" : ""}${item().i % 2 ? " odd" : ""}${n().dir && !settings.folderColorFolders ? " plain-dir" : ""}`}
                   style={{ top: `${item().i * ROW_H}px` }}
                   onMouseDown={(e) => (e.stopPropagation(), click(e, n().rel, item().i))}
                   onDblClick={() => activate(n())}
@@ -1324,6 +1543,18 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
           </Index>
         </div>
       </div>
+      <Show when={logOpen()}>
+        <div class="log-pane">
+          <div class="log-head">
+            Log <span class="spacer" />
+            <button class="link-btn" onClick={() => setLogLines([])}>Clear</button>
+            <button class="link-btn" onClick={() => setLogOpen(false)}>✕</button>
+          </div>
+          <div class="log-body" ref={(el) => createEffect(() => (logLines(), queueMicrotask(() => (el.scrollTop = el.scrollHeight))))}>
+            <For each={logLines()}>{(l) => <div><span class="muted">{new Date(l.t).toLocaleTimeString()}</span> {l.text}</div>}</For>
+          </div>
+        </div>
+      </Show>
       <div class="statusbar">
         <Show when={result()} fallback={<span>{busy() ? "Comparing…" : ""}</span>}>
           {(r) => (
@@ -1390,7 +1621,7 @@ function SyncDialog(props: { left: string; right: string; mode?: string; options
   const [mode, setMode] = createSignal(props.mode ?? "update-right");
   const [plan, setPlan] = createSignal<Action[] | null>(null);
   const [busy, setBusy] = createSignal(false);
-  const [useTrash, setUseTrash] = createSignal(true);
+  const [useTrash, setUseTrash] = createSignal(settings.useTrash);
   // Started from a selection, the reference synchronizes the selected items only.
   const [selOnly, setSelOnly] = createSignal(props.scope.length > 0);
   const [err, setErr] = createSignal("");
@@ -1416,7 +1647,7 @@ function SyncDialog(props: { left: string; right: string; mode?: string; options
     if (!p.length) return;
     setBusy(true);
     try {
-      props.onDone(await api.executeActions(p, useTrash()));
+      props.onDone(await api.executeActions(p, useTrash(), backupSpec(settings.backupOnCopy)));
     } catch (e) {
       setErr(errText(e));
       setBusy(false);

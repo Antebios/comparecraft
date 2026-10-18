@@ -1,6 +1,8 @@
 import { createSignal } from "solid-js";
 import { createStore, produce } from "solid-js/store";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { api, basename, type LaunchSpec, type Session, type ViewKind } from "./api";
+import { setSetting, settings, type WorkspaceTab } from "./settings";
 
 export interface Tab {
   id: string;
@@ -35,6 +37,8 @@ export const KIND_LABEL: Record<ViewKind, string> = {
   hex: "Hex Compare",
   table: "Table Compare",
   picture: "Picture Compare",
+  edit: "Text Edit",
+  patch: "Text Patch",
 };
 
 export function tabTitle(t: Tab): string {
@@ -57,7 +61,9 @@ export function openTab(init: Partial<Tab> & { kind: ViewKind }): string {
     ...init,
   };
   setState(produce((s) => {
-    s.tabs.push(tab);
+    const at = settings.tabNewNext ? s.tabs.findIndex((t) => t.id === s.active) : -1;
+    if (at >= 0) s.tabs.splice(at + 1, 0, tab);
+    else s.tabs.push(tab);
     s.active = tab.id;
   }));
   return tab.id;
@@ -70,6 +76,21 @@ export function closeTab(id: string) {
     s.tabs.splice(i, 1);
     if (s.active === id) s.active = s.tabs[Math.max(0, i - 1)]?.id ?? "home";
   }));
+  if (state.tabs.length === 0 && settings.tabSingleCloseWindow) void getCurrentWindow().close();
+}
+
+/** Tabs to restore on the next start ("Load workspace"). */
+export function saveWorkspace() {
+  if (settings.workspaceSave !== "last") return;
+  const ws: WorkspaceTab[] = state.tabs
+    .filter((t) => t.paths.some(Boolean))
+    .map((t) => ({ kind: t.kind, paths: [...t.paths], options: JSON.parse(JSON.stringify(t.options ?? {})), sessionName: t.sessionName }));
+  setSetting("lastWorkspace", ws);
+}
+
+export function restoreWorkspace() {
+  if (settings.workspaceLoad !== "last") return;
+  for (const w of settings.lastWorkspace) openTab({ kind: w.kind, paths: [...w.paths], options: { ...w.options }, sessionName: w.sessionName });
 }
 
 export function activate(id: string) {

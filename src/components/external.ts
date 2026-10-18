@@ -27,3 +27,12 @@ export function externalCommands(path: () => string | undefined, report: (msg: s
     { id: "reveal", menu: "File", group, label: IS_MAC ? "Reveal in Finder" : "Show in File Manager", enabled: () => !!path(), run: wrap(revealItemInDir) },
   ];
 }
+
+/** Splits a command line into words; double or single quotes group words. */
+export function shellWords(cmd: string): string[] {
+  const out: string[] = [];
+  const re = /"([^"]*)"|'([^']*)'|(\S+)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(cmd))) out.push(m[1] ?? m[2] ?? m[3]);
+  return out;
+}

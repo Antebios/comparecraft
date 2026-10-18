@@ -6,6 +6,9 @@ pub mod hex;
 pub mod merge;
 pub mod quick;
 pub mod sessions;
+pub mod settings;
+pub mod shell;
+pub mod snapshot;
 pub mod table;
 
 use base64::Engine;
@@ -50,9 +53,12 @@ async fn save_text(
     eol: String,
     final_newline: bool,
     backup: bool,
+    backup_kind: Option<String>,
+    backup_dir: Option<String>,
 ) -> CmdResult<fileio::PathInfo> {
     blocking(move || {
-        fileio::save_text(&path, &lines, &encoding, bom, &eol, final_newline, backup).map_err(s)?;
+        let spec = backup.then(|| fileio::BackupSpec { kind: backup_kind.unwrap_or_default(), dir: backup_dir });
+        fileio::save_text(&path, &lines, &encoding, bom, &eol, final_newline, spec.as_ref()).map_err(s)?;
         Ok(fileio::path_info(&path))
     })
     .await
@@ -85,17 +91,13 @@ async fn plan_sync(
     options: folder::FolderOptions,
     mode: String,
 ) -> CmdResult<Vec<folder::Action>> {
-    blocking(move || {
-        let r = folder::compare_folders(&left, &right, &options).map_err(s)?;
-        Ok(folder::plan_sync(&r.root, &left, &right, &mode))
-    })
-    .await
+    blocking(move || folder::plan_sync_folders(&left, &right, &options, &mode).map_err(s)).await
 }
 
 /// Re-compares individual items; `None` marks an item that no longer exists or is filtered out.
 #[tauri::command]
 async fn compare_items(left: String, right: String, rels: Vec<String>, options: folder::FolderOptions) -> CmdResult<Vec<Option<folder::Node>>> {
-    blocking(move || Ok(rels.iter().map(|r| folder::compare_item(&left, &right, r, &options)).collect())).await
+    blocking(move || Ok(folder::compare_items(&left, &right, &rels, &options))).await
 }
 
 /// File Compare Report in patch (unified diff) form for pairs of files.
@@ -128,8 +130,29 @@ async fn item_info(paths: Vec<String>) -> CmdResult<Vec<folder::ItemInfo>> {
 }
 
 #[tauri::command]
-async fn execute_actions(actions: Vec<folder::Action>, use_trash: bool) -> CmdResult<Vec<folder::ActionResult>> {
-    blocking(move || Ok(folder::execute(&actions, use_trash))).await
+async fn execute_actions(
+    actions: Vec<folder::Action>,
+    use_trash: bool,
+    backup: Option<fileio::BackupSpec>,
+) -> CmdResult<Vec<folder::ActionResult>> {
+    blocking(move || Ok(folder::execute(&actions, use_trash, backup.as_ref()))).await
+}
+
+/// Writes a snapshot of `dir` to `out`; returns the number of entries written.
+#[tauri::command]
+async fn save_snapshot(
+    dir: String,
+    out: String,
+    crc: bool,
+    empty_dirs: bool,
+    options: Option<folder::FolderOptions>,
+) -> CmdResult<usize> {
+    blocking(move || snapshot::save_snapshot(&dir, &out, crc, empty_dirs, options.as_ref()).map_err(s)).await
+}
+
+#[tauri::command]
+async fn is_snapshot(path: String) -> CmdResult<bool> {
+    blocking(move || Ok(snapshot::is_snapshot(std::path::Path::new(&path)))).await
 }
 
 #[tauri::command]
@@ -215,6 +238,68 @@ fn find_session(name: String) -> Option<sessions::Session> {
 }
 
 #[tauri::command]
+async fn load_settings() -> CmdResult<serde_json::Value> {
+    blocking(|| Ok(settings::load())).await
+}
+
+#[tauri::command]
+async fn save_settings(settings: serde_json::Value) -> CmdResult<()> {
+    blocking(move || settings::save(&settings).map_err(s)).await
+}
+
+#[tauri::command]
+async fn reset_settings() -> CmdResult<()> {
+    blocking(|| settings::reset().map_err(s)).await
+}
+
+#[tauri::command]
+async fn export_settings(
+    path: String,
+    settings: Option<serde_json::Value>,
+    session_ids: Option<Vec<String>>,
+) -> CmdResult<()> {
+    blocking(move || settings::export(std::path::Path::new(&path), settings, session_ids.as_deref()).map_err(s)).await
+}
+
+#[tauri::command]
+async fn read_settings_file(path: String) -> CmdResult<settings::ImportData> {
+    blocking(move || settings::read_file(std::path::Path::new(&path))).await
+}
+
+#[tauri::command]
+async fn import_sessions(sessions: Vec<sessions::Session>, replace: bool) -> CmdResult<()> {
+    blocking(move || settings::import_sessions(sessions, replace).map_err(s)).await
+}
+
+/// Starts a program without waiting for it.
+#[tauri::command]
+fn spawn_command(program: String, args: Vec<String>) -> CmdResult<()> {
+    use std::process::{Command, Stdio};
+    let mut child = Command::new(&program)
+        .args(&args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| format!("{program}: {e}"))?;
+    // Reap the child when it exits so it does not linger as a zombie.
+    std::thread::spawn(move || {
+        let _ = child.wait();
+    });
+    Ok(())
+}
+
+#[tauri::command]
+async fn shell_integration_status() -> CmdResult<shell::ShellStatus> {
+    blocking(|| Ok(shell::status())).await
+}
+
+#[tauri::command]
+async fn set_shell_integration(items: Vec<shell::ShellItem>) -> CmdResult<()> {
+    blocking(move || shell::set(&items).map_err(s)).await
+}
+
+#[tauri::command]
 fn usage() -> &'static str {
     cli::USAGE
 }
@@ -241,6 +326,7 @@ pub fn run(spec: cli::LaunchSpec, solo: bool) {
     builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .manage(Launch(Mutex::new(Some(spec))))
         .invoke_handler(tauri::generate_handler![
             take_launch_spec,
@@ -264,6 +350,17 @@ pub fn run(spec: cli::LaunchSpec, solo: bool) {
             save_session,
             delete_session,
             find_session,
+            save_snapshot,
+            is_snapshot,
+            load_settings,
+            save_settings,
+            reset_settings,
+            export_settings,
+            read_settings_file,
+            import_sessions,
+            spawn_command,
+            shell_integration_status,
+            set_shell_integration,
             usage
         ])
         .run(tauri::generate_context!())

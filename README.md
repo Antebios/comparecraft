@@ -51,8 +51,11 @@ CompareCraft opens the right view for whatever you give it: two files, two folde
 ### 📝 Text Compare
 Side-by-side diff with **Patience**, **Myers** or **LCS** alignment and highlighting of changes within lines.
 Differences are classified as **important** (red) or **unimportant** (blue): leading, trailing or embedded
-whitespace, case and blank lines. Edit inline, copy a section to the other side, undo, and save with the
-original encoding, BOM and line endings preserved (with `.bak` backups).
+whitespace, case, blank lines, text **replacements** and sections you mark as **Ignored**. Gutter arrows
+copy a section (or the selected lines) to the other side in one click. **Align With** and **Isolate**
+fix up the alignment by hand. Edit inline, cut, copy and paste lines, compare a selection to the
+clipboard, undo, and save each side on its own or both together. Saves keep the original encoding, BOM
+and line endings, and write `.bak` backups.
 
 </td>
 <td width="50%" valign="top">
@@ -69,10 +72,13 @@ the next.
 
 ### 📁 Folder Compare
 Recursive tree compare by **timestamp & size**, **size**, **CRC32**, **binary** or **rules-based content**.
-Include/exclude masks (`*.rs;-target/`), filters for differences, orphans and same files, and a full
-**Actions** menu and context menu: copy or move to the other side or to a folder, delete (to trash or
-permanently), rename with masks, attributes, touch, new folder, exclude, align with, compare contents and
-file reports.
+A **Filters** bar (`*.rs;-target/`) with history and presets, **Peek** at excluded items, and a
+**Session Settings** dialog for comparison rules, name filters, date/size/content filters and alignment
+overrides. The **View** menu combines display filters (same, orphans, newer, differences), four folder
+handling modes, including **Ignore Folder Structure** (flatten), plus Suppress Filters, columns, legend and a log.
+The full **Actions** menu and context menu cover copy or move to the other side or to a folder, delete (to trash or
+permanently), rename with masks, attributes, touch, new folder, exclude, align with, compare contents,
+file reports and your own **Open With** applications.
 
 </td>
 <td width="50%" valign="top">
@@ -101,6 +107,12 @@ Side-by-side, **blend** or **difference-mask** modes, with a per-pixel tolerance
 
 ### 💾 Sessions
 Recent and named sessions are saved automatically. Reopen them from Home or with `comparecraft "<session name>"`.
+
+### 🛠️ Tools & Options
+**Tools › Options** covers startup and workspace, tabs, colours and fonts, text editing, next-difference
+behaviour, backups, file-operation confirmations, keyboard shortcuts, Open With applications and tweaks.
+There are also Export/Import Settings, Restore Factory Defaults, folder **snapshots** (`.ccsnap`, usable
+in place of a folder), a plain **text editor** and a **patch viewer**.
 
 </td>
 </tr>
@@ -249,10 +261,10 @@ Then use `git difftool` and `git mergetool` as usual.
 
 ## Keyboard shortcuts
 
-Every view has a menu bar (Session / File / Edit / Search / View / Help; Folder Compare has **Actions** instead
+Every view has a menu bar (Session / File / Edit / Search / View / Tools / Help; Folder Compare has **Actions** instead
 of File). Right-click, the Menu key or Shift+F10 opens the context menu for the selection. Press **F1** for the
 full list of shortcuts in the current view, or **F10** to work the menus from the keyboard. On macOS, Ctrl
-means ⌘.
+means ⌘. Shortcuts can be changed in **Tools › Options › Toolbars, Shortcuts**.
 
 | Key | Action |
 |---|---|
@@ -267,6 +279,9 @@ means ⌘.
 | Ctrl+G | Go to line (Text) / go to offset (Hex) |
 | Alt+↑ / Alt+↓ / Alt+← / Alt+→ | Previous / next existing line, go left / right (Text Compare) |
 | F2, Ctrl+Enter, Del | Edit line, insert line, delete line (Text Compare) |
+| F7, Ctrl+D, Shift+↑ / Shift+↓ | Align with, select section, extend line selection (Text Compare) |
+| Shift+Ctrl+I / Shift+Ctrl+U | Increase / decrease indent (Text Compare) |
+| Shift+Ctrl+V, F12 | Open clipboard, save file as (Text Compare) |
 | Ctrl+S, Shift+Ctrl+S | Save file, save session |
 | Ctrl+Z, Ctrl+Y | Undo, redo |
 | F5, Ctrl+F5 | Refresh / reload, full refresh / recompare |
@@ -278,11 +293,12 @@ means ⌘.
 | ↑ ↓ PgUp PgDn Home End, ← → (Folder Compare) | Move selection (add Shift to extend it), collapse / expand folder |
 | Ctrl+A, Shift+Ctrl+A (Folder Compare) | Select all, select all files |
 | Ctrl+Alt+L (Folder Compare) | Legend |
+| Ctrl+1 / Ctrl+2 / Ctrl+3 (Folder Compare) | Show all / differences / same |
 | F8, Ctrl++ / Ctrl+− / Ctrl+0 (Picture Compare) | Toggle blend, zoom in / out / actual size |
 
 ## Data locations
 
-Sessions are stored in `sessions.json` in:
+Sessions are stored in `sessions.json` and options in `settings.json` in:
 
 - Linux: `~/.config/comparecraft/`
 - macOS: `~/Library/Application Support/comparecraft/`
@@ -303,6 +319,9 @@ src-tauri/src/
   folder.rs          folder scan, compare criteria, masks, file operations, sync plan/execute
   hex.rs, table.rs   hex and table compare
   sessions.rs        session persistence
+  settings.rs        options file, settings export/import
+  snapshot.rs        folder snapshots (.ccsnap)
+  shell.rs           file-manager integration (Nautilus scripts, Dolphin service menu)
   cli.rs             argument parsing, automerge
   lib.rs             Tauri commands, single-instance forwarding
 docs/screenshots/    images used in this README
@@ -321,10 +340,8 @@ Not implemented yet:
 - folder merge and three-way folder compare
 - source-control integration
 - a scripting language for batch reports
-- text patch and plain text editing views
 - media, registry and version-information compare
 - archives as folders; FTP/SFTP and cloud locations
-- folder snapshots
 - alignment across insertions in Hex Compare
 
 Bug reports and pull requests are welcome in [GitHub issues](https://github.com/Antebios/comparecraft/issues).
@@ -332,3 +349,8 @@ Bug reports and pull requests are welcome in [GitHub issues](https://github.com/
 ## License
 
 [MIT](LICENSE) © 2026 CompareCraft contributors
+
+## Trademarks
+
+CompareCraft is an independent project and is not affiliated with, sponsored by, or endorsed by Scooter Software,
+Inc. Beyond Compare is a trademark of Scooter Software, Inc.
