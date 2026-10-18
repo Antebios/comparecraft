@@ -60,6 +60,7 @@ jobs:
         with: { workspaces: "src-tauri -> target" }
       - run: npm ci
       - uses: tauri-apps/tauri-action@v0
+        id: tauri
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -67,3 +68,43 @@ jobs:
           releaseName: "CompareCraft ${{ github.ref_name }}"
           releaseDraft: true
           args: ${{ matrix.args }}
+      - name: Package and upload Windows portable ZIP
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ steps.tauri.outputs.releaseId }}
+        run: |
+          $version = (Get-Content -Raw "src-tauri/tauri.conf.json" | ConvertFrom-Json).version
+          $zipName = "CompareCraft-$version-windows-portable.zip"
+          $staging = Join-Path $env:RUNNER_TEMP "comparecraft-portable"
+          $zipPath = Join-Path $env:RUNNER_TEMP $zipName
+
+          New-Item -ItemType Directory -Path $staging -Force | Out-Null
+          Copy-Item "src-tauri/target/release/comparecraft.exe" (Join-Path $staging "comparecraft.exe")
+          Copy-Item "packaging/windows/README-portable.txt" (Join-Path $staging "README.txt")
+          Compress-Archive -Path (Join-Path $staging "*") -DestinationPath $zipPath -Force
+
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $archive = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
+          try {
+            $entries = @($archive.Entries | ForEach-Object { $_.FullName } | Sort-Object)
+            $expectedEntries = @("comparecraft.exe", "README.txt") | Sort-Object
+            if (($entries -join "`n") -ne ($expectedEntries -join "`n")) {
+              throw "Unexpected portable ZIP contents: $($entries -join ', ')"
+            }
+          } finally {
+            $archive.Dispose()
+          }
+
+          if (-not $env:RELEASE_ID) {
+            throw "Tauri action did not return a GitHub release ID."
+          }
+          $release = gh api "repos/$env:GITHUB_REPOSITORY/releases/$env:RELEASE_ID" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not retrieve the GitHub release."
+          }
+          gh release upload $release.tag_name $zipPath --clobber
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not upload the Windows portable ZIP."
+          }
