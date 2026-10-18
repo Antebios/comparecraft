@@ -15,13 +15,30 @@ pub struct TableOptions {
     pub header: bool,
     /// Zero-based key columns; empty = align by row content.
     pub keys: Vec<usize>,
+    /// Differences only in character case are unimportant.
     pub ignore_case: bool,
+    /// Differences only in whitespace are unimportant.
     pub trim: bool,
+    /// Zero-based columns whose differences are unimportant (keys excepted).
+    pub unimportant: Vec<usize>,
+    /// Numbers differing by at most this much are unimportant; 0 disables.
+    pub num_tolerance: f64,
+    /// `num_tolerance` is a percentage of the larger magnitude.
+    pub num_relative: bool,
 }
 
 impl Default for TableOptions {
     fn default() -> Self {
-        TableOptions { delimiter: String::new(), header: true, keys: vec![], ignore_case: false, trim: true }
+        TableOptions {
+            delimiter: String::new(),
+            header: true,
+            keys: vec![],
+            ignore_case: false,
+            trim: true,
+            unimportant: vec![],
+            num_tolerance: 0.0,
+            num_relative: false,
+        }
     }
 }
 
@@ -32,11 +49,14 @@ pub struct TableRow {
     pub l: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub r: Option<u32>,
-    /// "same" | "changed" | "left" | "right"
+    /// "same" | "changed" | "unimportant" (only unimportant cells differ) | "left" | "right"
     pub k: String,
     /// Column indices whose values differ.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub cells: Vec<u32>,
+    /// Subset of `cells` whose differences are unimportant.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub minor: Vec<u32>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -120,22 +140,87 @@ fn norm(s: &str, o: &TableOptions) -> String {
     if o.ignore_case { t.to_lowercase() } else { t.to_string() }
 }
 
-fn cell_diffs(a: &[String], b: &[String], o: &TableOptions) -> Vec<u32> {
-    let n = a.len().max(b.len());
-    (0..n)
-        .filter(|&i| norm(a.get(i).map(|s| s.as_str()).unwrap_or(""), o) != norm(b.get(i).map(|s| s.as_str()).unwrap_or(""), o))
-        .map(|i| i as u32)
-        .collect()
+/// Parses a plain decimal number ("-1,234.50", "+3", "1e3"); anything else is text.
+fn number(s: &str) -> Option<f64> {
+    let t = s.trim();
+    if t.is_empty() || !t.bytes().all(|b| b.is_ascii_digit() || b"+-.,eE".contains(&b)) || !t.bytes().any(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let t = if t.contains(',') {
+        // Only thousands separators are accepted: groups of three digits before any '.'.
+        let int = t.split(['.', 'e', 'E']).next().unwrap_or("").trim_start_matches(['+', '-']);
+        let mut groups = int.split(',');
+        let first = groups.next().unwrap_or("");
+        if first.is_empty() || first.len() > 3 || !groups.all(|g| g.len() == 3) {
+            return None;
+        }
+        t.replace(',', "")
+    } else {
+        t.to_string()
+    };
+    t.parse::<f64>().ok().filter(|v| v.is_finite())
+}
+
+/// Classifies one cell pair: 0 = same, 1 = unimportant difference, 2 = important difference.
+/// Values that both read as numbers compare by value; otherwise text differences become
+/// unimportant when they vanish after case folding / whitespace removal (if those are
+/// unimportant), and any difference in an unimportant non-key column is unimportant.
+fn cell_kind(a: &str, b: &str, col: usize, o: &TableOptions) -> u8 {
+    if a == b {
+        return 0;
+    }
+    let key = o.keys.contains(&col);
+    let important = key || !o.unimportant.contains(&col);
+    let base = if important { 2 } else { 1 };
+    if let (Some(x), Some(y)) = (number(a), number(b)) {
+        if x == y {
+            return 0;
+        }
+        if important && !key && o.num_tolerance > 0.0 {
+            let tol = if o.num_relative { o.num_tolerance / 100.0 * x.abs().max(y.abs()) } else { o.num_tolerance };
+            if (x - y).abs() <= tol {
+                return 1;
+            }
+        }
+        return base;
+    }
+    if important && (o.ignore_case || o.trim) {
+        let f = |s: &str| {
+            let s: String = if o.trim { s.chars().filter(|c| !c.is_whitespace()).collect() } else { s.to_string() };
+            if o.ignore_case { s.to_lowercase() } else { s }
+        };
+        if f(a) == f(b) {
+            return 1;
+        }
+    }
+    base
 }
 
 fn mk(l: Option<usize>, r: Option<usize>, left: &[Vec<String>], right: &[Vec<String>], o: &TableOptions) -> TableRow {
     match (l, r) {
         (Some(a), Some(b)) => {
-            let cells = cell_diffs(&left[a], &right[b], o);
-            TableRow { l: Some(a as u32), r: Some(b as u32), k: if cells.is_empty() { "same" } else { "changed" }.into(), cells }
+            let (ra, rb) = (&left[a], &right[b]);
+            let (mut cells, mut minor) = (vec![], vec![]);
+            for i in 0..ra.len().max(rb.len()) {
+                let k = cell_kind(ra.get(i).map(|s| s.as_str()).unwrap_or(""), rb.get(i).map(|s| s.as_str()).unwrap_or(""), i, o);
+                if k > 0 {
+                    cells.push(i as u32);
+                }
+                if k == 1 {
+                    minor.push(i as u32);
+                }
+            }
+            let k = if cells.is_empty() {
+                "same"
+            } else if cells.len() == minor.len() {
+                "unimportant"
+            } else {
+                "changed"
+            };
+            TableRow { l: Some(a as u32), r: Some(b as u32), k: k.into(), cells, minor }
         }
-        (Some(a), None) => TableRow { l: Some(a as u32), r: None, k: "left".into(), cells: vec![] },
-        (None, Some(b)) => TableRow { l: None, r: Some(b as u32), k: "right".into(), cells: vec![] },
+        (Some(a), None) => TableRow { l: Some(a as u32), r: None, k: "left".into(), cells: vec![], minor: vec![] },
+        (None, Some(b)) => TableRow { l: None, r: Some(b as u32), k: "right".into(), cells: vec![], minor: vec![] },
         _ => unreachable!(),
     }
 }
@@ -218,5 +303,43 @@ mod tests {
         assert_eq!(kinds, vec!["same", "changed", "left", "right"]);
         assert_eq!(r.rows[1].cells, vec![2]);
         assert_eq!(r.header, vec!["id", "name", "qty"]);
+    }
+
+    #[test]
+    fn unimportant_cells() {
+        let o = TableOptions { ignore_case: true, unimportant: vec![3], num_tolerance: 0.5, ..Default::default() };
+        assert_eq!(cell_kind("1.0", "1", 0, &o), 0);
+        assert_eq!(cell_kind("1,000", "1000", 0, &o), 0);
+        assert_eq!(cell_kind("1.2", "1.6", 0, &o), 1);
+        assert_eq!(cell_kind("1", "2", 0, &o), 2);
+        assert_eq!(cell_kind("Apple ", "apple", 1, &o), 1);
+        assert_eq!(cell_kind("apple", "pear", 1, &o), 2);
+        assert_eq!(cell_kind("x", "y", 3, &o), 1);
+        let keyed = TableOptions { keys: vec![0, 3], ..o.clone() };
+        assert_eq!(cell_kind("1.2", "1.6", 0, &keyed), 2);
+        assert_eq!(cell_kind("x", "y", 3, &keyed), 2);
+        let rel = TableOptions { num_tolerance: 10.0, num_relative: true, ..Default::default() };
+        assert_eq!(cell_kind("100", "109", 0, &rel), 1);
+        assert_eq!(cell_kind("100", "112", 0, &rel), 2);
+        assert_eq!(number("1,23"), None);
+        assert_eq!(number("abc"), None);
+        assert_eq!(number("-"), None);
+    }
+
+    #[test]
+    fn unimportant_rows() {
+        let d = tempfile::tempdir().unwrap();
+        let a = d.path().join("a.csv");
+        let b = d.path().join("b.csv");
+        std::fs::write(&a, "id,name,note\n1,Apple,x\n2,pear,y\n").unwrap();
+        std::fs::write(&b, "id,name,note\n1,apple,x\n2,pear,z\n").unwrap();
+        let o = TableOptions { keys: vec![0], ignore_case: true, unimportant: vec![], ..Default::default() };
+        let r = compare_tables(a.to_str().unwrap(), b.to_str().unwrap(), &o).unwrap();
+        assert_eq!(r.rows[0].k, "unimportant");
+        assert_eq!(r.rows[0].minor, vec![1]);
+        assert_eq!(r.rows[1].k, "changed");
+        let o = TableOptions { unimportant: vec![2], ..o };
+        let r = compare_tables(a.to_str().unwrap(), b.to_str().unwrap(), &o).unwrap();
+        assert_eq!(r.rows[1].k, "unimportant");
     }
 }
