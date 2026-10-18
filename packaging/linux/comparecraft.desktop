@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=CompareCraft
+GenericName=File and Folder Compare
+Comment=Compare, merge and synchronize files and folders
+Exec=comparecraft %F
+Icon=comparecraft
+Terminal=false
+Categories=Utility;FileTools;TextTools;
+Keywords=diff;compare;merge;sync;folder;hex;
+MimeType=inode/directory;text/plain;
+StartupWMClass=comparecraft

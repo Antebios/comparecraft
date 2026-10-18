@@ -1,0 +1,334 @@
+<p align="center">
+  <img src="src-tauri/icons/128x128.png" width="96" height="96" alt="CompareCraft" />
+</p>
+
+<h1 align="center">CompareCraft</h1>
+
+<h3 align="center">Compare, merge and synchronize files and folders.</h3>
+
+<p align="center">
+  <b>A fast, open-source desktop tool for comparing text, folders, tables, binaries and images, built with Tauri 2, SolidJS and Rust.</b><br>
+  Native on Linux, Windows and macOS. Scriptable from the command line. Works as your git diff and merge tool.
+</p>
+
+<p align="center">
+  <a href="https://github.com/Antebios/comparecraft/actions/workflows/build.yml"><img src="https://github.com/Antebios/comparecraft/actions/workflows/build.yml/badge.svg" alt="Build" /></a>
+  <a href="https://github.com/Antebios/comparecraft/releases"><img src="https://img.shields.io/github/v/release/Antebios/comparecraft?include_prereleases&label=release" alt="Latest release" /></a>
+  <img src="https://img.shields.io/badge/Linux%20%C2%B7%20Windows%20%C2%B7%20macOS-informational?style=flat" alt="Linux, Windows and macOS" />
+  <img src="https://img.shields.io/badge/Tauri%202-24C8DB?logo=tauri&logoColor=white" alt="Tauri 2" />
+  <img src="https://img.shields.io/badge/SolidJS-2C4F7C?logo=solid&logoColor=white" alt="SolidJS" />
+  <img src="https://img.shields.io/badge/Rust-000000?logo=rust&logoColor=white" alt="Rust" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License: MIT" /></a>
+</p>
+
+<p align="center">
+  <a href="#features">Features</a> ·
+  <a href="#download">Download</a> ·
+  <a href="#build-from-source">Build from source</a> ·
+  <a href="#command-line">Command line</a> ·
+  <a href="#using-comparecraft-with-git">Git integration</a> ·
+  <a href="#keyboard-shortcuts">Shortcuts</a> ·
+  <a href="#project-layout">Project layout</a> ·
+  <a href="#status-and-roadmap">Roadmap</a>
+</p>
+
+<br>
+
+<p align="center">
+  <img src="docs/screenshots/text-compare.jpg" alt="CompareCraft Text Compare: two versions of a file side by side, with changed lines and the changed characters within them highlighted" width="100%">
+  <br>
+  <sub>Text Compare: line alignment, highlighting within lines, and important (red) vs. unimportant (blue) differences.</sub>
+</p>
+
+## Features
+
+CompareCraft opens the right view for whatever you give it: two files, two folders, three files to merge, or a saved session.
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+### 📝 Text Compare
+Side-by-side diff with **Patience**, **Myers** or **LCS** alignment and highlighting of changes within lines.
+Differences are classified as **important** (red) or **unimportant** (blue): leading, trailing or embedded
+whitespace, case and blank lines. Edit inline, copy a section to the other side, undo, and save with the
+original encoding, BOM and line endings preserved (with `.bak` backups).
+
+</td>
+<td width="50%" valign="top">
+
+### 🔀 Text Merge
+**3-way merge** (left, base, right → output). Non-conflicting changes merge automatically; for each conflict
+choose left, right, both or base. The output pane is editable, and conflict navigation takes you from one to
+the next.
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+### 📁 Folder Compare
+Recursive tree compare by **timestamp & size**, **size**, **CRC32**, **binary** or **rules-based content**.
+Include/exclude masks (`*.rs;-target/`), filters for differences, orphans and same files, and a full
+**Actions** menu and context menu: copy or move to the other side or to a folder, delete (to trash or
+permanently), rename with masks, attributes, touch, new folder, exclude, align with, compare contents and
+file reports.
+
+</td>
+<td width="50%" valign="top">
+
+### 🔄 Folder Sync
+Update left → right, right → left or both ways, or **mirror** in either direction. Every action is shown in a
+preview before anything runs, and syncing can be limited to the current selection.
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+### 🔢 Hex Compare
+Byte-by-byte view with offsets, an ASCII column and difference navigation.
+
+### 📊 Table Compare
+CSV/TSV with delimiter auto-detection, a header row, **key columns** for matching rows, and differences
+shown cell by cell.
+
+</td>
+<td width="50%" valign="top">
+
+### 🖼️ Picture Compare
+Side-by-side, **blend** or **difference-mask** modes, with a per-pixel tolerance and zoom.
+
+### 💾 Sessions
+Recent and named sessions are saved automatically. Reopen them from Home or with `comparecraft "<session name>"`.
+
+</td>
+</tr>
+</table>
+
+CompareCraft runs as a single instance: launching `comparecraft a b` again opens a new tab in the existing window. Light,
+dark and auto themes are included.
+
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/folder-compare.jpg" alt="Folder Compare with two folder trees side by side, colour-coded by status"><br><sub><b>Folder Compare.</b> Two trees side by side, colour-coded by status.</sub></td>
+<td width="50%"><img src="docs/screenshots/text-merge.jpg" alt="Text Merge with left, base and right panes above an editable output pane"><br><sub><b>Text Merge.</b> Left, base and right above an editable output.</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/table-compare.jpg" alt="Table Compare of two CSV files with differing cells highlighted"><br><sub><b>Table Compare.</b> Rows matched by key, differing cells highlighted.</sub></td>
+<td width="50%"><img src="docs/screenshots/hex-compare.jpg" alt="Hex Compare of two binary files with offsets and ASCII column"><br><sub><b>Hex Compare.</b> Offsets, bytes and ASCII, side by side.</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/picture-compare.jpg" alt="Picture Compare of two images"><br><sub><b>Picture Compare.</b> Side by side, blend or difference mask.</sub></td>
+<td width="50%"><img src="docs/screenshots/home.jpg" alt="Home view with recent and saved sessions"><br><sub><b>Home.</b> Start a comparison or reopen a session.</sub></td>
+</tr>
+</table>
+
+## Download
+
+Installers for Linux (`.deb`, `.rpm`, AppImage), Windows (`.msi`, NSIS `.exe`) and macOS (`.dmg`, Apple Silicon
+and Intel) are published on the [releases page](https://github.com/Antebios/comparecraft/releases).
+
+**Arch / Omarchy:** build and install the package from [`packaging/arch/PKGBUILD`](packaging/arch/PKGBUILD)
+(see [below](#linux-packages)). On Omarchy, CompareCraft then appears in the app launcher (Super+Space).
+
+> [!NOTE]
+> The downloads aren't code-signed yet. On Windows, if SmartScreen warns you, choose **More info**, then
+> **Run anyway**. On macOS, the first time, right-click CompareCraft in Applications and choose **Open**.
+
+## Build from source
+
+### Prerequisites
+
+All platforms need **Rust** (stable, via [rustup](https://rustup.rs)) and **Node.js ≥ 20**.
+
+**Arch / Omarchy / Manjaro**
+```sh
+sudo pacman -S --needed webkit2gtk-4.1 base-devel curl wget file openssl appmenu-gtk-module libappindicator-gtk3 librsvg
+```
+
+**Debian / Ubuntu / Pop!_OS / Mint**
+```sh
+sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+```
+
+**Fedora**
+```sh
+sudo dnf install webkit2gtk4.1-devel openssl-devel curl wget file libappindicator-gtk3-devel librsvg2-devel
+sudo dnf group install "c-development"
+```
+
+**Windows:** Microsoft C++ Build Tools ("Desktop development with C++") and WebView2. WebView2 is preinstalled
+on Windows 10 (1803+) and 11.
+
+**macOS:** Xcode Command Line Tools (`xcode-select --install`).
+
+### Develop
+
+```sh
+git clone https://github.com/Antebios/comparecraft.git
+cd comparecraft
+npm install
+npm run tauri dev                    # hot-reloading app
+npm run typecheck                    # TypeScript
+cd src-tauri && cargo test           # Rust unit tests (diff, merge, quick compare, folders, CLI, …)
+scripts/parity.sh                    # command-line exit-code and merge-output checks (needs a release build)
+```
+
+### Build
+
+```sh
+npx tauri build                                  # all bundle types for the host OS
+npx tauri build --bundles deb,rpm,appimage       # Linux
+npx tauri build --bundles nsis,msi               # Windows
+npx tauri build --bundles app,dmg                # macOS
+```
+
+Installers go to `src-tauri/target/release/bundle/`. The bare binary is `src-tauri/target/release/comparecraft`.
+
+### Linux packages
+
+- **Arch / Omarchy:**
+
+  ```sh
+  cd packaging/arch && makepkg -si
+  ```
+
+- **Desktop entry:** the Arch package installs [`packaging/linux/comparecraft.desktop`](packaging/linux/comparecraft.desktop);
+  the `.deb`, `.rpm` and AppImage bundles generate their own.
+
+### Continuous integration
+
+[`.github/workflows/build.yml`](.github/workflows/build.yml) runs the type check and Rust tests on every push
+and pull request. Pushing a `v*` tag builds installers for Linux, Windows and macOS (Intel and Apple Silicon)
+and attaches them to a draft release.
+
+## Command line
+
+```
+comparecraft [options] [left] [right] [center] [output]
+
+comparecraft a.txt b.txt                 # text compare (viewer chosen by file type)
+comparecraft dirA dirB                   # folder compare      (-sync for folder sync)
+comparecraft mine.txt theirs.txt base.txt out.txt   # 3-way merge
+comparecraft -fv="Hex Compare" a.bin b.bin
+comparecraft -qc a.txt b.txt; echo $?    # quick compare, no GUI
+comparecraft -qc=binary|crc|size a b
+comparecraft -automerge [-force] [-iu] [-reviewconflicts] mine theirs base -mergeoutput=out
+comparecraft -filters="*.rs;-target/" -expandall dirA dirB
+comparecraft "My saved session"
+```
+
+Switches use `-name[=value]`; on Windows `/name[=value]` also works. Run `comparecraft -h` for the full list.
+
+Exit codes for quick compare and automerge:
+
+| Code | Meaning |
+|---|---|
+| 0 | Success |
+| 1 | Binary same |
+| 2 | Rules-based same (only encoding, BOM or line-ending differences) |
+| 11 | Binary differences |
+| 12 | Similar (only unimportant differences) |
+| 13 | Rules-based differences |
+| 14 | Conflicts detected (`-force` output written) |
+| 100 | Error (missing or invalid arguments) |
+| 101 | Conflicts detected, merge output not written |
+
+## Using CompareCraft with git
+
+```sh
+git config --global diff.tool comparecraft
+git config --global difftool.comparecraft.cmd 'comparecraft "$LOCAL" "$REMOTE" -solo'
+git config --global merge.tool comparecraft
+git config --global mergetool.comparecraft.cmd 'comparecraft "$LOCAL" "$REMOTE" "$BASE" "$MERGED" -solo'
+git config --global mergetool.comparecraft.trustExitCode true
+```
+
+Then use `git difftool` and `git mergetool` as usual.
+
+## Keyboard shortcuts
+
+Every view has a menu bar (Session / File / Edit / Search / View / Help; Folder Compare has **Actions** instead
+of File). Right-click, the Menu key or Shift+F10 opens the context menu for the selection. Press **F1** for the
+full list of shortcuts in the current view, or **F10** to work the menus from the keyboard. On macOS, Ctrl
+means ⌘.
+
+| Key | Action |
+|---|---|
+| Ctrl+T / Ctrl+W / Ctrl+Tab | New tab / close tab / next tab (Shift+Ctrl+Tab: previous tab) |
+| Alt+Home, Ctrl+Q | Home view, exit |
+| Ctrl+N / Ctrl+P | Next / previous difference (all views) |
+| Alt+N / Alt+P | Next / previous conflict (Text Merge) |
+| Ctrl+L / Ctrl+R | Copy to left / right (Text and Folder Compare); take left / right (Merge) |
+| Shift+Ctrl+L / Shift+Ctrl+R | Copy line (Text Compare); mirror to left / right (Folder Compare) |
+| Ctrl+B / Shift+Ctrl+B | Take left then right / right then left (Merge) |
+| Ctrl+F, F3, Shift+F3 | Find, find next, find previous |
+| Ctrl+G | Go to line (Text) / go to offset (Hex) |
+| Alt+↑ / Alt+↓ / Alt+← / Alt+→ | Previous / next existing line, go left / right (Text Compare) |
+| F2, Ctrl+Enter, Del | Edit line, insert line, delete line (Text Compare) |
+| Ctrl+S, Shift+Ctrl+S | Save file, save session |
+| Ctrl+Z, Ctrl+Y | Undo, redo |
+| F5, Ctrl+F5 | Refresh / reload, full refresh / recompare |
+| Enter (Folder Compare) | Open the selected pair, or open/close a single folder |
+| F2, Ins, Del, Shift+Del (Folder Compare) | Rename, new folder, delete (to trash), delete permanently |
+| F6, F7, Shift+F5 (Folder Compare) | Align with, compare to, refresh selection |
+| Alt+← / Alt+→ (Folder Compare) | Back / forward through base-folder history |
+| Ctrl+← / Ctrl+→ (Folder Compare) | Act on the left / right side of the selected rows |
+| ↑ ↓ PgUp PgDn Home End, ← → (Folder Compare) | Move selection (add Shift to extend it), collapse / expand folder |
+| Ctrl+A, Shift+Ctrl+A (Folder Compare) | Select all, select all files |
+| Ctrl+Alt+L (Folder Compare) | Legend |
+| F8, Ctrl++ / Ctrl+− / Ctrl+0 (Picture Compare) | Toggle blend, zoom in / out / actual size |
+
+## Data locations
+
+Sessions are stored in `sessions.json` in:
+
+- Linux: `~/.config/comparecraft/`
+- macOS: `~/Library/Application Support/comparecraft/`
+- Windows: `%APPDATA%\comparecraft\`
+
+Set `COMPARECRAFT_CONFIG_DIR` to use a different folder.
+
+## Project layout
+
+```
+index.html           frontend entry point (Vite)
+src/                 SolidJS UI: app shell, store, menus, views/*
+src-tauri/src/
+  fileio.rs          encoding/BOM/EOL detection, safe saves with backups
+  diff.rs            line alignment (Patience/Myers/LCS) + importance rules
+  merge.rs           3-way merge
+  quick.rs           -qc quick compare and exit codes
+  folder.rs          folder scan, compare criteria, masks, file operations, sync plan/execute
+  hex.rs, table.rs   hex and table compare
+  sessions.rs        session persistence
+  cli.rs             argument parsing, automerge
+  lib.rs             Tauri commands, single-instance forwarding
+docs/screenshots/    images used in this README
+packaging/           Arch PKGBUILD, Linux .desktop file
+scripts/parity.sh    command-line exit-code and merge-output checks
+tests/fixtures/      quick-compare and merge test files
+```
+
+## Status and roadmap
+
+CompareCraft is **early but usable** (version 0.1). Text, merge, folder, sync, hex, table and picture comparison all
+work, and the command-line exit codes are covered by `scripts/parity.sh`.
+
+Not implemented yet:
+
+- folder merge and three-way folder compare
+- source-control integration
+- a scripting language for batch reports
+- text patch and plain text editing views
+- media, registry and version-information compare
+- archives as folders; FTP/SFTP and cloud locations
+- folder snapshots
+- alignment across insertions in Hex Compare
+
+Bug reports and pull requests are welcome in [GitHub issues](https://github.com/Antebios/comparecraft/issues).
+
+## License
+
+[MIT](LICENSE) © 2026 CompareCraft contributors

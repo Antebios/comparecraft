@@ -1,0 +1,42 @@
+# Maintainer: Your Name <you@example.com>
+# Build from a local checkout:  cd packaging/arch && makepkg -si
+pkgname=comparecraft
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Compare, merge and synchronize files and folders (Tauri + SolidJS)"
+arch=('x86_64' 'aarch64')
+url="https://github.com/Antebios/comparecraft"
+license=('MIT')
+depends=('webkit2gtk-4.1' 'gtk3' 'cairo' 'pango' 'gdk-pixbuf2' 'glib2' 'openssl' 'libsoup3' 'hicolor-icon-theme')
+makedepends=('rust' 'cargo' 'nodejs' 'npm')
+options=('!lto' '!debug')
+source=()
+sha256sums=()
+
+_srcroot="$(realpath "${startdir}/../..")"
+
+prepare() {
+  cd "$_srcroot"
+  npm ci --no-audit --no-fund
+}
+
+build() {
+  cd "$_srcroot"
+  export CARGO_TARGET_DIR="$_srcroot/src-tauri/target"
+  npx tauri build --no-bundle
+}
+
+check() {
+  cd "$_srcroot/src-tauri"
+  cargo test --release --lib
+}
+
+package() {
+  cd "$_srcroot"
+  install -Dm755 src-tauri/target/release/comparecraft "$pkgdir/usr/bin/comparecraft"
+  install -Dm644 packaging/linux/comparecraft.desktop "$pkgdir/usr/share/applications/comparecraft.desktop"
+  install -Dm644 src-tauri/icons/32x32.png "$pkgdir/usr/share/icons/hicolor/32x32/apps/comparecraft.png"
+  install -Dm644 src-tauri/icons/128x128.png "$pkgdir/usr/share/icons/hicolor/128x128/apps/comparecraft.png"
+  install -Dm644 src-tauri/icons/128x128@2x.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/comparecraft.png"
+  install -Dm644 src-tauri/icons/comparecraft.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/comparecraft.svg"
+}

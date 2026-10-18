@@ -1,0 +1,43 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "CompareCraft",
+  "version": "0.1.0",
+  "identifier": "dev.comparecraft.app",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "CompareCraft",
+        "width": 1400,
+        "height": 900,
+        "minWidth": 800,
+        "minHeight": 500
+      }
+    ],
+    "security": { "csp": null }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["deb", "rpm", "appimage", "nsis", "msi", "app", "dmg"],
+    "category": "DeveloperTool",
+    "shortDescription": "Compare, merge and synchronize files and folders",
+    "longDescription": "CompareCraft compares text, folders, binary (hex), tables (CSV) and pictures, performs 3-way text merges and folder synchronization.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "linux": {
+      "deb": { "depends": [] },
+      "appimage": { "bundleMediaFramework": false }
+    }
+  }
+}
