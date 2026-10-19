@@ -182,6 +182,10 @@ dark and auto themes are included.
   [`.github/workflows/docs.yml`](.github/workflows/docs.yml) builds the site whenever the manual changes and publishes it to
   GitHub Pages from `main`.
 
+  **One-time publishing setup:** in the GitHub repository's **Settings > Pages > Build and deployment**, set
+  **Source** to **GitHub Actions**, then rerun the docs workflow. A repository administrator must enable Pages;
+  the workflow's built-in `GITHUB_TOKEN` cannot enable it automatically.
+
 ## Download
 
 Installers for Linux (`.deb`, `.rpm`, AppImage), Windows (`.msi`, NSIS `.exe`) and macOS (`.dmg`, Apple Silicon
