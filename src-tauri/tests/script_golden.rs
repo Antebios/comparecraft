@@ -43,11 +43,28 @@ fn setup(root: &Path) {
 
 fn normalise(s: &str, root: &Path) -> String {
     let s = s.replace(&root.to_string_lossy().into_owned(), "@ROOT@");
+    let s = normalise_patch_timestamps(&s);
     let s = Regex::new(r"\d\d/\d\d/\d{4} \d\d:\d\d:\d\d [AP]M").unwrap().replace_all(&s, "<TS>");
     let s = Regex::new(r"Completed in [\d.]+").unwrap().replace_all(&s, "Completed in <T>");
     let s = Regex::new(r"completed in [\d.]+ seconds").unwrap().replace_all(&s, "completed in <T> seconds");
     let s = Regex::new(r"\*\*\* .* \*\*\*").unwrap().replace_all(&s, "*** <BANNER> ***");
     stamp_re().replace_all(&s, "$1<STAMP>").into_owned()
+}
+
+fn normalise_patch_timestamps(s: &str) -> String {
+    Regex::new(r"(?m)^((?:\*\*\*|---|\+\+\+) @ROOT@/[^\t\r\n]+\t)\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d{9}")
+        .unwrap()
+        .replace_all(s, "${1}<TS>")
+        .into_owned()
+}
+
+#[test]
+fn patch_timestamps_are_timezone_independent() {
+    let expected = "--- @ROOT@/L/diff.txt\t<TS> \n+++ @ROOT@/R/diff.txt\t<TS> \n*** @ROOT@/base.txt\t<TS> \n@@ -1 +1 @@\n-2024-03-01 12:00:00.000000000\n+2024-03-01 18:00:00.000000000\n";
+    for timestamp in ["2024-03-01 12:00:00.000000000", "2024-03-01 18:00:00.000000000", "2024-03-02 03:00:00.000000000"] {
+        let input = expected.replace("<TS>", timestamp);
+        assert_eq!(normalise_patch_timestamps(&input), expected);
+    }
 }
 
 fn stamp_re() -> Regex {
@@ -114,7 +131,7 @@ fn run_case(case: &str) {
     setup(root);
     let dir = fixtures().join(case);
     let r = root.to_string_lossy().into_owned();
-    let out = ["out", "out2", "out5", "out7", "out8", "out9", "out10", "out11", "out12", "out14"];
+    let out = ["out", "out2", "out5", "out7", "out8", "out9", "out10", "out11", "out12", "out14", "out15", "out16"];
     for o in out {
         fs::create_dir_all(root.join(o)).unwrap();
     }
@@ -129,7 +146,7 @@ fn run_case(case: &str) {
     let actual_files = report_files(&out_dir);
     let mut failed = vec![];
     for (name, p) in report_files(&dir.join("expected")) {
-        let want = merge_spans(&fs::read_to_string(&p).unwrap());
+        let want = merge_spans(&normalise_patch_timestamps(&fs::read_to_string(&p).unwrap()));
         let Some(actual) = actual_files.iter().find(|(n, _)| *n == name).and_then(|(_, p)| fs::read_to_string(p).ok()) else {
             failed.push(format!("{name}: missing"));
             continue;
@@ -180,6 +197,16 @@ fn folder_states_and_display_filters() {
 #[test]
 fn nested_folder_connectors() {
     run_case("s11");
+}
+
+#[test]
+fn folder_content_icons_sizes_and_name_order() {
+    run_case("s15");
+}
+
+#[test]
+fn folder_binary_content_icons() {
+    run_case("s16");
 }
 
 #[test]
