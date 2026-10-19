@@ -1,0 +1,44 @@
+Text Compare
+Produced: <TS>
+
+Mode:  Differences, With Context
+Left file: @ROOT@/m1.txt     Right file: @ROOT@/m2.txt
+ 1 line 1  =   1 line 1
+ 2 line 2      2 line 2
+ 3 line 3      3 line 3
+ 4 line 4      4 line 4
+-----------------------------
+ 5 line 5  <>  5 five changed
+ 6 line 6      6 six changed
+-----------------------------
+ 7 line 7  =   7 line 7
+ 8 line 8      8 line 8
+ 9 line 9      9 line 9
+10 line 10    10 line 10
+11 line 11    11 line 11
+12 line 12    12 line 12
+-----------------------------
+-----------------------------
+14 line 14 =  14 line 14
+15 line 15    15 line 15
+16 line 16    16 line 16
+17 line 17    17 line 17
+18 line 18    18 line 18
+19 line 19    19 line 19
+-----------------------------
+20 line 20 +-
+-----------------------------
+21 line 21 =  20 line 21
+22 line 22    21 line 22
+23 line 23    22 line 23
+24 line 24    23 line 24
+25 line 25    24 line 25
+26 line 26    25 line 26
+-----------------------------
+           -+ 26 extra right
+-----------------------------
+27 line 27 =  27 line 27
+28 line 28    28 line 28
+29 line 29    29 line 29
+30 line 30    30 line 30
+-----------------------------

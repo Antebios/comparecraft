@@ -1,0 +1,10 @@
+Text Compare
+Produced: <TS>
+
+Mode:  Differences
+Left file: @ROOT@/L/diff.txt     Right file: @ROOT@/R/diff.txt
+2 beta <> 2 BETA
+-------------------
+-------------------
+       -+ 5 epsilon
+-------------------

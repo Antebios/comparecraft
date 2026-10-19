@@ -1,0 +1,11 @@
+Text Compare
+Produced: <TS>
+
+Left file: @ROOT@/L2/t.txt     Right file: @ROOT@/R2/t.txt
+12 same line(s)
+1 unimportant difference line(s)
+1 important left orphan line(s)
+2 important right orphan line(s)
+1 important difference line(s)
+
+4 difference section(s)

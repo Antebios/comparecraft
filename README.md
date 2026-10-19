@@ -35,7 +35,7 @@
 <br>
 
 <p align="center">
-  <img src="docs/screenshots/text-compare.jpg" alt="CompareCraft Text Compare: two versions of a file side by side, with changed lines and the changed characters within them highlighted" width="100%">
+  <img src="docs/manual/images/text-compare.jpg" alt="CompareCraft Text Compare: two versions of a file side by side, with changed lines and the changed characters within them highlighted" width="100%">
   <br>
   <sub>Text Compare: line alignment, highlighting within lines, and important (red) vs. unimportant (blue) differences.</sub>
 </p>
@@ -133,18 +133,39 @@ dark and auto themes are included.
 
 <table>
 <tr>
-<td width="50%"><img src="docs/screenshots/folder-compare.jpg" alt="Folder Compare with two folder trees side by side, colour-coded by status"><br><sub><b>Folder Compare.</b> Two trees side by side, colour-coded by status.</sub></td>
-<td width="50%"><img src="docs/screenshots/text-merge.jpg" alt="Text Merge with left, base and right panes above an editable output pane"><br><sub><b>Text Merge.</b> Left, base and right above an editable output.</sub></td>
+<td width="50%"><img src="docs/manual/images/folder-compare.jpg" alt="Folder Compare with two folder trees side by side, colour-coded by status"><br><sub><b>Folder Compare.</b> Two trees side by side, colour-coded by status.</sub></td>
+<td width="50%"><img src="docs/manual/images/text-merge.jpg" alt="Text Merge with left, base and right panes above an editable output pane"><br><sub><b>Text Merge.</b> Left, base and right above an editable output.</sub></td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/screenshots/table-compare.jpg" alt="Table Compare of two CSV files with differing cells highlighted"><br><sub><b>Table Compare.</b> Rows matched by key, differing cells highlighted.</sub></td>
-<td width="50%"><img src="docs/screenshots/hex-compare.jpg" alt="Hex Compare of two binary files with offsets and ASCII column"><br><sub><b>Hex Compare.</b> Aligned bytes and ASCII; an inserted field shows as a gap.</sub></td>
+<td width="50%"><img src="docs/manual/images/table-compare.jpg" alt="Table Compare of two CSV files with differing cells highlighted"><br><sub><b>Table Compare.</b> Rows matched by key, differing cells highlighted.</sub></td>
+<td width="50%"><img src="docs/manual/images/hex-compare.jpg" alt="Hex Compare of two binary files with offsets and ASCII column"><br><sub><b>Hex Compare.</b> Aligned bytes and ASCII; an inserted field shows as a gap.</sub></td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/screenshots/picture-compare.jpg" alt="Picture Compare of two images with the tolerance difference picture"><br><sub><b>Picture Compare.</b> Both pictures with a tolerance, range or blend difference picture.</sub></td>
-<td width="50%"><img src="docs/screenshots/home.jpg" alt="Home view with recent and saved sessions"><br><sub><b>Home.</b> Start a comparison or reopen a session.</sub></td>
+<td width="50%"><img src="docs/manual/images/picture-compare.jpg" alt="Picture Compare of two images with the tolerance difference picture"><br><sub><b>Picture Compare.</b> Both pictures with a tolerance, range or blend difference picture.</sub></td>
+<td width="50%"><img src="docs/manual/images/home.jpg" alt="Home view with recent and saved sessions"><br><sub><b>Home.</b> Start a comparison or reopen a session.</sub></td>
 </tr>
 </table>
+
+## Documentation
+
+- **User manual:** <https://antebios.github.io/comparecraft/>. It is searchable and covers every view, the
+  options, filters, the command line, scripting and reports.
+- **In the app:** press **F1** (**Help › CompareCraft Help**) for the same manual, opened at the page for the
+  current view, with full-text search (Ctrl+F). **Help › Online Manual** opens the website.
+- **Source:** the pages live in [`docs/manual/`](docs/manual/) and are built with [MkDocs](https://www.mkdocs.org/)
+  (Material theme) from [`mkdocs.yml`](mkdocs.yml):
+
+  ```sh
+  npm run docs:install                 # create .venv-docs and install documentation dependencies
+  npm run docs:serve                   # live preview at http://127.0.0.1:8000
+  npm run docs:build                   # static site in site/
+  ```
+
+  These commands use a project-local Python virtual environment; no activation or system-wide pip install is needed.
+  Python 3 with `venv` support is required (`python3-venv` on Debian/Ubuntu).
+
+  [`.github/workflows/docs.yml`](.github/workflows/docs.yml) builds the site whenever the manual changes and publishes it to
+  GitHub Pages from `main`.
 
 ## Download
 
@@ -196,13 +217,14 @@ npm run typecheck                    # TypeScript
 npm run test:rust                    # Rust unit tests + text, hex and picture golden suites
 npm test                             # typecheck + Rust tests
 npm run parity                       # command-line exit-code and merge-output checks (needs a release build)
+npm run ccomp -- @script.txt a b     # run the console version (ccomp) from source
 ```
 
 ### Build
 
 ```sh
 npm run app:build                    # all bundle types for the host OS
-npm run app:build:bin                # release binary only, no installers
+npm run app:build:bin                # release binaries (comparecraft, ccomp), no installers
 npm run app:build:linux              # deb, rpm, AppImage
 npm run app:build:windows            # NSIS, MSI
 npm run app:build:macos              # .app, .dmg
@@ -210,7 +232,8 @@ npm run app:build:macos              # .app, .dmg
 
 `npm run tauri -- <args>` passes any other Tauri CLI arguments through.
 
-Installers go to `src-tauri/target/release/bundle/`. The bare binary is `src-tauri/target/release/comparecraft`.
+Installers go to `src-tauri/target/release/bundle/`. The bare binaries are `src-tauri/target/release/comparecraft`
+(the application) and `src-tauri/target/release/ccomp` (the [console version](#console-version)).
 
 ### Linux packages
 
@@ -243,9 +266,33 @@ comparecraft -qc=binary|crc|size a b
 comparecraft -automerge [-force] [-iu] [-reviewconflicts] mine theirs base -mergeoutput=out
 comparecraft -filters="*.rs;-target/" -expandall dirA dirB
 comparecraft "My saved session"
+comparecraft @nightly.txt dirA dirB -silent   # run a script without the GUI
 ```
 
 Switches use `-name[=value]`; on Windows `/name[=value]` also works. Run `comparecraft -h` for the full list.
+
+### Console version
+
+`comparecraft` is a single-instance GUI program. When CompareCraft is already running, a new comparison opens
+as a tab in that window and the command returns immediately. On Windows it has no console, so script and
+quick-compare output is not shown.
+
+`ccomp` (`ccomp.exe` on Windows) is the console version and is installed next to `comparecraft`. It takes the
+same arguments:
+
+- Scripts (`@script.txt`), `-qc`, `-automerge` and `-h` run inside `ccomp` and print to the console. The exit
+  code is the result.
+- Any other request opens a new CompareCraft window, and `ccomp` waits until that window is closed. This
+  makes it the command to use in batch files, build scripts and version control tools.
+
+```sh
+ccomp @nightly.txt dirA dirB              # script output in the console, exit code = result
+ccomp -qc a.txt b.txt                     # quick compare
+ccomp a.txt b.txt && echo "closed"        # waits for the compare window to close
+```
+
+`ccomp` looks for `comparecraft` in its own folder, then on the `PATH`. Set `COMPARECRAFT_GUI` to the
+application's path to override this.
 
 Exit codes for quick compare and automerge:
 
@@ -260,14 +307,60 @@ Exit codes for quick compare and automerge:
 | 14 | Conflicts detected (`-force` output written) |
 | 100 | Error (missing or invalid arguments) |
 | 101 | Conflicts detected, merge output not written |
+| 102 | `ccomp` could not wait for the CompareCraft window to close |
+| 103 | `ccomp` could not find or start the CompareCraft application |
+
+## Scripting
+
+A script is a text file with one command per line. Run it with `ccomp @script.txt [params] [-silent]` (or
+`comparecraft @script.txt ...`). The GUI does not open, the log is echoed to the console unless `-silent` is
+given, and the exit code reports the result.
+Commands are case-insensitive, `#` starts a comment and a trailing `&` continues a line. Quote paths that contain
+spaces. `%1`..`%9` are the script parameters, and `%date%`, `%time%` and `%fn_time%` expand to the current date
+and time. Any other `%NAME%` is replaced by that environment variable.
+
+```text
+# nightly.txt: compare two folders, sync newer files and write reports
+log verbose "logs/%date%_%fn_time%.txt"
+option confirm:yes-to-all
+criteria timestamp:2sec size
+filter "*.rs;*.toml;-target/" cutoff:<30days
+load "%1" "%2"
+expand all
+folder-report layout:side-by-side options:display-mismatches,column-size output-to:report.html output-options:html-color
+select left.newer.files left.orphan.files
+copy left->right
+sync update:left->right
+text-report layout:patch options:patch-unified output-to:changes.diff "%1/README.md" "%2/README.md"
+```
+
+| Command | Purpose |
+|---|---|
+| `log [none\|normal\|verbose] [[append:]file]` | Write a time-stamped log of every command and file operation |
+| `load <left> <right>` / `load <session>` / `load <default>` | Load a folder or file comparison (`create:left\|right\|all` creates missing folders) |
+| `criteria`, `filter`, `option` | Comparison criteria (`timestamp[:Nsec][;IgnoreDST]`, `size`, `crc`, `binary`, `rules-based`), name masks, `cutoff:`/`size:` filters, `stop-on-error`, `confirm:` |
+| `expand`, `collapse`, `select` | Choose folders and items, e.g. `select left.orphan.files`, `select all.diff.files`, `select empty.folders` |
+| `compare [crc\|binary\|rules-based]` | Re-compare the selected files |
+| `copy`, `move`, `copyto`, `moveto`, `delete`, `rename`, `touch`, `sync`, `snapshot` | File operations on the selection (`rename` accepts masks like `*.bak` or `regexpr <old> <new>`) |
+| `folder-report`, `file-report`, `text-report`, `hex-report`, `data-report`, `table-report`, `picture-report` | Plain-text, HTML or XML reports with `layout:`, `options:`, `title:`, `output-to:` (a file, `printer` or `clipboard`) and `output-options:` |
+
+A script name without a folder is also looked up in the `Scripts` folder of the data location.
+
+| Code | Meaning |
+|---|---|
+| 0 | Script completed |
+| 100 | An error occurred and `option stop-on-error` was set |
+| 105 | The script file could not be loaded |
+| 106 | Unknown command or invalid arguments |
+| 107 | A comparison could not be loaded |
 
 ## Using CompareCraft with git
 
 ```sh
 git config --global diff.tool comparecraft
-git config --global difftool.comparecraft.cmd 'comparecraft "$LOCAL" "$REMOTE" -solo'
+git config --global difftool.comparecraft.cmd 'ccomp "$LOCAL" "$REMOTE"'
 git config --global merge.tool comparecraft
-git config --global mergetool.comparecraft.cmd 'comparecraft "$LOCAL" "$REMOTE" "$BASE" "$MERGED" -solo'
+git config --global mergetool.comparecraft.cmd 'ccomp "$LOCAL" "$REMOTE" "$BASE" "$MERGED"'
 git config --global mergetool.comparecraft.trustExitCode true
 ```
 
@@ -276,8 +369,8 @@ Then use `git difftool` and `git mergetool` as usual.
 ## Keyboard shortcuts
 
 Every view has a menu bar (Session / File / Edit / Search / View / Tools / Help; Folder Compare has **Actions** instead
-of File). Right-click, the Menu key or Shift+F10 opens the context menu for the selection. Press **F1** for the
-full list of shortcuts in the current view, or **F10** to work the menus from the keyboard. On macOS, Ctrl
+of File). Right-click, the Menu key or Shift+F10 opens the context menu for the selection. Press **F1** for help
+on the current view, **Shift+F1** for the full list of shortcuts in the current view, or **F10** to work the menus from the keyboard. On macOS, Ctrl
 means ⌘. Shortcuts can be changed in **Tools › Options › Toolbars, Shortcuts**.
 
 | Key | Action |
@@ -341,24 +434,30 @@ src-tauri/src/
   snapshot.rs        folder snapshots (.ccsnap)
   shell.rs           file-manager integration (Nautilus scripts, Dolphin service menu)
   cli.rs             argument parsing, automerge
+  script.rs          @script runner: commands, selection, file operations, logging
+  report.rs          folder, file, text, hex, table and picture reports (text, HTML, XML)
   lib.rs             Tauri commands, single-instance forwarding
-docs/screenshots/    images used in this README
+  main.rs            application entry point (comparecraft)
+  console.rs         console version (ccomp): headless requests in the console, waits for GUI windows
+src/help/            in-app help: renders and searches docs/manual
+docs/manual/         user manual (Markdown) and its images, also used by this README
+mkdocs.yml           manual website configuration and navigation
 packaging/           Arch PKGBUILD, Linux .desktop file
 scripts/parity.sh    command-line exit-code and merge-output checks
 tests/fixtures/      quick-compare and merge test files
-src-tauri/tests/     golden cases for the text, hex and picture engines (fixtures/engine, hex, pix)
+src-tauri/tests/     golden cases for the engines, reports and scripts (fixtures/engine, hex, pix, script)
 ```
 
 ## Status and roadmap
 
 CompareCraft is **early but usable** (version 0.1). Text, merge, folder, sync, hex, table and picture comparison all
-work, and the command-line exit codes are covered by `scripts/parity.sh`.
+work, scripts can run comparisons, file operations and reports without the GUI, and the command-line exit codes are
+covered by `scripts/parity.sh`.
 
 Not implemented yet:
 
 - folder merge and three-way folder compare
 - source-control integration
-- a scripting language for batch reports
 - media, registry and version-information compare; picture metadata compare
 - archives as folders; FTP/SFTP and cloud locations
 

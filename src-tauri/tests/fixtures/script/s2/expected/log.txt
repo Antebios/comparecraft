@@ -1,0 +1,34 @@
+<TS>  *** <BANNER> ***
+<TS>  >> log normal "@ROOT@/out2/log.txt"
+<TS>  >> criteria rules-based
+<TS>  >> load "@ROOT@/L2" "@ROOT@/R2"
+<TS>  Load comparison: @ROOT@/L2 <-> @ROOT@/R2
+<TS>  >> expand all
+<TS>  >> folder-report layout:side-by-side output-to:"@ROOT@/out2/fr_sbs.txt"
+<TS>  >> folder-report layout:summary options:display-mismatches,column-none output-to:"@ROOT@/out2/fr_sum_mm.txt"
+<TS>  >> folder-report layout:side-by-side options:display-orphans,column-size,column-timestamp,column-attributes output-to:"@ROOT@/out2/fr_orph.txt"
+<TS>  >> folder-report layout:xml output-to:"@ROOT@/out2/fr.xml"
+<TS>  >> text-report layout:side-by-side options:line-numbers output-to:"@ROOT@/out2/tr_sbs_ln.txt" "@ROOT@/L2/t.txt" "@ROOT@/R2/t.txt"
+<TS>  >> text-report layout:side-by-side options:display-context output-to:"@ROOT@/out2/tr_ctx.txt" "@ROOT@/L2/t.txt" "@ROOT@/R2/t.txt"
+<TS>  >> text-report layout:side-by-side options:ignore-unimportant,display-mismatches output-to:"@ROOT@/out2/tr_iu.txt" "@ROOT@/L2/t.txt" "@ROOT@/R2/t.txt"
+<TS>  >> text-report layout:interleaved options:display-mismatches output-to:"@ROOT@/out2/tr_inter_mm.txt" "@ROOT@/L2/t.txt" "@ROOT@/R2/t.txt"
+<TS>  >> text-report layout:summary output-to:"@ROOT@/out2/tr_sum.txt" "@ROOT@/L2/t.txt" "@ROOT@/R2/t.txt"
+<TS>  >> text-report layout:statistics output-to:"@ROOT@/out2/tr_stats.txt" "@ROOT@/L2/t.txt" "@ROOT@/R2/t.txt"
+<TS>  >> text-report layout:patch output-to:"@ROOT@/out2/tr_patch.txt" "@ROOT@/L2/t.txt" "@ROOT@/R2/t.txt"
+<TS>  >> text-report layout:patch options:patch-unified output-to:"@ROOT@/out2/tr_uni.txt" "@ROOT@/L2/t.txt" "@ROOT@/R2/t.txt"
+<TS>  >> text-report layout:patch options:patch-context output-to:"@ROOT@/out2/tr_ctxp.txt" "@ROOT@/L2/t.txt" "@ROOT@/R2/t.txt"
+<TS>  >> text-report layout:summary output-to:"@ROOT@/out2/tr_same.txt" "@ROOT@/L2/same.txt" "@ROOT@/R2/same.txt"
+<TS>  >> text-report layout:side-by-side output-to:"@ROOT@/out2/tr_empty.txt" "@ROOT@/L2/empty.txt" "@ROOT@/R2/empty.txt"
+<TS>  >> text-report layout:patch output-to:"@ROOT@/out2/tr_patch_same.txt" "@ROOT@/L2/same.txt" "@ROOT@/R2/same.txt"
+<TS>  >> hex-report layout:side-by-side output-to:"@ROOT@/out2/hr_sbs.txt" "@ROOT@/L2/a.bin" "@ROOT@/R2/a.bin"
+<TS>  >> hex-report layout:side-by-side options:line-numbers,display-mismatches output-to:"@ROOT@/out2/hr_ln.txt" "@ROOT@/L2/a.bin" "@ROOT@/R2/a.bin"
+<TS>  >> hex-report layout:summary output-to:"@ROOT@/out2/hr_sum.txt" "@ROOT@/L2/a.bin" "@ROOT@/R2/a.bin"
+<TS>  >> hex-report layout:interleaved output-to:"@ROOT@/out2/hr_inter.txt" "@ROOT@/L2/a.bin" "@ROOT@/R2/a.bin"
+<TS>  >> text-report layout:side-by-side output-to:"@ROOT@/out2/tr_html.html" output-options:html-color "@ROOT@/L2/t.txt" "@ROOT@/R2/t.txt"
+<TS>  >> select left.orphan.files
+<TS>  >> file-report layout:side-by-side output-to:"@ROOT@/out2/file_lo.txt"
+<TS>  >> select newer.files
+<TS>  >> file-report layout:summary output-to:"@ROOT@/out2/file_newer.txt"
+<TS>  >> bogus-command foo
+<TS>  Fatal Scripting Error: Unknown command "bogus-command"
+<TS>  Script completed in <T> seconds

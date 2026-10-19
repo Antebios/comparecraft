@@ -7,3 +7,7 @@ src-tauri/gen
 packaging/arch/pkg/
 packaging/arch/src/
 packaging/arch/*.pkg.tar.*
+
+# MkDocs output
+site/
+.venv-docs/

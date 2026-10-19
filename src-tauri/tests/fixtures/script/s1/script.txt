@@ -1,0 +1,28 @@
+# comment line
+log verbose "@ROOT@/out/log.txt"
+load "@ROOT@/L" "@ROOT@/R"
+expand all
+folder-report layout:summary output-to:"@ROOT@/out/fr_summary.txt"
+folder-report layout:side-by-side output-to:"@ROOT@/out/fr_sbs.txt"
+folder-report layout:xml output-to:"@ROOT@/out/fr.xml"
+folder-report layout:side-by-side options:display-mismatches,column-crc &
+  title:"My Title" output-to:"@ROOT@/out/fr_sbs_mm.txt"
+folder-report layout:side-by-side output-to:"@ROOT@/out/fr_sbs.html" output-options:html-color
+text-report layout:side-by-side output-to:"@ROOT@/out/tr_sbs.txt" "@ROOT@/L/diff.txt" "@ROOT@/R/diff.txt"
+text-report layout:side-by-side options:line-numbers,display-mismatches output-to:"@ROOT@/out/tr_sbs_ln.txt" "@ROOT@/L/diff.txt" "@ROOT@/R/diff.txt"
+text-report layout:summary output-to:"@ROOT@/out/tr_summary.txt" "@ROOT@/L/diff.txt" "@ROOT@/R/diff.txt"
+text-report layout:interleaved output-to:"@ROOT@/out/tr_inter.txt" "@ROOT@/L/diff.txt" "@ROOT@/R/diff.txt"
+text-report layout:patch output-to:"@ROOT@/out/tr_patch.txt" "@ROOT@/L/diff.txt" "@ROOT@/R/diff.txt"
+text-report layout:patch options:patch-unified output-to:"@ROOT@/out/tr_unified.txt" "@ROOT@/L/diff.txt" "@ROOT@/R/diff.txt"
+text-report layout:patch options:patch-context output-to:"@ROOT@/out/tr_context.txt" "@ROOT@/L/diff.txt" "@ROOT@/R/diff.txt"
+text-report layout:statistics output-to:"@ROOT@/out/tr_stats.txt" "@ROOT@/L/diff.txt" "@ROOT@/R/diff.txt"
+text-report layout:xml output-to:"@ROOT@/out/tr.xml" "@ROOT@/L/diff.txt" "@ROOT@/R/diff.txt"
+hex-report layout:side-by-side output-to:"@ROOT@/out/hr_sbs.txt" "@ROOT@/L/b.bin" "@ROOT@/R/b.bin"
+hex-report layout:summary output-to:"@ROOT@/out/hr_summary.txt" "@ROOT@/L/b.bin" "@ROOT@/R/b.bin"
+hex-report layout:interleaved output-to:"@ROOT@/out/hr_inter.txt" "@ROOT@/L/b.bin" "@ROOT@/R/b.bin"
+data-report layout:side-by-side output-to:"@ROOT@/out/dr_sbs.txt" "@ROOT@/L/t.csv" "@ROOT@/R/t.csv"
+data-report layout:summary output-to:"@ROOT@/out/dr_summary.txt" "@ROOT@/L/t.csv" "@ROOT@/R/t.csv"
+data-report layout:interleaved output-to:"@ROOT@/out/dr_inter.txt" "@ROOT@/L/t.csv" "@ROOT@/R/t.csv"
+select all.diff.files
+file-report layout:summary output-to:"@ROOT@/out/file_summary.txt"
+file-report layout:side-by-side output-to:"@ROOT@/out/file_sbs.txt"

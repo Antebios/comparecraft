@@ -1,0 +1,7 @@
+diff -r @ROOT@/L/diff.txt @ROOT@/R/diff.txt
+2c2
+< beta
+---
+> BETA
+4a5
+> epsilon

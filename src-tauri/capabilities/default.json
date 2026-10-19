@@ -13,6 +13,7 @@
     "dialog:default",
     "clipboard-manager:allow-read-text",
     "clipboard-manager:allow-write-text",
+    "opener:allow-default-urls",
     "opener:allow-reveal-item-in-dir",
     {
       "identifier": "opener:allow-open-path",

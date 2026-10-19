@@ -1,0 +1,14 @@
+Text Compare
+Produced: <TS>
+
+Mode:  Differences
+Left file: @ROOT@/m1.txt     Right file: @ROOT@/m2.txt
+line 5  <> five changed
+line 6     six changed
+-----------------------
+-----------------------
+line 20 +-
+-----------------------
+-----------------------
+        -+ extra right
+-----------------------

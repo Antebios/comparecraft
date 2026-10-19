@@ -1,0 +1,30 @@
+Text Compare
+Produced: <TS>
+
+Mode:  All
+Left file: @ROOT@/L2/t.txt     Right file: @ROOT@/R2/t.txt
+ 1 line 1  <>  1 line  1
+-----------------------------------
+ 2 line 2  =   2 line 2
+-----------------------------------
+ 3 line 3  <>  3 line three changed
+-----------------------------------
+ 4 line 4  =   4 line 4
+ 5 line 5      5 line 5
+ 6 line 6      6 line 6
+ 7 line 7      7 line 7
+-----------------------------------
+ 8 line 8  +-
+-----------------------------------
+ 9 line 9  =   8 line 9
+10 line 10     9 line 10
+11 line 11    10 line 11
+12 line 12    11 line 12
+-----------------------------------
+           -+ 12 inserted A
+              13 inserted B
+-----------------------------------
+13 line 13 =  14 line 13
+14 line 14    15 line 14
+15 line 15    16 line 15
+-----------------------------------

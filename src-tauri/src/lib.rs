@@ -7,6 +7,8 @@ pub mod hex;
 pub mod merge;
 pub mod pix;
 pub mod quick;
+pub mod report;
+pub mod script;
 pub mod sessions;
 pub mod settings;
 pub mod shell;

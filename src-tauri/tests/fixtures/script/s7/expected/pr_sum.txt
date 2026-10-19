@@ -1,0 +1,6 @@
+Picture Compare
+Produced: <TS>
+
+Left file: @ROOT@/P/a.png     Right file: @ROOT@/P/b.png
+1386 same pixel(s)
+534 unimportant difference pixel(s)

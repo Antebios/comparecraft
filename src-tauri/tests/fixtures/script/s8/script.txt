@@ -1,0 +1,8 @@
+log normal "@ROOT@/out8/log.txt"
+load "@ROOT@/L" "@ROOT@/R"
+expand all
+folder-report layout:side-by-side options:display-all output-to:"@ROOT@/out8/fr_custom.html" output-options:html-custom="style.css"
+text-report layout:side-by-side options:display-all output-to:"@ROOT@/out8/tr_custom.html" output-options:html-custom="http://x/y.css" "@ROOT@/L/diff.txt" "@ROOT@/R/diff.txt"
+text-report layout:side-by-side options:display-mismatches output-to:"@ROOT@/out8/tr_wn.html" output-options:html-color,wrap-none "@ROOT@/L/diff.txt" "@ROOT@/R/diff.txt"
+picture-report layout:summary output-to:"@ROOT@/out8/pr_same.html" output-options:html-color "@ROOT@/P/same.png" "@ROOT@/P/same.png"
+picture-report layout:side-by-side output-to:"@ROOT@/out8/pr_sbs_same.txt" "@ROOT@/P/same.png" "@ROOT@/P/same.png"

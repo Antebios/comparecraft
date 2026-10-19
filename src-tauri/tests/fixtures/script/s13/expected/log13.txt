@@ -1,0 +1,5 @@
+<TS>  *** <BANNER> ***
+<TS>  >> log normal "@ROOT@/out12/log13.txt"
+<TS>  >> hex-report layout:side-by-side options:display-context output-to:"@ROOT@/out12/ctx.txt" "@ROOT@/g1.bin" "@ROOT@/g2.bin"
+<TS>  Fatal Scripting Error: Unexpected argument(s) "display-context"
+<TS>  Script completed in <T> seconds

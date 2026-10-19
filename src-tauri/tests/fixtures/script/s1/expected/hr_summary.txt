@@ -1,0 +1,6 @@
+Hex Compare
+Produced: <TS>
+
+Left file: @ROOT@/L/b.bin     Right file: @ROOT@/R/b.bin
+63 same byte(s)
+1 difference byte(s)

@@ -1,0 +1,14 @@
+load "@ROOT@/L4" "@ROOT@/R4"
+expand all
+folder-report layout:side-by-side options:display-all output-to:"@ROOT@/out11/deep.html" output-options:html-color
+folder-report layout:side-by-side options:display-all output-to:"@ROOT@/out11/deep.txt"
+folder-report layout:side-by-side options:display-mismatches output-to:"@ROOT@/out11/deep_mis.html" output-options:html-color
+hex-report layout:side-by-side options:display-mismatches output-to:"@ROOT@/out11/h_mis.txt" "@ROOT@/L/b.bin" "@ROOT@/R/b.bin"
+hex-report layout:side-by-side options:display-all,line-numbers output-to:"@ROOT@/out11/h_ln.txt" "@ROOT@/h1.bin" "@ROOT@/h2.bin"
+hex-report layout:interleaved options:display-all output-to:"@ROOT@/out11/h_int.txt" "@ROOT@/h1.bin" "@ROOT@/h2.bin"
+text-report layout:side-by-side options:display-context,line-numbers output-to:"@ROOT@/out11/t_ctx.txt" "@ROOT@/m1.txt" "@ROOT@/m2.txt"
+text-report layout:interleaved options:display-mismatches output-to:"@ROOT@/out11/t_int.txt" "@ROOT@/m1.txt" "@ROOT@/m2.txt"
+data-report layout:side-by-side options:display-mismatches,line-numbers output-to:"@ROOT@/out11/d_mis_ln.txt" "@ROOT@/L/t.csv" "@ROOT@/R/t.csv"
+data-report layout:interleaved options:display-all output-to:"@ROOT@/out11/d_int.txt" "@ROOT@/L/t.csv" "@ROOT@/R/t.csv"
+data-report layout:interleaved options:display-mismatches output-to:"@ROOT@/out11/d_int_mis.txt" "@ROOT@/L/t.csv" "@ROOT@/R/t.csv"
+data-report layout:side-by-side options:display-mismatches output-to:"@ROOT@/out11/d_mis.html" output-options:html-color "@ROOT@/L/t.csv" "@ROOT@/R/t.csv"

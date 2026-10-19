@@ -1,0 +1,1 @@
+diff -r @ROOT@/L2/same.txt @ROOT@/R2/same.txt

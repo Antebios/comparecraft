@@ -1,0 +1,14 @@
+Text Compare
+Produced: <TS>
+
+Mode:  Differences, Ignoring Unimportant
+Left file: @ROOT@/L2/t.txt     Right file: @ROOT@/R2/t.txt
+line 3 <> line three changed
+----------------------------
+----------------------------
+line 8 +-
+----------------------------
+----------------------------
+       -+ inserted A
+          inserted B
+----------------------------

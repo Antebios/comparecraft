@@ -1,0 +1,14 @@
+a b
+a  b
+a   b
+a    b
+a     b
+a      b
+a       b
+ x
+  x
+   x
+x 
+x  
+x   
+	t	a'b&c<d>"e

@@ -1,0 +1,28 @@
+Folder Compare
+Produced: <TS>
+
+Mode:  Differences
+Left base folder: @ROOT@/L2
+Right base folder: @ROOT@/R2
+
+Left Orphan Files (1)
+----------------------
+lfold/x/f.txt
+----------------------
+
+Right Orphan Files (1)
+----------------------
+rfold/g.txt
+----------------------
+
+Left Newer Files (0)
+----------------------
+
+Right Newer Files (0)
+----------------------
+
+Difference Files (2)
+----------------------
+a.bin
+t.txt
+----------------------

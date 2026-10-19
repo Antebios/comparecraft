@@ -1,0 +1,3 @@
+data-report layout:side-by-side options:line-numbers output-to:"@ROOT@/out14/d_rev.html" output-options:html-color "@ROOT@/R/t.csv" "@ROOT@/L/t.csv"
+data-report layout:interleaved options:display-mismatches output-to:"@ROOT@/out14/d_int_mis.html" output-options:html-color "@ROOT@/L/t.csv" "@ROOT@/R/t.csv"
+folder-report layout:side-by-side options:display-all,include-file-links output-to:"@ROOT@/out14/links.html" output-options:html-color "@ROOT@/L4" "@ROOT@/R4"

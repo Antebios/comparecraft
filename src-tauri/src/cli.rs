@@ -73,6 +73,8 @@ Positional arguments:
   <l> <r> <c> <out>   3-way text merge writing to <out>
   <session name>      open a saved session
   -                   read stdin into a temporary file
+  @<script> [params]  run a script without the GUI; params are %1..%9 in the
+                      script (add -silent to suppress console output)
 
 Options (prefix with '-' ; on Windows '/' is also accepted):
   -h, -?, -help                 show this help
@@ -98,10 +100,20 @@ Options (prefix with '-' ; on Windows '/' is also accepted):
   -solo                         force a new application instance
   -silent                       suppress interaction
 
+Console version:
+  ccomp [options] [left] [right] [center] [output]
+  Takes the same arguments. Scripts, -qc and -automerge run in the console and
+  print there; other requests open a new CompareCraft window and ccomp waits
+  until it is closed (for batch files and version control tools).
+
 Exit codes (quick compare / automerge):
   0 success, 1 binary same, 2 rules-based same, 11 binary differences,
   12 similar, 13 rules-based differences, 14 conflicts detected,
   100 unknown error, 101 conflicts detected (merge output not written)
+
+Exit codes (scripts):
+  0 success, 100 error with \"option stop-on-error\", 105 script file could not be
+  loaded, 106 unknown command or invalid arguments, 107 comparison could not be loaded
 ";
 
 fn split_switch(arg: &str) -> Option<(String, Option<String>)> {
@@ -192,7 +204,8 @@ fn absolutize(p: &str, cwd: &Path) -> String {
     std::fs::canonicalize(&abs).unwrap_or(abs).to_string_lossy().into_owned()
 }
 
-fn stdin_to_temp() -> Result<String, String> {
+/// Saves stdin to a temporary file and returns its path.
+pub fn stdin_to_temp() -> Result<String, String> {
     let mut buf = Vec::new();
     std::io::stdin().read_to_end(&mut buf).map_err(|e| e.to_string())?;
     let p = std::env::temp_dir().join(format!("comparecraft-stdin-{}.txt", std::process::id()));
@@ -227,6 +240,9 @@ pub fn resolve(a: &Args, cwd: &Path) -> Outcome {
     if a.help {
         println!("{USAGE}");
         return Outcome::Exit(0);
+    }
+    if let Some(script) = a.positional.first().and_then(|p| p.strip_prefix('@')) {
+        return Outcome::Exit(crate::script::run(script, &a.positional[1..], a.silent, cwd));
     }
     let mut paths: Vec<String> = Vec::new();
     for p in &a.positional {
@@ -431,5 +447,18 @@ mod tests {
             Outcome::Gui(spec) => assert_eq!(spec.session.as_deref(), Some("MySession")),
             o => panic!("{o:?}"),
         }
+    }
+
+    #[test]
+    fn runs_scripts_headless() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::write(d.path().join("s.txt"), "log normal out.log\nbogus %1\n").unwrap();
+        let a = parse(&s(&["@s.txt", "x", "-silent"])).unwrap();
+        assert!(a.silent);
+        assert!(matches!(resolve(&a, d.path()), Outcome::Exit(106)));
+        let log = std::fs::read_to_string(d.path().join("out.log")).unwrap();
+        assert!(log.contains(">> bogus x") && log.contains("Unknown command \"bogus\""), "{log}");
+        let a = parse(&s(&["@missing.txt", "-silent"])).unwrap();
+        assert!(matches!(resolve(&a, d.path()), Outcome::Exit(105)));
     }
 }

@@ -1,0 +1,121 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<style>
+.AlignLeft { text-align: left; }
+.AlignCenter { text-align: center; }
+.AlignRight { text-align: right; }
+.Wrap { white-space: nowrap; }
+body { font-family: sans-serif; font-size: 11pt; }
+img.AutoScale { max-width: 100%; max-height: 100%; }
+td { vertical-align: top; padding-left: 4px; padding-right: 4px; }
+
+tr.SectionGap td { font-size: 4px; border-left: none; border-top: none; border-bottom: 1px solid Black; border-right: 1px solid Black; }
+tr.SectionAll td { border-left: none; border-top: none; border-bottom: 1px solid Black; border-right: 1px solid Black; }
+tr.SectionBegin td { border-left: none; border-top: none; border-right: 1px solid Black; }
+tr.SectionEnd td { border-left: none; border-top: none; border-bottom: 1px solid Black; border-right: 1px solid Black; }
+tr.SectionMiddle td { border-left: none; border-top: none; border-right: 1px solid Black; }
+tr.SubsectionAll td { border-left: none; border-top: none; border-bottom: 1px solid Gray; border-right: 1px solid Black; }
+tr.SubsectionEnd td { border-left: none; border-top: none; border-bottom: 1px solid Gray; border-right: 1px solid Black; }
+table.fc { border-top: 1px solid Black; border-left: 1px solid Black; width: 100%; font-family: monospace; font-size: 10pt; }
+td.TextItemInsigMod { background-color: #F0F0F0; }
+td.TextItemInsigOrphan { background-color: #F0F0F0; }
+td.TextItemNum { }
+td.TextItemSame { }
+td.TextItemSigMod { background-color: #E5E5E5; }
+td.TextItemSigOrphan { background-color: #E5E5E5; }
+.TextSegInsigDiff { font-style: italic; }
+.TextSegReplacedDiff { font-style: italic; }
+.TextSegSigDiff { font-weight: bold; }
+td.TextItemInsigAdd { background-color: #F0F0F0; }
+td.TextItemInsigDel { background-color: #F0F0F0; text-decoration: line-through; }
+td.TextItemSigAdd { background-color: #E5E5E5; }
+td.TextItemSigDel { background-color: #E5E5E5; text-decoration: line-through; }
+</style>
+<title>T  two   three &<x></title>
+</head>
+<body>
+T  two   three &<x><br>
+Produced: <TS><br>
+&nbsp; &nbsp;
+<br>
+Mode:&nbsp; All &nbsp;
+<br>
+File: @ROOT@/sp1.txt &nbsp;
+<br>
+<table class="fc" cellspacing="0" cellpadding="0">
+<tr class="SectionBegin">
+<td class="TextItemSame Wrap">a b</td>
+<td class="AlignCenter Wrap">=</td>
+<td class="TextItemSame Wrap">a b</td>
+</tr>
+<tr class="SectionMiddle">
+<td class="TextItemSame Wrap">a&nbsp; b</td>
+<td class="AlignCenter Wrap">&nbsp;</td>
+<td class="TextItemSame Wrap">a&nbsp; b</td>
+</tr>
+<tr class="SectionMiddle">
+<td class="TextItemSame Wrap">a&nbsp;&nbsp; b</td>
+<td class="AlignCenter Wrap">&nbsp;</td>
+<td class="TextItemSame Wrap">a&nbsp;&nbsp; b</td>
+</tr>
+<tr class="SectionMiddle">
+<td class="TextItemSame Wrap">a&nbsp; &nbsp; b</td>
+<td class="AlignCenter Wrap">&nbsp;</td>
+<td class="TextItemSame Wrap">a&nbsp; &nbsp; b</td>
+</tr>
+<tr class="SectionMiddle">
+<td class="TextItemSame Wrap">a&nbsp; &nbsp;&nbsp; b</td>
+<td class="AlignCenter Wrap">&nbsp;</td>
+<td class="TextItemSame Wrap">a&nbsp; &nbsp;&nbsp; b</td>
+</tr>
+<tr class="SectionMiddle">
+<td class="TextItemSame Wrap">a&nbsp; &nbsp; &nbsp; b</td>
+<td class="AlignCenter Wrap">&nbsp;</td>
+<td class="TextItemSame Wrap">a&nbsp; &nbsp; &nbsp; b</td>
+</tr>
+<tr class="SectionMiddle">
+<td class="TextItemSame Wrap">a&nbsp; &nbsp; &nbsp;&nbsp; b</td>
+<td class="AlignCenter Wrap">&nbsp;</td>
+<td class="TextItemSame Wrap">a&nbsp; &nbsp; &nbsp;&nbsp; b</td>
+</tr>
+<tr class="SectionMiddle">
+<td class="TextItemSame Wrap">&nbsp;x</td>
+<td class="AlignCenter Wrap">&nbsp;</td>
+<td class="TextItemSame Wrap">&nbsp;x</td>
+</tr>
+<tr class="SectionMiddle">
+<td class="TextItemSame Wrap">&nbsp; x</td>
+<td class="AlignCenter Wrap">&nbsp;</td>
+<td class="TextItemSame Wrap">&nbsp; x</td>
+</tr>
+<tr class="SectionMiddle">
+<td class="TextItemSame Wrap">&nbsp;&nbsp; x</td>
+<td class="AlignCenter Wrap">&nbsp;</td>
+<td class="TextItemSame Wrap">&nbsp;&nbsp; x</td>
+</tr>
+<tr class="SectionMiddle">
+<td class="TextItemSame Wrap">x&nbsp;</td>
+<td class="AlignCenter Wrap">&nbsp;</td>
+<td class="TextItemSame Wrap">x&nbsp;</td>
+</tr>
+<tr class="SectionMiddle">
+<td class="TextItemSame Wrap">x &nbsp;</td>
+<td class="AlignCenter Wrap">&nbsp;</td>
+<td class="TextItemSame Wrap">x &nbsp;</td>
+</tr>
+<tr class="SectionMiddle">
+<td class="TextItemSame Wrap">x&nbsp; &nbsp;</td>
+<td class="AlignCenter Wrap">&nbsp;</td>
+<td class="TextItemSame Wrap">x&nbsp; &nbsp;</td>
+</tr>
+<tr class="SectionEnd">
+<td class="TextItemSame Wrap">&nbsp;&nbsp; &nbsp; &nbsp;&nbsp; t&nbsp; &nbsp; &nbsp;&nbsp; a'b&amp;c&lt;d&gt;&quot;e</td>
+<td class="AlignCenter Wrap">&nbsp;</td>
+<td class="TextItemSame Wrap">&nbsp;&nbsp; &nbsp; &nbsp;&nbsp; t&nbsp; &nbsp; &nbsp;&nbsp; a'b&amp;c&lt;d&gt;&quot;e</td>
+</tr>
+</table>
+<br>
+</body>
+</html>

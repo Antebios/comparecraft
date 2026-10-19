@@ -1,0 +1,15 @@
+My Title
+Produced: <TS>
+
+Mode:  Differences
+Left base folder: @ROOT@/L
+Right base folder: @ROOT@/R
+Name      CRC         Name      CRC
+----------------------------------------
+sub                   sub
+\a.txt    46EA081F << \a.txt    5FF1395E
+diff.txt  BE4228CA << diff.txt  1FD4BFB4
+lonly.txt A8D46918 >>
+                   << ronly.txt 5BC2AA40
+t.csv     A5824485 <> t.csv     BAFB95B7
+----------------------------------------

@@ -1,0 +1,2 @@
+log normal "@ROOT@/out12/log13.txt"
+hex-report layout:side-by-side options:display-context output-to:"@ROOT@/out12/ctx.txt" "@ROOT@/g1.bin" "@ROOT@/g2.bin"

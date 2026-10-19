@@ -1,0 +1,22 @@
+load %1 %2
+expand all
+folder-report layout:side-by-side options:display-no-orphans,column-none output-to:@ROOT@/out5/display-no-orphans.txt
+folder-report layout:side-by-side options:display-mismatches-no-orphans,column-none output-to:@ROOT@/out5/display-mismatches-no-orphans.txt
+folder-report layout:side-by-side options:display-right-newer,column-none output-to:@ROOT@/out5/display-right-newer.txt
+folder-report layout:side-by-side options:display-left-newer-orphans,column-none output-to:@ROOT@/out5/display-left-newer-orphans.txt
+folder-report layout:side-by-side options:display-right-newer-orphans,column-none output-to:@ROOT@/out5/display-right-newer-orphans.txt
+folder-report layout:side-by-side options:display-left-orphans,column-none output-to:@ROOT@/out5/display-left-orphans.txt
+folder-report layout:side-by-side options:display-right-orphans,column-none output-to:@ROOT@/out5/display-right-orphans.txt
+text-report layout:side-by-side options:display-matches,ignore-unimportant output-to:@ROOT@/out5/t_m_iu.txt %1/t.txt %2/t.txt
+text-report layout:side-by-side options:display-context,ignore-unimportant output-to:@ROOT@/out5/t_c_iu.txt %1/t.txt %2/t.txt
+text-report layout:side-by-side options:ignore-unimportant output-to:@ROOT@/out5/t_a_iu.txt %1/t.txt %2/t.txt
+text-report layout:summary options:ignore-unimportant output-to:@ROOT@/out5/t_s_iu.txt %1/t.txt %2/t.txt
+text-report layout:interleaved options:line-numbers output-to:@ROOT@/out5/t_i_ln.txt %1/t.txt %2/t.txt
+filter cutoff:<10days size:>1KB
+folder-report layout:summary options:column-none output-to:@ROOT@/out5/filt.txt
+filter cutoff:>"01/01/2024"
+folder-report layout:summary options:column-none output-to:@ROOT@/out5/filt2.txt
+filter "*.txt;-d1/"
+folder-report layout:summary options:column-none output-to:@ROOT@/out5/filt3.txt
+criteria timestamp:5sec size
+folder-report layout:summary options:column-none output-to:@ROOT@/out5/crit.txt

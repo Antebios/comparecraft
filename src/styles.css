@@ -1912,3 +1912,237 @@ kbd {
 .path-save:disabled {
   opacity: 0.35;
 }
+
+/* ---- Help viewer ---- */
+.help-window {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  width: min(1280px, 94vw);
+  height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+.help-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg3);
+}
+.help-head .spacer,
+.help-pager .spacer {
+  flex: 1;
+}
+.help-title {
+  font-weight: 600;
+  margin-left: 6px;
+}
+.help-main {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+.help-side {
+  width: 280px;
+  flex: none;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg2);
+}
+.help-search {
+  margin: 10px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+}
+.help-nav,
+.help-results {
+  overflow: auto;
+  padding: 0 10px 10px;
+  flex: 1;
+}
+.help-nav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.help-nav ul ul {
+  padding-left: 12px;
+}
+.help-nav a,
+.help-nav-group {
+  display: block;
+  padding: 3px 6px;
+  border-radius: 4px;
+}
+.help-nav-group {
+  margin-top: 10px;
+  font-size: 0.8em;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.help-nav a,
+.help-hit-item,
+.help-pager a,
+.help-toc a {
+  cursor: pointer;
+  color: var(--fg);
+}
+.help-nav a:hover,
+.help-hit-item:hover {
+  background: var(--bg3);
+}
+.help-nav a.active {
+  background: var(--sel);
+  font-weight: 600;
+}
+.help-hit-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  border-radius: 4px;
+  margin-top: 4px;
+}
+.help-hit-item.selected {
+  background: var(--sel);
+}
+.help-hit-title {
+  font-weight: 600;
+}
+.help-hit-page {
+  font-size: 0.8em;
+  color: var(--accent);
+}
+.help-hit-snippet {
+  font-size: 0.85em;
+  color: var(--muted);
+}
+.help-results mark,
+.help-content mark.help-hit {
+  background: #ffe066;
+  color: #1d2330;
+  border-radius: 2px;
+}
+.help-body {
+  flex: 1;
+  overflow: auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.help-content {
+  padding: 16px 32px;
+  line-height: 1.55;
+  max-width: 900px;
+  user-select: text;
+}
+.help-content h1 {
+  font-size: 1.8em;
+  margin: 0.2em 0 0.6em;
+}
+.help-content h2 {
+  font-size: 1.35em;
+  margin: 1.4em 0 0.5em;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.help-content h3 {
+  font-size: 1.1em;
+  margin: 1.2em 0 0.4em;
+}
+.help-content a {
+  color: var(--accent);
+  cursor: pointer;
+}
+.help-content img {
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.help-content code {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  background: var(--bg3);
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+.help-content pre {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  overflow: auto;
+}
+.help-content pre code {
+  background: none;
+  padding: 0;
+}
+.help-content table {
+  border-collapse: collapse;
+  margin: 0.8em 0;
+}
+.help-content th,
+.help-content td {
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+.help-content th {
+  background: var(--bg3);
+}
+.help-content .admonition {
+  border-left: 4px solid var(--accent);
+  background: var(--bg2);
+  border-radius: 4px;
+  padding: 2px 12px;
+  margin: 1em 0;
+}
+.help-content .admonition.tip {
+  border-left-color: var(--same-fg);
+}
+.help-content .admonition.warning {
+  border-left-color: #e0a100;
+}
+.help-content .admonition-title {
+  font-weight: 600;
+  margin: 8px 0 4px;
+}
+.help-pager {
+  display: flex;
+  padding: 12px 32px 24px;
+  max-width: 900px;
+  gap: 12px;
+}
+.help-pager a {
+  color: var(--accent);
+}
+.help-toc {
+  width: 210px;
+  flex: none;
+  border-left: 1px solid var(--border);
+  padding: 12px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.9em;
+}
+.help-toc a:hover {
+  color: var(--accent);
+}
+@media (max-width: 1000px) {
+  .help-toc {
+    display: none;
+  }
+}

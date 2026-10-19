@@ -1,0 +1,3 @@
+text-report layout:side-by-side options:display-all output-to:"@ROOT@/out9/sp.html" output-options:html-color "@ROOT@/sp1.txt" "@ROOT@/sp2.txt"
+text-report layout:side-by-side options:display-all title:"T  two   three &<x>" output-to:"@ROOT@/out9/sp_t.html" output-options:html-mono "@ROOT@/sp1.txt" "@ROOT@/sp1.txt"
+text-report layout:side-by-side options:display-all output-to:"@ROOT@/out9/sp.txt" "@ROOT@/sp1.txt" "@ROOT@/sp2.txt"

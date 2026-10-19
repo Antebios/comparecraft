@@ -1,0 +1,5 @@
+Text Compare
+Produced: <TS>
+
+Mode:  All
+Left file: @ROOT@/L2/empty.txt     Right file: @ROOT@/R2/empty.txt

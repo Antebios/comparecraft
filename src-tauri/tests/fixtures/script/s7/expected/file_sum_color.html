@@ -1,0 +1,55 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<style>
+.AlignLeft { text-align: left; }
+.AlignCenter { text-align: center; }
+.AlignRight { text-align: right; }
+.Wrap { white-space: nowrap; }
+body { font-family: sans-serif; font-size: 11pt; }
+img.AutoScale { max-width: 100%; max-height: 100%; }
+td { vertical-align: top; padding-left: 4px; padding-right: 4px; }
+
+tr.SectionGap td { font-size: 4px; border-left: none; border-top: none; border-bottom: 1px solid Black; border-right: 1px solid Black; }
+tr.SectionAll td { border-left: none; border-top: none; border-bottom: 1px solid Black; border-right: 1px solid Black; }
+tr.SectionBegin td { border-left: none; border-top: none; border-right: 1px solid Black; }
+tr.SectionEnd td { border-left: none; border-top: none; border-bottom: 1px solid Black; border-right: 1px solid Black; }
+tr.SectionMiddle td { border-left: none; border-top: none; border-right: 1px solid Black; }
+tr.SubsectionAll td { border-left: none; border-top: none; border-bottom: 1px solid Gray; border-right: 1px solid Black; }
+tr.SubsectionEnd td { border-left: none; border-top: none; border-bottom: 1px solid Gray; border-right: 1px solid Black; }
+table.fc { border-top: 1px solid Black; border-left: 1px solid Black; width: 100%; font-family: monospace; font-size: 10pt; }
+td.TableItemHeader { background-color: #E7E7E7; padding-top: 8px; }
+td.TableItemInsigDiff { background-color: #F0F0F0; }
+td.TableItemInsigOrphan { background-color: #F0F0F0; }
+td.TableItemNum { }
+td.TableItemSame { }
+td.TableItemSigDiff { background-color: #E5E5E5; }
+td.TableItemSigOrphan { background-color: #E5E5E5; }
+.TableSegInsigDiff { font-style: italic; }
+.TableSegSigDiff { font-weight: bold; }
+</style>
+<title>Table Compare</title>
+</head>
+<body>
+Table Compare<br>
+Produced: <TS><br>
+&nbsp; &nbsp;
+<br>
+Left base folder: @ROOT@/L &nbsp;
+<br>
+Right base folder: @ROOT@/R &nbsp;
+<br>
+&nbsp; &nbsp;
+<br>
+File: t.csv &nbsp;
+<br>
+2 same row(s) &nbsp;
+<br>
+1 important right orphan row(s) &nbsp;
+<br>
+1 important difference row(s) &nbsp;
+<br>
+<br>
+</body>
+</html>

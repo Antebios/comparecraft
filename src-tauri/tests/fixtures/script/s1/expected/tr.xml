@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bcreport created="<TS>">
+	<ltpath/>
+	<rtpath/>
+	<filecomparison created="<TS>">
+		<filename1>@ROOT@/L/diff.txt</filename1>
+		<filename2>@ROOT@/R/diff.txt</filename2>
+		<linecomp status="same">
+			<text ltid="1" rtid="1">alpha</text>
+		</linecomp>
+		<linecomp status="similar">
+			<text ltid="2">beta</text>
+			<text rtid="2">BETA</text>
+		</linecomp>
+		<linecomp status="same">
+			<text ltid="3" rtid="3">gamma</text>
+		</linecomp>
+		<linecomp status="same">
+			<text ltid="4" rtid="4">delta</text>
+		</linecomp>
+		<linecomp status="rightorphan">
+			<text rtid="5">epsilon</text>
+		</linecomp>
+	</filecomparison>
+</bcreport>

@@ -1,6 +1,7 @@
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ask, open as openDialog } from "@tauri-apps/plugin-dialog";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { createEffect, createSignal, For, Match, onCleanup, onMount, Show, Switch } from "solid-js";
 import { api, type LaunchSpec } from "./api";
 import { dispatchKey, IS_MAC, registerCommands } from "./commands";
@@ -8,6 +9,8 @@ import OptionsDialog, { type OptionsPage } from "./components/OptionsDialog";
 import { ExportDialog, FileFormatsDialog, ImportDialog, ProfilesDialog, restoreFactoryDefaults, SnapshotDialog } from "./components/ToolsDialogs";
 import { flushSettings, loadSettings, setSetting, settings } from "./settings";
 import { Modal } from "./components/common";
+import { HelpViewer } from "./components/HelpViewer";
+import { ONLINE_MANUAL, pageForView } from "./help/manual";
 import MenuBar, { ShortcutList } from "./components/MenuBar";
 import { PromptHost } from "./components/Prompt";
 import { ReplaceHost } from "./views/folderOps";
@@ -68,9 +71,10 @@ export default function App() {
     closeTab(t.id);
   }
 
-  type DialogName = "shortcuts" | "about" | "options" | "export" | "import" | "snapshot" | "formats" | "profiles";
+  type DialogName = "help" | "shortcuts" | "about" | "options" | "export" | "import" | "snapshot" | "formats" | "profiles";
   const [dialog, setDialog] = createSignal<DialogName | null>(null);
   const [optionsPage, setOptionsPage] = createSignal<OptionsPage | undefined>();
+  const [helpPage, setHelpPage] = createSignal<string>();
   const [toast, setToast] = createSignal("");
   let toastTimer: number | undefined;
   const notify = (m: string) => {
@@ -135,8 +139,13 @@ export default function App() {
     { id: "save-snapshot", menu: "Tools", group: "snap", label: "Save Snapshot…", run: () => setDialog("snapshot") },
     { id: "edit-text", menu: "Tools", group: "edit", label: "Edit Text File…", run: () => openSingle("edit") },
     { id: "view-patch", menu: "Tools", group: "edit", label: "View Patch…", run: () => openSingle("patch") },
-    { id: "shortcuts", menu: "Help", label: "Keyboard Shortcuts", keys: "F1", run: () => setDialog("shortcuts") },
-    { id: "about", menu: "Help", label: "About CompareCraft", run: () => setDialog("about") },
+    {
+      id: "help", menu: "Help", group: "help", label: "CompareCraft Help", keys: "F1",
+      run: () => (setHelpPage(pageForView(activeTab()?.kind)), setDialog("help")),
+    },
+    { id: "shortcuts", menu: "Help", group: "help", label: "Keyboard Shortcuts", keys: "Shift+F1", run: () => setDialog("shortcuts") },
+    { id: "online-manual", menu: "Help", group: "help", label: "Online Manual", enabled: () => !!ONLINE_MANUAL, run: () => void openUrl(ONLINE_MANUAL) },
+    { id: "about", menu: "Help", group: "about", label: "About CompareCraft", run: () => setDialog("about") },
   ]);
 
   const onKey = (e: KeyboardEvent) => {
@@ -211,6 +220,9 @@ export default function App() {
         </div>
         <For each={state.tabs}>{(t) => <TabView tab={t} />}</For>
       </div>
+      <Show when={dialog() === "help"}>
+        <HelpViewer file={helpPage()} onClose={() => setDialog(null)} />
+      </Show>
       <Show when={dialog() === "shortcuts"}>
         <Modal title="Keyboard Shortcuts" onClose={() => setDialog(null)}>
           <ShortcutList scope={state.active} />

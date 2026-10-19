@@ -1,0 +1,14 @@
+diff -r @ROOT@/L2/t.txt @ROOT@/R2/t.txt
+1c1
+< line 1
+---
+> line  1
+3c3
+< line 3
+---
+> line three changed
+8d7
+< line 8
+12a12,13
+> inserted A
+> inserted B

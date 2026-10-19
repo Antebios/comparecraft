@@ -1,0 +1,6 @@
+hex-report layout:side-by-side options:display-mismatches output-to:"@ROOT@/out12/mis.txt" "@ROOT@/g1.bin" "@ROOT@/g2.bin"
+hex-report layout:side-by-side options:display-matches output-to:"@ROOT@/out12/match.txt" "@ROOT@/g1.bin" "@ROOT@/g2.bin"
+hex-report layout:interleaved options:display-mismatches output-to:"@ROOT@/out12/int_mis.txt" "@ROOT@/g1.bin" "@ROOT@/g2.bin"
+hex-report layout:side-by-side options:display-mismatches output-to:"@ROOT@/out12/del_mis.txt" "@ROOT@/g1.bin" "@ROOT@/g3.bin"
+hex-report layout:side-by-side options:display-all output-to:"@ROOT@/out12/del_all.txt" "@ROOT@/g1.bin" "@ROOT@/g3.bin"
+hex-report layout:side-by-side options:display-mismatches,line-numbers output-to:"@ROOT@/out12/mis_ln.txt" "@ROOT@/g1.bin" "@ROOT@/g3.bin"

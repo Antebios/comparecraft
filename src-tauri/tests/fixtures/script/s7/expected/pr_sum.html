@@ -1,0 +1,46 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<style>
+.AlignLeft { text-align: left; }
+.AlignCenter { text-align: center; }
+.AlignRight { text-align: right; }
+.Wrap { white-space: nowrap; }
+body { font-family: sans-serif; font-size: 11pt; }
+img.AutoScale { max-width: 100%; max-height: 100%; }
+td { vertical-align: top; padding-left: 4px; padding-right: 4px; }
+
+tr.SectionGap td { font-size: 4px; border-left: none; border-top: none; border-bottom: 1px solid Black; border-right: 1px solid Black; }
+tr.SectionAll td { border-left: none; border-top: none; border-bottom: 1px solid Black; border-right: 1px solid Black; }
+tr.SectionBegin td { border-left: none; border-top: none; border-right: 1px solid Black; }
+tr.SectionEnd td { border-left: none; border-top: none; border-bottom: 1px solid Black; border-right: 1px solid Black; }
+tr.SectionMiddle td { border-left: none; border-top: none; border-right: 1px solid Black; }
+tr.SubsectionAll td { border-left: none; border-top: none; border-bottom: 1px solid Gray; border-right: 1px solid Black; }
+tr.SubsectionEnd td { border-left: none; border-top: none; border-bottom: 1px solid Gray; border-right: 1px solid Black; }
+table.fc { border-top: 1px solid Black; border-left: 1px solid Black; width: 100%; font-family: monospace; font-size: 10pt; }
+td.PixItemHeader { background-color: #E7E7E7; padding-top: 8px; }
+td.PixItemInsigDiff { background-color: #F0F0F0; }
+td.PixItemInsigOrphan { background-color: #F0F0F0; }
+td.PixItemSame { }
+td.PixItemSigDiff { background-color: #E5E5E5; }
+td.PixItemSigOrphan { background-color: #E5E5E5; }
+.PixSegInsigDiff { font-style: italic; }
+.PixSegSigDiff { font-weight: bold; }
+</style>
+<title>Picture Compare</title>
+</head>
+<body>
+Picture Compare<br>
+Produced: <TS><br>
+&nbsp; &nbsp;
+<br>
+Left file: @ROOT@/P/a.png&nbsp; &nbsp;&nbsp; Right file: @ROOT@/P/b.png &nbsp;
+<br>
+1386 same pixel(s) &nbsp;
+<br>
+534 unimportant difference pixel(s) &nbsp;
+<br>
+<br>
+</body>
+</html>

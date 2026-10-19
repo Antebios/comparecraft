@@ -1,0 +1,10 @@
+Table Compare
+Produced: <TS>
+
+Left base folder: @ROOT@/L
+Right base folder: @ROOT@/R
+
+File: t.csv
+2 same row(s)
+1 important right orphan row(s)
+1 important difference row(s)

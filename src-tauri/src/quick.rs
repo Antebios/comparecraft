@@ -15,6 +15,10 @@ pub const RULES_DIFFERENT: i32 = 13;
 pub const CONFLICTS: i32 = 14;
 pub const UNKNOWN_ERROR: i32 = 100;
 pub const CONFLICTS_NOT_WRITTEN: i32 = 101;
+/// `ccomp` could not wait for the CompareCraft window to close.
+pub const GUI_WAIT_FAILED: i32 = 102;
+/// `ccomp` could not find or start the CompareCraft executable.
+pub const GUI_NOT_FOUND: i32 = 103;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QcMode {

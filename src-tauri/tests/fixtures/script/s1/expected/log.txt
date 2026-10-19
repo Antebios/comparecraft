@@ -1,0 +1,32 @@
+<TS>  *** <BANNER> ***
+<TS>  >> # comment line
+<TS>  >> log verbose "@ROOT@/out/log.txt"
+<TS>  >> load "@ROOT@/L" "@ROOT@/R"
+<TS>  Load comparison: @ROOT@/L <-> @ROOT@/R
+<TS>  >> expand all
+<TS>  >> folder-report layout:summary output-to:"@ROOT@/out/fr_summary.txt"
+<TS>  >> folder-report layout:side-by-side output-to:"@ROOT@/out/fr_sbs.txt"
+<TS>  >> folder-report layout:xml output-to:"@ROOT@/out/fr.xml"
+<TS>  >> folder-report layout:side-by-side options:display-mismatches,column-crc &
+<TS>  >>   title:"My Title" output-to:"@ROOT@/out/fr_sbs_mm.txt"
+<TS>  >> folder-report layout:side-by-side output-to:"@ROOT@/out/fr_sbs.html" output-options:html-color
+<TS>  >> text-report layout:side-by-side output-to:"@ROOT@/out/tr_sbs.txt" "@ROOT@/L/diff.txt" "@ROOT@/R/diff.txt"
+<TS>  >> text-report layout:side-by-side options:line-numbers,display-mismatches output-to:"@ROOT@/out/tr_sbs_ln.txt" "@ROOT@/L/diff.txt" "@ROOT@/R/diff.txt"
+<TS>  >> text-report layout:summary output-to:"@ROOT@/out/tr_summary.txt" "@ROOT@/L/diff.txt" "@ROOT@/R/diff.txt"
+<TS>  >> text-report layout:interleaved output-to:"@ROOT@/out/tr_inter.txt" "@ROOT@/L/diff.txt" "@ROOT@/R/diff.txt"
+<TS>  >> text-report layout:patch output-to:"@ROOT@/out/tr_patch.txt" "@ROOT@/L/diff.txt" "@ROOT@/R/diff.txt"
+<TS>  >> text-report layout:patch options:patch-unified output-to:"@ROOT@/out/tr_unified.txt" "@ROOT@/L/diff.txt" "@ROOT@/R/diff.txt"
+<TS>  >> text-report layout:patch options:patch-context output-to:"@ROOT@/out/tr_context.txt" "@ROOT@/L/diff.txt" "@ROOT@/R/diff.txt"
+<TS>  >> text-report layout:statistics output-to:"@ROOT@/out/tr_stats.txt" "@ROOT@/L/diff.txt" "@ROOT@/R/diff.txt"
+<TS>  >> text-report layout:xml output-to:"@ROOT@/out/tr.xml" "@ROOT@/L/diff.txt" "@ROOT@/R/diff.txt"
+<TS>  >> hex-report layout:side-by-side output-to:"@ROOT@/out/hr_sbs.txt" "@ROOT@/L/b.bin" "@ROOT@/R/b.bin"
+<TS>  >> hex-report layout:summary output-to:"@ROOT@/out/hr_summary.txt" "@ROOT@/L/b.bin" "@ROOT@/R/b.bin"
+<TS>  >> hex-report layout:interleaved output-to:"@ROOT@/out/hr_inter.txt" "@ROOT@/L/b.bin" "@ROOT@/R/b.bin"
+<TS>  >> data-report layout:side-by-side output-to:"@ROOT@/out/dr_sbs.txt" "@ROOT@/L/t.csv" "@ROOT@/R/t.csv"
+<TS>  >> data-report layout:summary output-to:"@ROOT@/out/dr_summary.txt" "@ROOT@/L/t.csv" "@ROOT@/R/t.csv"
+<TS>  >> data-report layout:interleaved output-to:"@ROOT@/out/dr_inter.txt" "@ROOT@/L/t.csv" "@ROOT@/R/t.csv"
+<TS>  >> select all.diff.files
+<TS>  >> file-report layout:summary output-to:"@ROOT@/out/file_summary.txt"
+<TS>  >> file-report layout:side-by-side output-to:"@ROOT@/out/file_sbs.txt"
+<TS>  >> 
+<TS>  Script completed in <T> seconds

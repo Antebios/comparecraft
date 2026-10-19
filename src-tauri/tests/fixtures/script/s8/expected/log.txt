@@ -1,0 +1,12 @@
+<TS>  *** <BANNER> ***
+<TS>  >> log normal "@ROOT@/out8/log.txt"
+<TS>  >> load "@ROOT@/L" "@ROOT@/R"
+<TS>  Load comparison: @ROOT@/L <-> @ROOT@/R
+<TS>  >> expand all
+<TS>  >> folder-report layout:side-by-side options:display-all output-to:"@ROOT@/out8/fr_custom.html" output-options:html-custom="style.css"
+<TS>  >> text-report layout:side-by-side options:display-all output-to:"@ROOT@/out8/tr_custom.html" output-options:html-custom="http://x/y.css" "@ROOT@/L/diff.txt" "@ROOT@/R/diff.txt"
+<TS>  >> text-report layout:side-by-side options:display-mismatches output-to:"@ROOT@/out8/tr_wn.html" output-options:html-color,wrap-none "@ROOT@/L/diff.txt" "@ROOT@/R/diff.txt"
+<TS>  >> picture-report layout:summary output-to:"@ROOT@/out8/pr_same.html" output-options:html-color "@ROOT@/P/same.png" "@ROOT@/P/same.png"
+<TS>  >> picture-report layout:side-by-side output-to:"@ROOT@/out8/pr_sbs_same.txt" "@ROOT@/P/same.png" "@ROOT@/P/same.png"
+<TS>  >> 
+<TS>  Script completed in <T> seconds

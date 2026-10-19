@@ -1,0 +1,4 @@
+Picture Compare
+Produced: <TS>
+
+Left file: @ROOT@/P/a.png     Right file: @ROOT@/P/b.png

@@ -14,9 +14,13 @@
     "app:build:linux": "tauri build --bundles deb,rpm,appimage",
     "app:build:windows": "tauri build --bundles nsis,msi",
     "app:build:macos": "tauri build --bundles app,dmg",
+    "ccomp": "cargo run --quiet --manifest-path src-tauri/Cargo.toml --bin ccomp --",
     "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
     "test": "npm run typecheck && npm run test:rust",
     "parity": "bash scripts/parity.sh",
+    "docs:install": "node scripts/docs.mjs install",
+    "docs:serve": "node scripts/docs.mjs serve",
+    "docs:build": "node scripts/docs.mjs build",
     "package:arch": "cd packaging/arch && makepkg -si"
   },
   "dependencies": {
@@ -24,6 +28,7 @@
     "@tauri-apps/plugin-clipboard-manager": "^2.5.0",
     "@tauri-apps/plugin-dialog": "^2",
     "@tauri-apps/plugin-opener": "^2.7.2",
+    "marked": "^16.4.2",
     "solid-js": "^1.9.17"
   },
   "devDependencies": {

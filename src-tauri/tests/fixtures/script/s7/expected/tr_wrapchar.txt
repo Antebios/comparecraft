@@ -1,0 +1,14 @@
+Text Compare
+Produced: <TS>
+
+Mode:  All
+Left file: @ROOT@/L/diff.txt     Right file: @ROOT@/R/diff.txt
+alpha =  alpha
+----------------
+beta  <> BETA
+----------------
+gamma =  gamma
+delta    delta
+----------------
+      -+ epsilon
+----------------

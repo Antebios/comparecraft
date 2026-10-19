@@ -1,0 +1,16 @@
+Table Compare
+Produced: <TS>
+
+Mode:  All
+Left file: @ROOT@/L/t.csv     Right file: @ROOT@/R/t.csv
+    A  B     C
+----------------
+1 1 id name  qty
+----------------
+2 2 1  apple 3
+----------------
+3   2  pear  4
+  3 2  Pear  5
+----------------
+  4 3  fig   1
+----------------

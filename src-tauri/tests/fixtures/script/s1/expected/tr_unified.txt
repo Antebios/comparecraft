@@ -1,0 +1,9 @@
+--- @ROOT@/L/diff.txt	2024-03-01 12:00:00.000000000 
++++ @ROOT@/R/diff.txt	2024-03-02 12:00:00.000000000 
+@@ -1,4 +1,5 @@
+ alpha
+-beta
++BETA
+ gamma
+ delta
++epsilon

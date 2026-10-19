@@ -1,0 +1,2 @@
+# Test fixtures are compared byte for byte.
+src-tauri/tests/fixtures/** -text

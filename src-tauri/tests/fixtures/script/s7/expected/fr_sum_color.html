@@ -1,0 +1,130 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<style>
+.AlignLeft { text-align: left; }
+.AlignCenter { text-align: center; }
+.AlignRight { text-align: right; }
+.Wrap { white-space: nowrap; }
+body { font-family: sans-serif; font-size: 11pt; }
+img.AutoScale { max-width: 100%; max-height: 100%; }
+td { vertical-align: top; padding-left: 4px; padding-right: 4px; }
+
+tr.SectionGap td { font-size: 4px; border-left: none; border-top: none; border-bottom: 1px solid Black; border-right: 1px solid Black; }
+tr.SectionAll td { border-left: none; border-top: none; border-bottom: 1px solid Black; border-right: 1px solid Black; }
+tr.SectionBegin td { border-left: none; border-top: none; border-right: 1px solid Black; }
+tr.SectionEnd td { border-left: none; border-top: none; border-bottom: 1px solid Black; border-right: 1px solid Black; }
+tr.SectionMiddle td { border-left: none; border-top: none; border-right: 1px solid Black; }
+tr.SubsectionAll td { border-left: none; border-top: none; border-bottom: 1px solid Gray; border-right: 1px solid Black; }
+tr.SubsectionEnd td { border-left: none; border-top: none; border-bottom: 1px solid Gray; border-right: 1px solid Black; }
+table.dc { border-top: 1px solid Black; border-left: 1px solid Black; width: 100%; font-family: sans-serif; font-size: 10pt; }
+table.dc tr.SectionBegin td { border-bottom: 1px solid Silver; }
+table.dc tr.SectionMiddle td { border-bottom: 1px solid Silver; }
+td.DirItemHeader { background-color: #E7E7E7; padding-top: 8px; }
+td.DirItemDefault { }
+td.DirItemDiff { font-weight: bold; }
+td.DirItemNewer { font-weight: bold; }
+td.DirItemOlder { color: Gray; }
+td.DirItemOrphan { font-weight: bold; }
+td.DirItemSame { }
+.DirSegInfo { color: Silver; }
+</style>
+<title>Folder Compare</title>
+</head>
+<body>
+Folder Compare<br>
+Produced: <TS><br>
+&nbsp; &nbsp;
+<br>
+Mode:&nbsp; All &nbsp;
+<br>
+Left base folder: @ROOT@/L &nbsp;
+<br>
+Right base folder: @ROOT@/R &nbsp;
+<br>
+<table class="dc" cellspacing="0" cellpadding="0">
+<tr class="SectionAll">
+<td class="DirItemHeader Wrap">Same Files (2)</td>
+<td class="DirItemHeader Wrap">Size</td>
+<td class="DirItemHeader Wrap">Modified</td>
+</tr>
+<tr class="SectionBegin">
+<td class="AlignLeft Wrap">b.bin</td>
+<td class="AlignRight Wrap">64</td>
+<td class="AlignLeft Wrap"><TS></td>
+</tr>
+<tr class="SectionEnd">
+<td class="AlignLeft Wrap">same.txt</td>
+<td class="AlignRight Wrap">5</td>
+<td class="AlignLeft Wrap"><TS></td>
+</tr>
+<tr class="SectionAll">
+<td class="DirItemHeader Wrap">Left Orphan Files (1)</td>
+<td class="DirItemHeader Wrap">Size</td>
+<td class="DirItemHeader Wrap">Modified</td>
+</tr>
+<tr class="SectionAll">
+<td class="AlignLeft Wrap">lonly.txt</td>
+<td class="AlignRight Wrap">10</td>
+<td class="AlignLeft Wrap"><TS></td>
+</tr>
+<tr class="SectionAll">
+<td class="DirItemHeader Wrap">Right Orphan Files (1)</td>
+<td class="DirItemHeader Wrap">Size</td>
+<td class="DirItemHeader Wrap">Modified</td>
+</tr>
+<tr class="SectionAll">
+<td class="AlignLeft Wrap">ronly.txt</td>
+<td class="AlignRight Wrap">11</td>
+<td class="AlignLeft Wrap"><TS></td>
+</tr>
+<tr class="SectionAll">
+<td class="DirItemHeader Wrap">Left Newer Files (0)</td>
+<td class="DirItemHeader Wrap">Size</td>
+<td class="DirItemHeader Wrap">Modified</td>
+</tr>
+<tr class="SectionAll">
+<td class="DirItemHeader Wrap">Right Newer Files (2)</td>
+<td class="DirItemHeader Wrap">Size</td>
+<td class="DirItemHeader Wrap">Modified</td>
+</tr>
+<tr class="SectionBegin">
+<td class="AlignLeft Wrap">sub/a.txt</td>
+<td class="AlignRight Wrap">2</td>
+<td class="AlignLeft Wrap"><TS></td>
+</tr>
+<tr class="SectionMiddle">
+<td class="AlignLeft Wrap">&nbsp;</td>
+<td class="AlignRight Wrap">2</td>
+<td class="AlignLeft Wrap"><TS></td>
+</tr>
+<tr class="SectionMiddle">
+<td class="AlignLeft Wrap">diff.txt</td>
+<td class="AlignRight Wrap">23</td>
+<td class="AlignLeft Wrap"><TS></td>
+</tr>
+<tr class="SectionEnd">
+<td class="AlignLeft Wrap">&nbsp;</td>
+<td class="AlignRight Wrap">31</td>
+<td class="AlignLeft Wrap"><TS></td>
+</tr>
+<tr class="SectionAll">
+<td class="DirItemHeader Wrap">Difference Files (1)</td>
+<td class="DirItemHeader Wrap">Size</td>
+<td class="DirItemHeader Wrap">Modified</td>
+</tr>
+<tr class="SectionBegin">
+<td class="AlignLeft Wrap">t.csv</td>
+<td class="AlignRight Wrap">31</td>
+<td class="AlignLeft Wrap"><TS></td>
+</tr>
+<tr class="SectionEnd">
+<td class="AlignLeft Wrap">&nbsp;</td>
+<td class="AlignRight Wrap">39</td>
+<td class="AlignLeft Wrap"><TS></td>
+</tr>
+</table>
+<br>
+</body>
+</html>

@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bcreport created="<TS>">
+	<foldercomp>
+		<ltpath>@ROOT@/L</ltpath>
+		<rtpath>@ROOT@/R</rtpath>
+		<foldercomp>
+			<lt>
+				<name>sub</name>
+				<size>2</size>
+				<modified><TS></modified>
+			</lt>
+			<rt>
+				<name>sub</name>
+				<size>2</size>
+				<modified><TS></modified>
+			</rt>
+			<filecomp status="rtnewer">
+				<lt>
+					<name>a.txt</name>
+					<size>2</size>
+					<modified><TS></modified>
+				</lt>
+				<rt>
+					<name>a.txt</name>
+					<size>2</size>
+					<modified><TS></modified>
+				</rt>
+			</filecomp>
+		</foldercomp>
+		<filecomp status="same">
+			<lt>
+				<name>b.bin</name>
+				<size>64</size>
+				<modified><TS></modified>
+			</lt>
+			<rt>
+				<name>b.bin</name>
+				<size>64</size>
+				<modified><TS></modified>
+			</rt>
+		</filecomp>
+		<filecomp status="rtnewer">
+			<lt>
+				<name>diff.txt</name>
+				<size>23</size>
+				<modified><TS></modified>
+			</lt>
+			<rt>
+				<name>diff.txt</name>
+				<size>31</size>
+				<modified><TS></modified>
+			</rt>
+		</filecomp>
+		<filecomp status="ltonly">
+			<lt>
+				<name>lonly.txt</name>
+				<size>10</size>
+				<modified><TS></modified>
+			</lt>
+		</filecomp>
+		<filecomp status="rtonly">
+			<rt>
+				<name>ronly.txt</name>
+				<size>11</size>
+				<modified><TS></modified>
+			</rt>
+		</filecomp>
+		<filecomp status="same">
+			<lt>
+				<name>same.txt</name>
+				<size>5</size>
+				<modified><TS></modified>
+			</lt>
+			<rt>
+				<name>same.txt</name>
+				<size>5</size>
+				<modified><TS></modified>
+			</rt>
+		</filecomp>
+		<filecomp status="diff">
+			<lt>
+				<name>t.csv</name>
+				<size>31</size>
+				<modified><TS></modified>
+			</lt>
+			<rt>
+				<name>t.csv</name>
+				<size>39</size>
+				<modified><TS></modified>
+			</rt>
+		</filecomp>
+	</foldercomp>
+</bcreport>

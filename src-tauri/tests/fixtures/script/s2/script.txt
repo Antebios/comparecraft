@@ -1,0 +1,30 @@
+log normal "@ROOT@/out2/log.txt"
+criteria rules-based
+load "%1" "%2"
+expand all
+folder-report layout:side-by-side output-to:"@ROOT@/out2/fr_sbs.txt"
+folder-report layout:summary options:display-mismatches,column-none output-to:"@ROOT@/out2/fr_sum_mm.txt"
+folder-report layout:side-by-side options:display-orphans,column-size,column-timestamp,column-attributes output-to:"@ROOT@/out2/fr_orph.txt"
+folder-report layout:xml output-to:"@ROOT@/out2/fr.xml"
+text-report layout:side-by-side options:line-numbers output-to:"@ROOT@/out2/tr_sbs_ln.txt" "%1/t.txt" "%2/t.txt"
+text-report layout:side-by-side options:display-context output-to:"@ROOT@/out2/tr_ctx.txt" "%1/t.txt" "%2/t.txt"
+text-report layout:side-by-side options:ignore-unimportant,display-mismatches output-to:"@ROOT@/out2/tr_iu.txt" "%1/t.txt" "%2/t.txt"
+text-report layout:interleaved options:display-mismatches output-to:"@ROOT@/out2/tr_inter_mm.txt" "%1/t.txt" "%2/t.txt"
+text-report layout:summary output-to:"@ROOT@/out2/tr_sum.txt" "%1/t.txt" "%2/t.txt"
+text-report layout:statistics output-to:"@ROOT@/out2/tr_stats.txt" "%1/t.txt" "%2/t.txt"
+text-report layout:patch output-to:"@ROOT@/out2/tr_patch.txt" "%1/t.txt" "%2/t.txt"
+text-report layout:patch options:patch-unified output-to:"@ROOT@/out2/tr_uni.txt" "%1/t.txt" "%2/t.txt"
+text-report layout:patch options:patch-context output-to:"@ROOT@/out2/tr_ctxp.txt" "%1/t.txt" "%2/t.txt"
+text-report layout:summary output-to:"@ROOT@/out2/tr_same.txt" "%1/same.txt" "%2/same.txt"
+text-report layout:side-by-side output-to:"@ROOT@/out2/tr_empty.txt" "%1/empty.txt" "%2/empty.txt"
+text-report layout:patch output-to:"@ROOT@/out2/tr_patch_same.txt" "%1/same.txt" "%2/same.txt"
+hex-report layout:side-by-side output-to:"@ROOT@/out2/hr_sbs.txt" "%1/a.bin" "%2/a.bin"
+hex-report layout:side-by-side options:line-numbers,display-mismatches output-to:"@ROOT@/out2/hr_ln.txt" "%1/a.bin" "%2/a.bin"
+hex-report layout:summary output-to:"@ROOT@/out2/hr_sum.txt" "%1/a.bin" "%2/a.bin"
+hex-report layout:interleaved output-to:"@ROOT@/out2/hr_inter.txt" "%1/a.bin" "%2/a.bin"
+text-report layout:side-by-side output-to:"@ROOT@/out2/tr_html.html" output-options:html-color "%1/t.txt" "%2/t.txt"
+select left.orphan.files
+file-report layout:side-by-side output-to:"@ROOT@/out2/file_lo.txt"
+select newer.files
+file-report layout:summary output-to:"@ROOT@/out2/file_newer.txt"
+bogus-command foo

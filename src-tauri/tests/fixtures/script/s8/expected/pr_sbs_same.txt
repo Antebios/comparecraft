@@ -1,0 +1,4 @@
+Picture Compare
+Produced: <TS>
+
+File: @ROOT@/P/same.png

@@ -1,0 +1,66 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<style>
+.AlignLeft { text-align: left; }
+.AlignCenter { text-align: center; }
+.AlignRight { text-align: right; }
+.Wrap { white-space: nowrap; }
+body { font-family: sans-serif; font-size: 11pt; }
+img.AutoScale { max-width: 100%; max-height: 100%; }
+td { vertical-align: top; padding-left: 4px; padding-right: 4px; }
+
+tr.SectionGap td { font-size: 4px; border-left: none; border-top: none; border-bottom: 1px solid Black; border-right: 1px solid Black; }
+tr.SectionAll td { border-left: none; border-top: none; border-bottom: 1px solid Black; border-right: 1px solid Black; }
+tr.SectionBegin td { border-left: none; border-top: none; border-right: 1px solid Black; }
+tr.SectionEnd td { border-left: none; border-top: none; border-bottom: 1px solid Black; border-right: 1px solid Black; }
+tr.SectionMiddle td { border-left: none; border-top: none; border-right: 1px solid Black; }
+tr.SubsectionAll td { border-left: none; border-top: none; border-bottom: 1px solid Gray; border-right: 1px solid Black; }
+tr.SubsectionEnd td { border-left: none; border-top: none; border-bottom: 1px solid Gray; border-right: 1px solid Black; }
+table.fc { border-top: 1px solid Black; border-left: 1px solid Black; width: 100%; font-family: monospace; font-size: 10pt; }
+td.HexItemNum { color: #696969; background-color: #F0F0F0; }
+td.HexItemSame { color: #000000; background-color: #FFFFFF; }
+.HexSegDiff { color: #FF0000; background-color: #FFE3E3; }
+</style>
+<title>Hex Compare</title>
+</head>
+<body>
+Hex Compare<br>
+Produced: <TS><br>
+&nbsp; &nbsp;
+<br>
+Mode:&nbsp; All &nbsp;
+<br>
+Left file: @ROOT@/h1.bin&nbsp; &nbsp;&nbsp; Right file: @ROOT@/h2.bin &nbsp;
+<br>
+<table class="fc" cellspacing="0" cellpadding="0">
+<tr class="SectionAll">
+<td class="HexItemNum AlignRight Wrap">00000000</td>
+<td class="HexItemNum AlignRight Wrap">00000000</td>
+<td class="HexItemSame Wrap">00 01 02 03 04 05 06 07&nbsp; ........</td>
+</tr>
+<tr class="SectionBegin">
+<td class="HexItemNum AlignRight Wrap">00000008</td>
+<td class="HexItemNum AlignRight Wrap">&nbsp;</td>
+<td class="HexItemSame Wrap">08 09 <span class="HexSegDiff">0A</span> 0B 0C 0D 0E 0F&nbsp; ..<span class="HexSegDiff">.</span>.....</td>
+</tr>
+<tr class="SubsectionEnd">
+<td class="HexItemNum AlignRight Wrap">00000010</td>
+<td class="HexItemNum AlignRight Wrap">&nbsp;</td>
+<td class="HexItemSame Wrap">10 11 12 <span class="HexSegDiff">13 14</span><span class="">&nbsp; &nbsp; &nbsp; &nbsp;&nbsp; </span>&nbsp; ...<span class="HexSegDiff">..</span><span class="">&nbsp; &nbsp;</span></td>
+</tr>
+<tr class="SectionMiddle">
+<td class="HexItemNum AlignRight Wrap">&nbsp;</td>
+<td class="HexItemNum AlignRight Wrap">00000008</td>
+<td class="HexItemSame Wrap">08 09 <span class="HexSegDiff">FF</span> 0B 0C 0D 0E 0F&nbsp; ..<span class="HexSegDiff">.</span>.....</td>
+</tr>
+<tr class="SectionEnd">
+<td class="HexItemNum AlignRight Wrap">&nbsp;</td>
+<td class="HexItemNum AlignRight Wrap">00000010</td>
+<td class="HexItemSame Wrap">10 11 12<span class="">&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;&nbsp; </span>&nbsp; ...<span class="">&nbsp; &nbsp; &nbsp;</span></td>
+</tr>
+</table>
+<br>
+</body>
+</html>

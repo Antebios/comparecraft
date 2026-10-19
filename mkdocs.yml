@@ -1,0 +1,83 @@
+site_name: CompareCraft User Manual
+site_description: Compare, merge and synchronize files and folders with CompareCraft.
+site_url: https://antebios.github.io/comparecraft/
+repo_url: https://github.com/Antebios/comparecraft
+repo_name: Antebios/comparecraft
+edit_uri: edit/main/docs/manual/
+docs_dir: docs/manual
+site_dir: site
+copyright: CompareCraft is released under the MIT License.
+
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - navigation.indexes
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - tables
+  - attr_list
+  - toc:
+      permalink: true
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn
+
+nav:
+  - Welcome: index.md
+  - Getting started: getting-started.md
+  - Comparing:
+      - Folder Compare: folder-compare.md
+      - Folder Sync: folder-sync.md
+      - Text Compare: text-compare.md
+      - Text Merge: text-merge.md
+      - Table Compare: table-compare.md
+      - Hex Compare: hex-compare.md
+      - Picture Compare: picture-compare.md
+      - Editing and patches: editing-and-patches.md
+  - Working with CompareCraft:
+      - Sessions: sessions.md
+      - Filters: filters.md
+      - Options: options.md
+      - Settings and data: settings-and-data.md
+      - Keyboard shortcuts: shortcuts.md
+  - Automation:
+      - Command line: command-line.md
+      - Console program (ccomp): console.md
+      - Scripting: scripting.md
+      - Script reference: script-reference.md
+      - Reports: reports.md
+  - Troubleshooting: troubleshooting.md

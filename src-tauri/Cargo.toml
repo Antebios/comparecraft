@@ -15,6 +15,11 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 name = "comparecraft"
 path = "src/main.rs"
 
+# Console version: runs scripts and quick compares in the console, waits for GUI comparisons to close.
+[[bin]]
+name = "ccomp"
+path = "src/console.rs"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
@@ -35,6 +40,7 @@ filetime = "0.2"
 regex = "1"
 tauri-plugin-clipboard-manager = "2"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "bmp", "tiff", "webp", "ico", "tga", "pnm", "qoi"] }
+chrono = "0.4.45"
 
 [dev-dependencies]
 tempfile = "3"

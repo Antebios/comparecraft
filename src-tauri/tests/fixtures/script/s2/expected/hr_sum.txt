@@ -1,0 +1,6 @@
+Hex Compare
+Produced: <TS>
+
+Left file: @ROOT@/L2/a.bin     Right file: @ROOT@/R2/a.bin
+40 same byte(s)
+7 right orphan byte(s)

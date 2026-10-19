@@ -1,0 +1,4 @@
+Text Compare
+Produced: <TS>
+SourceFile,CompareFile,IOriginal,IAdded,IDeleted,IChanged,UOriginal,UAdded,UDeleted,UChanged,SourceError,CompareError,Error
+@ROOT@/L2/t.txt,@ROOT@/R2/t.txt,15,2,1,1,0,0,0,1

@@ -1,0 +1,20 @@
+Folder Compare
+Produced: <TS>
+
+Mode:  All
+Left base folder: @ROOT@/L4
+Right base folder: @ROOT@/R4
+Name Size Modified                  Name Size Modified
+--------------------------------------------------------------------
+d1     15 <TS>    d1     10 <TS>
++d2     9 <TS>    +d2     4 <TS>
+|+d3    2 <TS>    |+d3    2 <TS>
+||\c    2 <TS> =  ||\c    2 <TS>
+|+b     2 <TS> =  |\b     2 <TS>
+|\lo    5 <TS> >> |
++e      2 <TS>    +e      2 <TS>
+|\q     2 <TS> =  |\q     2 <TS>
++a      2 <TS> =  +a      2 <TS>
+\z      2 <TS> =  \z      2 <TS>
+top     2 <TS> =  top     2 <TS>
+--------------------------------------------------------------------

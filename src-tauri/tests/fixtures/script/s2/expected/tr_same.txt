@@ -1,0 +1,5 @@
+Text Compare
+Produced: <TS>
+
+Left file: @ROOT@/L2/same.txt     Right file: @ROOT@/R2/same.txt
+1 same line(s)

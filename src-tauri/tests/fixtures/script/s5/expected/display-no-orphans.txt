@@ -1,0 +1,16 @@
+Folder Compare
+Produced: <TS>
+
+Mode:  No Orphans
+Left base folder: @ROOT@/L2
+Right base folder: @ROOT@/R2
+Name          Name
+------------------------
+d1            d1
+\d2           \d2
+ \deep.txt =   \deep.txt
+a.bin      <> a.bin
+empty.txt  =  empty.txt
+same.txt   =  same.txt
+t.txt      >> t.txt
+------------------------

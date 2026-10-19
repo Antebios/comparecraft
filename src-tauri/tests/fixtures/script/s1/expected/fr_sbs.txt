@@ -1,0 +1,17 @@
+Folder Compare
+Produced: <TS>
+
+Mode:  All
+Left base folder: @ROOT@/L
+Right base folder: @ROOT@/R
+Name      Size Modified                  Name      Size Modified
+------------------------------------------------------------------------------
+sub          2 <TS>    sub          2 <TS>
+\a.txt       2 <TS> << \a.txt       2 <TS>
+b.bin       64 <TS> =  b.bin       64 <TS>
+diff.txt    23 <TS> << diff.txt    31 <TS>
+lonly.txt   10 <TS> >>
+                                      << ronly.txt   11 <TS>
+same.txt     5 <TS> =  same.txt     5 <TS>
+t.csv       31 <TS> <> t.csv       39 <TS>
+------------------------------------------------------------------------------

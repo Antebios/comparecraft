@@ -1,0 +1,22 @@
+--- @ROOT@/L2/t.txt	2024-06-01 01:00:00.000000000 
++++ @ROOT@/R2/t.txt	2024-05-01 01:00:00.000000000 
+@@ -1,15 +1,16 @@
+-line 1
++line  1
+ line 2
+-line 3
++line three changed
+ line 4
+ line 5
+ line 6
+ line 7
+-line 8
+ line 9
+ line 10
+ line 11
+ line 12
++inserted A
++inserted B
+ line 13
+ line 14
+ line 15

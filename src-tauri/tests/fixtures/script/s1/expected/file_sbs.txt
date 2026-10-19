@@ -1,0 +1,15 @@
+Table Compare
+Produced: <TS>
+
+Mode:  All
+Left base folder: @ROOT@/L
+Right base folder: @ROOT@/R
+
+File: t.csv
+A  B     C      A  B     C
+----------------------------
+id name  qty =  id name  qty
+ 1 apple   3 =   1 apple   3
+ 2 pear    4 <>  2 Pear    5
+             -+  3 fig     1
+----------------------------

@@ -1,0 +1,9 @@
+Text Compare
+Produced: <TS>
+
+Left file: @ROOT@/L/diff.txt     Right file: @ROOT@/R/diff.txt
+3 same line(s)
+1 unimportant difference line(s)
+1 important right orphan line(s)
+
+2 difference section(s)
