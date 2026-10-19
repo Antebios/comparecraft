@@ -153,7 +153,11 @@ dark and auto themes are included.
 </tr>
 <tr>
 <td width="50%"><img src="docs/manual/images/picture-compare.jpg" alt="Picture Compare of two images with the tolerance difference picture"><br><sub><b>Picture Compare.</b> Both pictures with a tolerance, range or blend difference picture.</sub></td>
-<td width="50%"><img src="docs/manual/images/home.jpg" alt="Home view with recent and saved sessions"><br><sub><b>Home.</b> Start a comparison or reopen a session.</sub></td>
+<td width="50%"><img src="docs/manual/images/folder-merge.jpg" alt="Folder Merge with left, base, right and output folders and a conflict selected"><br><sub><b>Folder Merge.</b> Three-way merge of folder trees, with conflicts resolved file by file.</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/manual/images/report-dialog.jpg" alt="Folder Compare Report dialog with layout, report and output options"><br><sub><b>Reports.</b> HTML, plain-text or printed reports from the Session menu.</sub></td>
+<td width="50%"><img src="docs/manual/images/home.jpg" alt="Home view with new session cards, saved sessions and recent comparisons"><br><sub><b>Home.</b> Start a comparison or reopen a session.</sub></td>
 </tr>
 </table>
 

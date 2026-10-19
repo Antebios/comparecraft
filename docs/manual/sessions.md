@@ -61,8 +61,12 @@ In Folder Compare and Folder Sync, the **Session Settings** dialog can also upda
 
 ## Session information and reports
 
+![The Session menu of a Text Compare, with the Info and Report commands, workspaces and Compare Parent Folders](images/session-menu.jpg)
+
 - The **Info** command on the **Session** menu (`Ctrl+I`), for example **Folder Compare Info** or **Text Compare Info**, shows a summary of the comparison: how many files or lines are the same, different or orphans. In folder views, expand a category to see its files.
 - The **Report…** command on the **Session** menu, for example **Folder Compare Report…** or **Text Compare Report…** (not in Folder Sync, Folder Merge or Text Merge), creates a report of the comparison as it is shown. See [Reports](reports.md#create-reports-in-the-application).
+
+![Folder Merge Info with the Conflicts and Left changes categories expanded to show their files](images/info-dialog.jpg)
 
 ## Compare parent and base folders
 
@@ -76,6 +80,8 @@ A workspace is a set of open tabs saved under a name. Use workspaces to switch b
 - **Session > Save Workspace As…** saves all open tabs under a name. If a workspace with that name exists, CompareCraft asks before replacing it.
 - **Session > Load Workspace** lists the saved workspaces. Choosing one closes the open tabs and opens the tabs of the workspace. If some tabs have unsaved changes, CompareCraft asks first.
 - **Session > Load Workspace > Manage Workspaces…** opens a list of the saved workspaces. Select one and click **Rename** (`F2`), **Delete** (`Del`) or **Load** (or double-click it).
+
+![The Manage Workspaces dialog listing two saved workspaces](images/workspaces-dialog.jpg)
 
 ## Restore your tabs at startup
 

@@ -8,6 +8,8 @@ Folder Compare and the file comparison views have a report command on the **Sess
 
 The report dialog has three parts.
 
+![The Folder Compare Report dialog with the report layout, report options and output options](images/report-dialog.jpg)
+
 **Report layout** lists the layouts for the view:
 
 | Dialog | Layouts |
@@ -28,6 +30,8 @@ File Compare Report uses the viewer-specific dialog when all selected files are 
 - For the Interleaved layout: **Strikeout left differences** and **Strikeout right differences**.
 - For the Patch layout: **Patch style:** **Normal diff**, **Context diff** or **Unified diff**.
 - For folder reports: **Columns:** **Size**, **Modified**, **CRC** and **Attributes**.
+
+![The Text Compare Report dialog with the text layouts, including Patch, Statistics and XML Dump](images/report-dialog-text.jpg)
 
 **Output options** choose where the report goes:
 
@@ -205,6 +209,14 @@ text-report output-to:report.html output-options:"html-custom=https://intranet.e
 ## HTML reports
 
 An HTML report is a single HTML file with the style sheet embedded in it, so it can be opened in any browser, attached to an e-mail or published as a build artifact. With `html-custom=`, the file links to your style sheet instead.
+
+A side-by-side text report with the color style sheet and line numbers:
+
+![An HTML side-by-side text report with changed lines highlighted and line numbers on both sides](images/report-text-output.jpg)
+
+A side-by-side folder report with the color style sheet, after `expand all`:
+
+![An HTML side-by-side folder report with folder icons, tree lines, sizes and modification times](images/report-folder-output.jpg)
 
 Some reports need images or additional pages. These are written to folders next to the report file:
 

@@ -11,6 +11,8 @@ import { openAuto, openTab, persistSession, updateTab, type Tab } from "../store
 import { defaultOptions } from "./FolderCompare";
 import { sessionCommands } from "./sessionMenu";
 
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
 type Filter = "all" | "changes" | "conflicts" | "same";
 type Version = "left" | "right";
 
@@ -331,8 +333,9 @@ export default function FolderMerge(props: { tab: Tab; active: boolean }) {
         </Show>
         <Show when={result()}>
           <span>
-            {result()!.items.length} files · <span class="st-diff">{count("conflict")} conflicts</span> · <span class="st-orphan">{count("left")} left changes · {count("right")} right changes</span> ·{" "}
-            <span class="st-unimp">{count("both")} same changes</span> · <span class="st-same">{count("same")} unchanged</span>
+            {plural(result()!.items.length, "file")} · <span class="st-diff">{plural(count("conflict"), "conflict")}</span> ·{" "}
+            <span class="st-orphan">{plural(count("left"), "left change")} · {plural(count("right"), "right change")}</span> ·{" "}
+            <span class="st-unimp">{plural(count("both"), "same change")}</span> · <span class="st-same">{count("same")} unchanged</span>
             {selected().length ? ` · ${selected().length} selected` : ""}
           </span>
         </Show>

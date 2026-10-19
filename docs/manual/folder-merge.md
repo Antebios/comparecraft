@@ -1,5 +1,7 @@
 # Folder Merge
 
+![Folder Merge with left, base, right and output folders, and a conflict selected in the file list](images/folder-merge.jpg)
+
 Folder Merge combines the changes made to two copies of a folder tree. You give it the two changed folders (left and right), optionally the folder they both started from (the base), and an output folder. CompareCraft works out, file by file, which side changed and copies the changed versions into the output. Files changed differently on both sides are conflicts. You resolve them one by one, with a [Text Merge](text-merge.md) if needed.
 
 ## Start a folder merge
