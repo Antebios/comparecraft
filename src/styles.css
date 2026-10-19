@@ -1424,17 +1424,6 @@ kbd {
   font-size: 12px;
   word-break: break-all;
 }
-.op-report {
-  margin: 0;
-  max-height: 60vh;
-  overflow: auto;
-  font-family: var(--mono);
-  font-size: 12px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 6px;
-  white-space: pre;
-}
 
 /* Shared form helpers (Options, Session Settings, Tools dialogs) */
 .modal-foot {
@@ -2145,4 +2134,200 @@ kbd {
   .help-toc {
     display: none;
   }
+}
+
+/* Report and Info dialogs */
+.report-dlg {
+  min-width: 720px;
+}
+.report-top {
+  display: flex;
+  gap: 10px;
+}
+.report-layouts select {
+  width: 160px;
+  height: 100%;
+  min-height: 130px;
+}
+.report-options {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.report-sub {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.report-sub .op-opt {
+  display: inline-block;
+}
+.report-out {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+.report-out-kinds {
+  min-width: 120px;
+}
+.report-out-opts {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.report-out-opts .op-row .op-opt {
+  display: inline-block;
+}
+.report-out-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 140px;
+}
+.report-css {
+  flex: 1;
+  min-width: 200px;
+}
+.report-title {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+}
+.report-title input {
+  flex: 1;
+}
+.report-msg {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 480px;
+}
+.report-preview {
+  width: 860px;
+  height: 65vh;
+  border: 1px solid var(--border);
+  background: #fff;
+}
+.info-dlg {
+  min-width: 420px;
+  min-height: 160px;
+  max-height: 60vh;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 13px;
+  resize: both;
+}
+.info-line {
+  white-space: pre;
+}
+.info-node {
+  cursor: default;
+  user-select: none;
+}
+.info-twisty {
+  display: inline-block;
+  width: 14px;
+}
+.info-leaf {
+  padding-left: 32px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.info-icon {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  margin-right: 6px;
+  background: var(--muted);
+}
+.info-icon.st-same {
+  background: var(--same-fg);
+}
+.info-icon.st-diff {
+  background: var(--diff-fg);
+}
+.info-icon.st-left,
+.info-icon.st-right {
+  background: var(--orphan-fg);
+}
+.info-icon.st-unimp {
+  background: var(--unimp-fg);
+}
+.info-icon.st-newer {
+  background: #d08700;
+}
+.ws-list {
+  min-height: 140px;
+  font-family: inherit;
+}
+.ws-item {
+  padding: 2px 4px;
+  border-radius: 3px;
+  cursor: default;
+}
+.ws-item.selected {
+  background: var(--sel);
+}
+
+/* Folder Merge */
+.fm-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  font-size: 12px;
+  outline: none;
+}
+.fm-row {
+  display: grid;
+  grid-template-columns: minmax(200px, 2fr) 110px repeat(4, minmax(150px, 1fr));
+  gap: 0 10px;
+  align-items: center;
+  padding: 2px 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
+  white-space: nowrap;
+  cursor: default;
+  user-select: none;
+}
+.fm-row > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fm-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--panel, var(--bg));
+  border-bottom: 1px solid var(--border);
+}
+.fm-name {
+  font-family: var(--mono);
+}
+.fm-conflict {
+  background: var(--conflict-bg);
+}
+.fm-left,
+.fm-right {
+  background: color-mix(in srgb, var(--orphan-bg) 55%, transparent);
+}
+.fm-both {
+  background: color-mix(in srgb, var(--unimp-bg) 55%, transparent);
+}
+.fm-row.sel {
+  background: var(--sel);
+}
+.fm-empty {
+  padding: 24px;
+  text-align: center;
+}
+.paths.fm-output {
+  grid-template-columns: 1fr;
 }

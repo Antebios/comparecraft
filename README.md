@@ -90,6 +90,12 @@ question-mark pointer; click any other file or folder (on either side) to compar
 Update left → right, right → left or both ways, or **mirror** in either direction. Every action is shown in a
 preview before anything runs, and syncing can be limited to the current selection.
 
+### ⑃ Folder Merge
+**3-way folder merge** (left, base, right → output folder). Each file is classified as unchanged, a left or right
+change, the same change or a conflict. **Merge** (Ctrl+M) copies the changed versions to the output; **Take Left**,
+**Take Right** or a per-file **Text Merge** resolve conflicts. Start it from Home, `comparecraft L R BASE OUT`, or
+**Session › Merge Base Folders** in Folder Compare.
+
 </td>
 </tr>
 <tr>
@@ -114,9 +120,14 @@ important ones red; **mismatch range** shades by size of difference; **blend** m
 flip, auto-scale, zoom/fit and per-pixel colour details. Reads PNG, JPEG, GIF, BMP, TIFF, WebP, ICO, TGA, PNM,
 QOI and (through the webview) SVG/AVIF.
 
-### 💾 Sessions
-Recent and named sessions are saved automatically. Reopen them from Home, the **Sessions** toolbar menu of each
-compare view, or with `comparecraft "<session name>"`.
+### 💾 Sessions, workspaces & reports
+Recent sessions are recorded automatically; **Save Session** / **Save Session As…** name them, **Locked** protects
+them and **Clear Session** starts over. Reopen them from Home, the **Sessions** toolbar menu of each compare view,
+or with `comparecraft "<session name>"`. **Workspaces** save and restore whole sets of tabs. Every view has an
+**Info** summary (Ctrl+I), and **Folder Compare Report…**, **Text Compare Report…** and the other report dialogs
+produce side-by-side, summary, interleaved, patch, statistics or XML reports as HTML, plain text or print, the
+same reports the `ccomp` console writes. **Compare Parent Folders**, **Merge Base Folders** and **Sync Base Folders**
+open related comparisons in one step.
 
 ### 🛠️ Tools & Options
 **Tools › Options** covers startup and workspace, tabs, colours and fonts, text editing, next-difference
@@ -426,6 +437,7 @@ src-tauri/src/
   merge.rs           3-way merge
   quick.rs           -qc quick compare and exit codes
   folder.rs          folder scan, compare criteria, masks, file operations, sync plan/execute
+  folder_merge.rs    3-way folder merge classification
   hex.rs             hex compare with byte alignment
   pix.rs             picture decoding, statistics and difference rendering
   table.rs           table compare
@@ -435,7 +447,7 @@ src-tauri/src/
   shell.rs           file-manager integration (Nautilus scripts, Dolphin service menu)
   cli.rs             argument parsing, automerge
   script.rs          @script runner: commands, selection, file operations, logging
-  report.rs          folder, file, text, hex, table and picture reports (text, HTML, XML)
+  report.rs          folder, file, text, hex, table and picture reports (text, HTML, XML), used by scripts and the GUI
   lib.rs             Tauri commands, single-instance forwarding
   main.rs            application entry point (comparecraft)
   console.rs         console version (ccomp): headless requests in the console, waits for GUI windows

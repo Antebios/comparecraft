@@ -88,8 +88,10 @@ The output is written with the encoding and line endings of the base file (or of
 
 ## Reload and save the session
 
-- **⟳ Refresh** (`F5`, **Session > Reload Files**) reads the input files again.
-- **Session > Save Session…** (`Shift+Ctrl+S`) saves the merge so that you can reopen it later. See [Sessions](sessions.md).
+- **⟳ Refresh** (`F5`, **Session > Reload**) reads the input files again.
+- **Session > Save Session** (`Shift+Ctrl+S`) saves the merge so that you can reopen it later. See [Sessions](sessions.md).
+- **Session > Text Merge Info** (`Ctrl+I`) counts the changes and conflicts.
+- **Session > Merge Parent Folders** opens a [Folder Merge](folder-merge.md) of the folders that contain the left, right, base and output files.
 
 ## Merge from the command line
 

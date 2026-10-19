@@ -16,10 +16,10 @@ The workspace is the set of comparison tabs you have open.
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| **When starting, load workspace:** | (none) | Choose **Last used tabs** to reopen the tabs that were open when CompareCraft was last closed. |
-| **On exit, save workspace as:** | (none) | Choose **Last used tabs** to remember the open tabs when CompareCraft closes. |
+| **When starting, load workspace:** | (none) | Choose **Last used tabs** to reopen the tabs that were open when CompareCraft was last closed, or the name of a saved workspace to open it. |
+| **On exit, save workspace as:** | (none) | Choose **Last used tabs** to remember the open tabs when CompareCraft closes, or the name of a saved workspace to update it. |
 
-To restore your tabs at every start, set both to **Last used tabs**.
+To restore your tabs at every start, set both to **Last used tabs**. Named workspaces are saved with **Session > Save Workspace As…**; see [Workspaces](sessions.md#workspaces).
 
 ### Quick compare (Home view)
 

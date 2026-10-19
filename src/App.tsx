@@ -15,7 +15,11 @@ import MenuBar, { ShortcutList } from "./components/MenuBar";
 import { PromptHost } from "./components/Prompt";
 import { ReplaceHost } from "./views/folderOps";
 import { ContextMenuHost } from "./components/ContextMenu";
-import { activate, closeTab, KIND_LABEL, openSpec, openTab, restoreWorkspace, saveWorkspace, state, tabTitle, type Tab } from "./store";
+import { activate, closeAllTabs, closeTab, KIND_LABEL, openSpec, openTab, openWorkspace, restoreWorkspace, saveNamedWorkspace, saveWorkspace, state, tabTitle, type Tab } from "./store";
+import { promptText } from "./components/Prompt";
+import { WorkspacesDialog } from "./components/WorkspacesDialog";
+import { ModalHost } from "./views/sessionMenu";
+import type { Command } from "./commands";
 import FolderCompare from "./views/FolderCompare";
 import HexCompare from "./views/HexCompare";
 import Home from "./views/Home";
@@ -23,6 +27,7 @@ import PictureCompare from "./views/PictureCompare";
 import TableCompare from "./views/TableCompare";
 import TextCompare from "./views/TextCompare";
 import TextMerge from "./views/TextMerge";
+import FolderMerge from "./views/FolderMerge";
 import TextEdit from "./views/TextEdit";
 import PatchView from "./views/PatchView";
 
@@ -36,6 +41,9 @@ function TabView(props: { tab: Tab }) {
         </Match>
         <Match when={props.tab.kind === "folder" || props.tab.kind === "sync"}>
           <FolderCompare tab={props.tab} active={active()} />
+        </Match>
+        <Match when={props.tab.kind === "fmerge"}>
+          <FolderMerge tab={props.tab} active={active()} />
         </Match>
         <Match when={props.tab.kind === "merge"}>
           <TextMerge tab={props.tab} active={active()} />
@@ -71,7 +79,7 @@ export default function App() {
     closeTab(t.id);
   }
 
-  type DialogName = "help" | "shortcuts" | "about" | "options" | "export" | "import" | "snapshot" | "formats" | "profiles";
+  type DialogName = "help" | "shortcuts" | "about" | "options" | "export" | "import" | "snapshot" | "formats" | "profiles" | "workspaces";
   const [dialog, setDialog] = createSignal<DialogName | null>(null);
   const [optionsPage, setOptionsPage] = createSignal<OptionsPage | undefined>();
   const [helpPage, setHelpPage] = createSignal<string>();
@@ -90,6 +98,10 @@ export default function App() {
   const onOpenOptions = (e: Event) => openOptions((e as CustomEvent<OptionsPage | undefined>).detail);
   window.addEventListener("comparecraft:options", onOpenOptions);
   onCleanup(() => window.removeEventListener("comparecraft:options", onOpenOptions));
+  // Dialogs open a manual page through this event.
+  const onOpenHelp = (e: Event) => (setHelpPage((e as CustomEvent<string | undefined>).detail), setDialog("help"));
+  window.addEventListener("comparecraft:help", onOpenHelp);
+  onCleanup(() => window.removeEventListener("comparecraft:help", onOpenHelp));
   const snapshotBases = () => {
     const t = activeTab();
     return t && (t.kind === "folder" || t.kind === "sync") ? { left: t.paths[0] || undefined, right: t.paths[1] || undefined } : {};
@@ -109,20 +121,55 @@ export default function App() {
   const activeTab = () => state.tabs.find((x) => x.id === state.active);
   const newSession = (kind: Tab["kind"]) => () => void openTab({ kind, paths: [] });
 
+  /** Session › Load Workspace: closes the open tabs and opens the saved ones. */
+  async function loadWorkspace(name: string) {
+    const ws = settings.workspaces[name];
+    if (!ws) return;
+    const dirty = state.tabs.filter((t) => t.dirty);
+    if (dirty.length && !(await ask(`${dirty.length} tab(s) have unsaved changes. Close them anyway?`, { kind: "warning" }))) return;
+    closeAllTabs();
+    openWorkspace(ws);
+    notify(`Loaded workspace “${name}”`);
+  }
+  async function saveWorkspaceAs() {
+    const name = (await promptText("Save Workspace As", "Workspace name:", Object.keys(settings.workspaces)[0] ?? ""))?.trim();
+    if (!name) return;
+    if (settings.workspaces[name] && !(await ask(`Replace the workspace “${name}”?`, { kind: "warning" }))) return;
+    saveNamedWorkspace(name);
+    notify(`Saved workspace “${name}” (${state.tabs.filter((t) => t.paths.some(Boolean)).length} tab(s))`);
+  }
+  const workspaceItems = (): (string | Command)[] => {
+    const names = Object.keys(settings.workspaces).sort((a, b) => a.localeCompare(b));
+    const items: (string | Command)[] = names.map((n) => ({ id: `ws-${n}`, menu: "Session", label: n, run: () => void loadWorkspace(n) }));
+    if (items.length) items.push("-");
+    items.push("manage-workspaces");
+    return items;
+  };
+
   registerCommands("global", [
-    { id: "home", menu: "Session", group: "nav", label: "Home", keys: "Alt+Home", run: () => activate("home") },
-    { id: "new-tab", menu: "Session", group: "nav", label: "New Tab", keys: "Ctrl+T", run: () => activate("home") },
-    { id: "new-text", menu: "Session", group: "new", label: "New Text Compare", run: newSession("text") },
-    { id: "new-folder", menu: "Session", group: "new", label: "New Folder Compare", run: newSession("folder") },
-    { id: "new-sync", menu: "Session", group: "new", label: "New Folder Sync", run: newSession("sync") },
-    { id: "new-merge", menu: "Session", group: "new", label: "New Text Merge", run: newSession("merge") },
-    { id: "new-table", menu: "Session", group: "new", label: "New Table Compare", run: newSession("table") },
-    { id: "new-hex", menu: "Session", group: "new", label: "New Hex Compare", run: newSession("hex") },
-    { id: "new-pix", menu: "Session", group: "new", label: "New Picture Compare", run: newSession("picture") },
+    {
+      id: "new-session", menu: "Session", group: "start", label: "New Session", run: () => {},
+      submenu: () => ["new-folder-compare", "new-sync", "new-fmerge", "new-text", "new-merge", "new-table", "new-hex", "new-pix"],
+    },
+    { id: "new-folder-compare", menu: "Session", hidden: true, label: "Folder Compare", run: newSession("folder") },
+    { id: "new-fmerge", menu: "Session", hidden: true, label: "Folder Merge", run: newSession("fmerge") },
+    { id: "new-sync", menu: "Session", hidden: true, label: "Folder Sync", run: newSession("sync") },
+    { id: "new-text", menu: "Session", hidden: true, label: "Text Compare", run: newSession("text") },
+    { id: "new-merge", menu: "Session", hidden: true, label: "Text Merge", run: newSession("merge") },
+    { id: "new-table", menu: "Session", hidden: true, label: "Table Compare", run: newSession("table") },
+    { id: "new-hex", menu: "Session", hidden: true, label: "Hex Compare", run: newSession("hex") },
+    { id: "new-pix", menu: "Session", hidden: true, label: "Picture Compare", run: newSession("picture") },
+    { id: "new-tab", menu: "Session", group: "start", label: "New Tab", keys: "Ctrl+T", run: () => activate("home") },
+    { id: "new-window", menu: "Session", group: "start", label: "New Window", run: () => api.newWindow().catch((e) => notify(String(e))) },
+    { id: "open-session", menu: "Session", group: "start", label: "Open Session…", keys: "Shift+Ctrl+O", run: () => activate("home") },
+    { id: "home", menu: "Session", group: "start", label: "Home", keys: "Alt+Home", run: () => activate("home") },
+    { id: "load-workspace", menu: "Session", group: "workspace", label: "Load Workspace", run: () => {}, enabled: () => true, submenu: workspaceItems },
+    { id: "manage-workspaces", menu: "Session", hidden: true, label: "Manage Workspaces…", run: () => setDialog("workspaces") },
+    { id: "save-workspace", menu: "Session", group: "workspace", label: "Save Workspace As…", run: () => void saveWorkspaceAs() },
     { id: "next-tab", menu: "Session", group: "tabs", label: "Select Next Tab", keys: "Ctrl+Tab", run: () => cycleTab(1) },
     { id: "prev-tab", menu: "Session", group: "tabs", label: "Select Previous Tab", keys: "Shift+Ctrl+Tab", run: () => cycleTab(-1) },
     {
-      id: "close-tab", menu: "Session", group: "tabs", label: "Close Tab", keys: "Ctrl+W",
+      id: "close-tab", menu: "Session", group: "session", label: "Close Tab", keys: "Ctrl+W",
       enabled: () => !!activeTab(), run: () => { const t = activeTab(); if (t) void requestClose(t); },
     },
     { id: "exit", menu: "Session", group: "exit", label: "Exit", keys: "Ctrl+Q", run: () => void getCurrentWindow().close() },
@@ -152,7 +199,7 @@ export default function App() {
     if (dispatchKey(e, state.active)) return;
     // Options › Tweaks › "ESC closes file views".
     const t = activeTab();
-    if (e.key === "Escape" && settings.escClosesFileViews && t && t.kind !== "folder" && t.kind !== "sync" && !e.defaultPrevented) {
+    if (e.key === "Escape" && settings.escClosesFileViews && t && t.kind !== "folder" && t.kind !== "sync" && t.kind !== "fmerge" && !e.defaultPrevented) {
       const el = e.target as HTMLElement | null;
       if (document.querySelector(".modal-backdrop, .ctx-menu") || el?.closest("input, textarea, select, .findbar")) return;
       void requestClose(t);
@@ -249,12 +296,16 @@ export default function App() {
       <Show when={dialog() === "formats"}>
         <FileFormatsDialog onClose={() => setDialog(null)} />
       </Show>
+      <Show when={dialog() === "workspaces"}>
+        <WorkspacesDialog onLoad={(n) => (setDialog(null), void loadWorkspace(n))} onClose={() => setDialog(null)} />
+      </Show>
       <Show when={dialog() === "profiles"}>
         <ProfilesDialog onClose={() => setDialog(null)} onDone={notify} />
       </Show>
       <Show when={toast()}>
         <div class="toast" onClick={() => setToast("")}>{toast()}</div>
       </Show>
+      <ModalHost />
       <PromptHost />
       <ReplaceHost />
       <ContextMenuHost />

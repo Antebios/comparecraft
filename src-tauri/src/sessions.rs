@@ -19,6 +19,9 @@ pub struct Session {
     /// Named sessions are kept; auto-saved ones are pruned.
     #[serde(default)]
     pub saved: bool,
+    /// Locked sessions are not overwritten by Save Session.
+    #[serde(default)]
+    pub locked: bool,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]

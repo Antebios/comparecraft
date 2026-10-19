@@ -8,6 +8,7 @@ import { KIND_LABEL, openAuto, openSession, openTab, sessionsVersion, setSession
 const NEW_KINDS: { kind: ViewKind; icon: string; help: string }[] = [
   { kind: "folder", icon: "📁", help: "Compare two folder trees and copy, delete or sync items." },
   { kind: "sync", icon: "⇆", help: "Update or mirror one folder into another." },
+  { kind: "fmerge", icon: "⑃", help: "Three-way merge of two changed folders against their common base." },
   { kind: "text", icon: "📝", help: "Line-by-line text diff with intraline highlights and editing." },
   { kind: "merge", icon: "🔀", help: "Three-way merge of left/right changes against a common base." },
   { kind: "table", icon: "▦", help: "Cell-by-cell comparison of CSV/TSV data with key columns." },

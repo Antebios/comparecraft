@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
-export type ViewKind = "home" | "text" | "folder" | "sync" | "merge" | "hex" | "table" | "picture" | "edit" | "patch";
+export type ViewKind = "home" | "text" | "folder" | "sync" | "fmerge" | "merge" | "hex" | "table" | "picture" | "edit" | "patch";
 
 export interface LaunchSpec {
   kind: ViewKind | "session";
@@ -202,6 +202,22 @@ export interface FolderResult {
   root: FNode;
   summary: Summary;
 }
+export type MergeStatus = "same" | "left" | "right" | "both" | "conflict";
+export interface MergeItem {
+  rel: string;
+  name: string;
+  left?: Side;
+  right?: Side;
+  base?: Side;
+  output?: Side;
+  status: MergeStatus;
+  error?: string;
+}
+export interface FolderMergeResult {
+  items: MergeItem[];
+  summary: Record<MergeStatus, number>;
+}
+
 export interface Action {
   op: "copy" | "move" | "delete" | "rename" | "mkdir" | "touch" | "chmod";
   /** Source path (copy, move, rename) or, for touch, the item whose timestamp is copied. */
@@ -324,6 +340,8 @@ export interface Session {
   options: unknown;
   modified: number;
   saved: boolean;
+  /** Locked sessions are not overwritten by Save Session. */
+  locked?: boolean;
 }
 
 export const api = {
@@ -339,12 +357,16 @@ export const api = {
     invoke<FolderResult>("compare_folders", { left, right, options }),
   planSync: (left: string, right: string, options: FolderOptions, mode: string) =>
     invoke<Action[]>("plan_sync", { left, right, options, mode }),
+  compareFolderMerge: (left: string, right: string, base: string | null, output: string | null, options: FolderOptions) =>
+    invoke<FolderMergeResult>("compare_folder_merge", { left, right, base, output, options }),
   executeActions: (actions: Action[], useTrash: boolean, backup?: BackupSpec) =>
     invoke<ActionResult[]>("execute_actions", { actions, useTrash, backup: backup ?? null }),
   compareItems: (left: string, right: string, rels: string[], options: FolderOptions) =>
     invoke<(FNode | null)[]>("compare_items", { left, right, rels, options }),
   itemInfo: (paths: string[]) => invoke<ItemInfo[]>("item_info", { paths }),
-  fileReport: (pairs: [string, string][], context = 3) => invoke<string>("file_report", { pairs, context }),
+  makeReport: (request: ReportRequest, spec: ReportSpec, target: "content" | "browser" | `file:${string}`) =>
+    invoke<string>("make_report", { request, spec, target }),
+  newWindow: () => invoke<void>("new_window"),
   readBytes: async (path: string, offset: number, len: number) => {
     const b64 = await invoke<string>("read_bytes", { path, offset, len });
     const bin = atob(b64);
@@ -378,6 +400,21 @@ export const api = {
   setShellIntegration: (items: ShellItem[]) => invoke<void>("set_shell_integration", { items }),
 };
 
+/** What a report covers: an open file viewer, selected files of a folder comparison, or the folder comparison. */
+export type ReportRequest =
+  | { type: "pair"; kind: "text" | "hex" | "table" | "picture"; left: string; right: string; view?: { left?: string[]; right?: string[]; rules?: Rules; table?: TableOptions } }
+  | { type: "files"; files: [string, string | null, string | null][]; leftBase: string; rightBase: string; forced: string | null }
+  | { type: "folder"; root: FNode; leftBase: string; rightBase: string; options: FolderOptions; expanded: string[] };
+
+/** Report layout and options, using the script command's option names. */
+export interface ReportSpec {
+  layout: string;
+  options: string[];
+  title: string | null;
+  outputOptions: string[];
+  css: string | null;
+}
+
 export interface BackupSpec {
   kind: string;
   dir: string | null;
@@ -398,6 +435,15 @@ export interface ShellStatus {
 export function basename(p: string): string {
   const parts = p.split(/[\\/]/).filter(Boolean);
   return parts[parts.length - 1] ?? p;
+}
+
+/** The folder containing a path ("" when it has none). */
+export function dirname(p: string): string {
+  const t = p.replace(/[\\/]+$/, "");
+  const i = Math.max(t.lastIndexOf("/"), t.lastIndexOf("\\"));
+  if (i < 0) return "";
+  if (i === 0) return t[0];
+  return /^[A-Za-z]:$/.test(t.slice(0, i)) ? t.slice(0, i + 1) : t.slice(0, i);
 }
 
 export function joinPath(root: string, rel: string): string {

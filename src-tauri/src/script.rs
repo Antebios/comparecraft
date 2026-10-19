@@ -332,21 +332,6 @@ fn parse_size(s: &str) -> Option<u64> {
     (v >= 0.0).then(|| (v * mult as f64).round() as u64)
 }
 
-fn describe_filter(f: &OtherFilter) -> Option<String> {
-    match f.kind.as_str() {
-        "date" => {
-            let rel = if f.newer { "newer" } else { "older" };
-            if let Some(d) = f.days {
-                Some(format!("Files {rel} than {d} day(s) ago are excluded."))
-            } else {
-                f.date.map(|ms| format!("Files {rel} than {} are excluded.", report::fmt_time(ms)))
-            }
-        }
-        "size" => Some(format!("Files {} than {} bytes are excluded.", if f.larger { "larger" } else { "smaller" }, f.size)),
-        _ => None,
-    }
-}
-
 // ---------------------------------------------------------------------------
 // State
 
@@ -799,16 +784,7 @@ impl<'a> Script<'a> {
     }
 
     fn filter_lines(&self) -> Vec<String> {
-        let mut out = vec![];
-        let inc = self.opts.include.trim();
-        if !inc.is_empty() && inc != "*" {
-            out.push(format!("Filters:  {inc}"));
-        }
-        let d: Vec<String> = self.opts.other_filters.iter().filter(|f| f.enabled).filter_map(describe_filter).collect();
-        if !d.is_empty() {
-            out.push(format!("Filters:  {}", d.join("  ")));
-        }
-        out
+        report::folder_filter_lines(&self.opts)
     }
 
     fn done(&mut self, verb: &str, n: usize, skipped: usize, start: Instant) {

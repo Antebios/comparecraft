@@ -39,6 +39,14 @@ export interface Command {
   isDefault?: () => boolean;
 }
 
+/**
+ * Order of command groups in menus that mix tab and global commands, following the
+ * reference application's Session menu. "" stands for any group not listed.
+ */
+export const GROUP_ORDER: Partial<Record<MenuName, string[]>> = {
+  Session: ["start", "tabs", "workspace", "session", "files", "nav", "report", "using", "", "exit"],
+};
+
 /** A registered command id, an ad-hoc command, or "-" for a separator. */
 export type MenuRef = string | Command;
 export type MenuEntry = Command | "-";

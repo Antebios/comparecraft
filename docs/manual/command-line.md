@@ -25,6 +25,7 @@ The paths you give decide what is opened:
 | `<file> <file>` | A file comparison in the viewer for that file type |
 | `<left> <right> <center>` | A three-way text merge; `<center>` is the common ancestor |
 | `<left> <right> <center> <output>` | A three-way text merge that saves to `<output>` |
+| `<folder> <folder> <folder> [<folder>]` | A [Folder Merge](folder-merge.md) of left, right and base folders, into the output folder |
 | `<session name>` | The saved session with that name |
 | `-` | Standard input, read into a temporary file (can be used in place of any path) |
 | `@<script> [params]` | Runs a script without opening a window (see [Scripting](scripting.md)) |
@@ -81,7 +82,8 @@ Some notes on how arguments are read:
 | Table Compare | `table`, `datacompare` |
 | Picture Compare | `picture`, `mediacompare` |
 | Folder Compare | `folder` |
-| Folder Sync | `sync`, `foldermerge` |
+| Folder Sync | `sync` |
+| Folder Merge | `foldermerge`, `fmerge` |
 
 If the name is not recognised, CompareCraft prints an error and uses Text Compare.
 

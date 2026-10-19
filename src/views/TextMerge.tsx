@@ -3,10 +3,11 @@ import { settings } from "../settings";
 import { batch, createEffect, createMemo, createSignal, Index, onMount, Show } from "solid-js";
 import { api, errText, strictRules, type Chunk, type MergeResult, type Rules, type TextFile } from "../api";
 import { Btn, Modal, PathBar, ROW_H, useViewport } from "../components/common";
-import { promptText } from "../components/Prompt";
 import { displayKeys, registerCommands } from "../commands";
 import { showContextMenu } from "../components/ContextMenu";
 import { persistSession, updateTab, type Tab } from "../store";
+import { mergeInfo } from "../components/InfoDialog";
+import { sessionCommands } from "./sessionMenu";
 
 type Choice = "base" | "left" | "right" | "lr" | "rl" | { custom: string[] } | null;
 
@@ -217,11 +218,15 @@ export default function TextMerge(props: { tab: Tab; active: boolean }) {
 
   const isChange = () => sel() >= 0 && !!merge() && merge()!.chunks[sel()].kind !== "stable";
   registerCommands(tab().id, [
-    {
-      id: "save-session", menu: "Session", group: "session", label: "Save Session…", keys: "Shift+Ctrl+S",
-      run: async () => { const n = await promptText("Save Session", "Session name:", tab().sessionName ?? ""); if (n) await persistSession(tab(), n); },
-    },
-    { id: "reload", menu: "Session", group: "files", label: "Reload Files", keys: "F5", run: loadAll },
+    ...sessionCommands({
+      tab,
+      title: "Text Merge",
+      dirty,
+      notify: setMessage,
+      info: { enabled: () => !!merge(), lines: () => mergeInfo(merge()!.chunks) },
+      parents: { label: "Merge Parent Folders", kind: "fmerge", paths: () => [path(0), path(1), path(2), outputPath()] },
+    }),
+    { id: "reload", menu: "Session", group: "files", label: "Reload", keys: "F5", run: loadAll },
     { id: "save", menu: "File", label: "Save Output", keys: "Ctrl+S", run: saveOutput },
     { id: "undo", menu: "Edit", group: "undo", label: "Undo", keys: "Ctrl+Z", run: () => undoChoice(undoStack, redoStack) },
     { id: "redo", menu: "Edit", group: "undo", label: "Redo", keys: "Ctrl+Y", altKeys: ["Shift+Ctrl+Z"], run: () => undoChoice(redoStack, undoStack) },

@@ -7,6 +7,8 @@ import { showContextMenu } from "../components/ContextMenu";
 import { externalCommands, sideOf } from "../components/external";
 import { SessionButtons } from "../components/SessionTools";
 import { persistSession, updateTab, type Tab } from "../store";
+import { hexInfo } from "../components/InfoDialog";
+import { sessionCommands } from "./sessionMenu";
 
 const PAGE = 64 * 1024;
 
@@ -247,8 +249,19 @@ export default function HexCompare(props: { tab: Tab; active: boolean }) {
     ["complete", "Complete"],
   ];
   registerCommands(tab().id, [
+    ...sessionCommands({
+      tab,
+      title: "Hex Compare",
+      report: {
+        kind: "hex",
+        enabled: () => !!hd(),
+        request: () => ({ type: "pair", kind: "hex", left: left() ?? "", right: right() ?? "" }),
+      },
+      info: { enabled: () => !!hd(), lines: () => hexInfo(hd()!) },
+    }),
     { id: "swap", menu: "Session", group: "files", label: "Swap Sides", run: swap },
     { id: "reload", menu: "Session", group: "files", label: "Reload", keys: "F5", run: reload },
+    { id: "recompare", menu: "Session", group: "files", label: "Recompare", keys: "Ctrl+F5", run: () => void refetch() },
     { id: "next-diff", menu: "Search", group: "diff", label: "Next Difference", keys: "Ctrl+N", altKeys: ["Alt+Down"], run: () => gotoDiff(1) },
     { id: "prev-diff", menu: "Search", group: "diff", label: "Previous Difference", keys: "Ctrl+P", altKeys: ["Alt+Up"], run: () => gotoDiff(-1) },
     { id: "goto", menu: "Search", group: "go", label: "Go To Offset…", keys: "Ctrl+G", run: goToOffset },

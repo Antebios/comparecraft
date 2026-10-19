@@ -85,11 +85,11 @@ To return to the Home view from anywhere, press `Alt+Home` or choose **Session >
 
 ### From a New session card
 
-1. Click a card on the Home view: **Folder Compare**, **Folder Sync**, **Text Compare**, **Text Merge**, **Table Compare**, **Hex Compare** or **Picture Compare**.
+1. Click a card on the Home view: **Folder Compare**, **Folder Sync**, **Folder Merge**, **Text Compare**, **Text Merge**, **Table Compare**, **Hex Compare** or **Picture Compare**.
 2. A new tab opens with empty path bars.
 3. Type a path into each path bar and press `Enter`, or click the **…** button next to the path bar to browse for it.
 
-When both sides are filled in, CompareCraft compares them. You can also start an empty comparison from the **Session** menu: **New Text Compare**, **New Folder Compare**, **New Folder Sync**, **New Text Merge**, **New Table Compare**, **New Hex Compare** or **New Picture Compare**.
+When both sides are filled in, CompareCraft compares them. You can also start an empty comparison from the **Session > New Session** submenu: **Folder Compare**, **Folder Sync**, **Folder Merge**, **Text Compare**, **Text Merge**, **Table Compare**, **Hex Compare** or **Picture Compare**.
 
 ### With Quick compare
 

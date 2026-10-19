@@ -3,6 +3,7 @@ pub mod cli;
 pub mod diff;
 pub mod fileio;
 pub mod folder;
+pub mod folder_merge;
 pub mod hex;
 pub mod merge;
 pub mod pix;
@@ -89,6 +90,21 @@ async fn compare_folders(left: String, right: String, options: folder::FolderOpt
 }
 
 #[tauri::command]
+async fn compare_folder_merge(
+    left: String,
+    right: String,
+    base: Option<String>,
+    output: Option<String>,
+    options: folder::FolderOptions,
+) -> CmdResult<folder_merge::FolderMergeResult> {
+    blocking(move || {
+        let base = base.filter(|b| !b.is_empty());
+        folder_merge::compare_merge(&left, &right, base.as_deref(), output.as_deref(), &options).map_err(s)
+    })
+    .await
+}
+
+#[tauri::command]
 async fn plan_sync(
     left: String,
     right: String,
@@ -104,28 +120,111 @@ async fn compare_items(left: String, right: String, rels: Vec<String>, options: 
     blocking(move || Ok(folder::compare_items(&left, &right, &rels, &options))).await
 }
 
-/// File Compare Report in patch (unified diff) form for pairs of files.
+/// What a report dialog reports on.
+#[derive(serde::Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+enum ReportRequest {
+    /// The two files of an open file viewer (`kind`: text, hex, table, picture).
+    Pair {
+        kind: String,
+        left: String,
+        right: String,
+        #[serde(default)]
+        view: report::ViewState,
+    },
+    /// Selected files of a folder comparison; `forced` picks the viewer for all of them.
+    Files { files: Vec<(String, Option<String>, Option<String>)>, left_base: String, right_base: String, forced: Option<String> },
+    /// The folder comparison as shown, honouring its expanded folders.
+    Folder { root: folder::Node, left_base: String, right_base: String, options: folder::FolderOptions, expanded: Vec<String> },
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GuiReportSpec {
+    layout: String,
+    options: Vec<String>,
+    title: Option<String>,
+    output_options: Vec<String>,
+    css: Option<String>,
+}
+
+/// Replaces references to report attachments with data URLs, for previews.
+fn inline_files(out: &report::Output) -> String {
+    let mut html = out.content.clone();
+    for (name, data) in &out.files {
+        let mime = match name.rsplit('.').next().unwrap_or("").to_ascii_lowercase().as_str() {
+            "png" => "image/png",
+            "css" => "text/css",
+            "html" | "htm" => "text/html",
+            _ => "application/octet-stream",
+        };
+        let url = format!("data:{mime};base64,{}", base64::engine::general_purpose::STANDARD.encode(data));
+        html = html.replace(&format!("\"{name}\""), &format!("\"{url}\""));
+    }
+    html
+}
+
+/// Builds a report. `target` is "content" (returned, attachments inlined), "browser" (written to a
+/// temporary folder; returns the file path) or "file:<path>" (written with its attachments).
 #[tauri::command]
-async fn file_report(pairs: Vec<(String, String)>, context: usize) -> CmdResult<String> {
+async fn make_report(request: ReportRequest, spec: GuiReportSpec, target: String) -> CmdResult<String> {
     blocking(move || {
-        let mut out = String::new();
-        for (l, r) in pairs {
-            let read = |p: &str| std::fs::read(p).map(|b| String::from_utf8_lossy(&b).into_owned()).unwrap_or_default();
-            let (a, b) = (read(&l), read(&r));
-            if a == b {
-                out.push_str(&format!("Files {l} and {r} are identical\n\n"));
-                continue;
+        let html = spec.output_options.iter().any(|o| o.starts_with("html-"));
+        let mut rs = report::ReportSpec {
+            layout: spec.layout,
+            options: spec.options,
+            title: spec.title.filter(|t| !t.trim().is_empty()),
+            output_to: String::new(),
+            output_options: spec.output_options,
+            css: spec.css,
+        };
+        let out = match request {
+            ReportRequest::Pair { kind, left, right, view } => report::with_view(view, || report::pair_report(&kind, &left, &right, &rs))?,
+            ReportRequest::Files { files, left_base, right_base, forced } => {
+                let items: Vec<report::FileItem> = files
+                    .into_iter()
+                    .map(|(rel, l, r)| report::FileItem { rel, left: l.map(Into::into), right: r.map(Into::into) })
+                    .collect();
+                report::file_report(&rs, &items, &left_base, &right_base, forced.as_deref())?
             }
-            let diff = similar::TextDiff::from_lines(&a, &b);
-            out.push_str(&diff.unified_diff().context_radius(context).header(&l, &r).to_string());
-            if !out.ends_with('\n') {
-                out.push_str("\n\\ No newline at end of file\n");
+            ReportRequest::Folder { root, left_base, right_base, options, expanded } => {
+                let open: std::collections::HashSet<String> = expanded.into_iter().collect();
+                let is_open = move |rel: &str| open.contains(rel);
+                let cx = report::FolderCtx {
+                    root: &root,
+                    left_base: &left_base,
+                    right_base: &right_base,
+                    timesize: options.criteria == "timesize",
+                    expanded: &is_open,
+                    filters: report::folder_filter_lines(&options),
+                };
+                report::folder_report(&rs, &cx)?
             }
-            out.push('\n');
+        };
+        if target == "content" {
+            return Ok(if html { inline_files(&out) } else { out.content });
         }
-        Ok(out)
+        let path = match target.strip_prefix("file:") {
+            Some(p) => std::path::PathBuf::from(p),
+            None if target == "browser" => {
+                let dir = std::env::temp_dir().join(format!("comparecraft-report-{}-{}", std::process::id(), report::now_ms()));
+                dir.join(if html { "report.html" } else { "report.txt" })
+            }
+            None => return Err(format!("Unknown report target {target}")),
+        };
+        rs.output_to = path.to_string_lossy().into_owned();
+        report::deliver(&rs, &out, std::path::Path::new("/"))?;
+        Ok(rs.output_to)
     })
     .await
+}
+
+/// Opens another application window running its own instance.
+#[tauri::command]
+fn new_window() -> CmdResult<()> {
+    let exe = std::env::current_exe().map_err(s)?;
+    std::process::Command::new(exe).arg("-solo").spawn().map_err(s)?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -357,10 +456,12 @@ pub fn run(spec: cli::LaunchSpec, solo: bool) {
             merge_texts,
             compare_folders,
             plan_sync,
+            compare_folder_merge,
             execute_actions,
             compare_items,
             item_info,
-            file_report,
+            make_report,
+            new_window,
             read_bytes,
             hex_align,
             pix_compare,

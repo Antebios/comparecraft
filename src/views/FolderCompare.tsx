@@ -1,4 +1,4 @@
-import { message } from "@tauri-apps/plugin-dialog";
+import { message, open as openDialog } from "@tauri-apps/plugin-dialog";
 import { createEffect, createMemo, createSignal, For, Index, type JSX, on, onCleanup, onMount, Show } from "solid-js";
 import { createStore } from "solid-js/store";
 import {
@@ -15,6 +15,7 @@ import {
   type Status,
   type Summary,
   type ViewKind,
+  type ReportRequest,
 } from "../api";
 import { Btn, Modal, PathBar, ROW_H, useViewport } from "../components/common";
 import { showContextMenu } from "../components/ContextMenu";
@@ -22,7 +23,10 @@ import { externalCommands, shellWords, sideOf } from "../components/external";
 import { promptText } from "../components/Prompt";
 import { displayKeys, isEnabled, IS_MAC, registerCommands, type Command, type MenuRef } from "../commands";
 import { backupSpec, rememberFilter, setSetting, settings } from "../settings";
-import { openAuto, openTab, persistSession, setSessionsVersion, updateTab, type Tab } from "../store";
+import { openAuto, openTab, persistSession, setSessionsVersion, tabTitle, updateTab, type Tab } from "../store";
+import { folderInfo } from "../components/InfoDialog";
+import { ReportDialog, type ReportKind } from "../components/ReportDialog";
+import { saveSession as saveNamedSession, sessionCommands } from "./sessionMenu";
 import FolderSettingsDialog, { defaultViewSettings, filterText, parseFilterText, type FolderViewSettings, type SettingsTab } from "./folderSettings";
 import {
   AlignDialog,
@@ -36,7 +40,6 @@ import {
   NewFolderDialog,
   qcText,
   RenameDialog,
-  ReportDialog,
   SideDialog,
   TouchDialog,
   type ContentMode,
@@ -83,7 +86,7 @@ const FOLDER_MODES: [FolderMode, string][] = [
 
 const IS_WINDOWS = navigator.userAgent.includes("Windows");
 
-const defaultOptions = (): FolderOptions => ({
+export const defaultOptions = (): FolderOptions => ({
   criteria: "timesize",
   timeToleranceSecs: 2,
   include: "*",
@@ -214,6 +217,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
   const left = () => tab().paths[0] ?? "";
   const right = () => tab().paths[1] ?? "";
   const rootOf = (s: SideName) => (s === "left" ? left() : right());
+  const isSync = tab().kind === "sync";
   const idle = () => !!result() && !busy();
   const basesDiffer = () => !!left() && !!right() && left() !== right();
 
@@ -999,20 +1003,47 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
     }
   }
 
+  /** Actions › File Compare Report: the viewer's report dialog when all files share a viewer, otherwise the generic one. */
   async function fileReport() {
     const files = effSel().filter((n) => !n.dir);
-    const pairs: [string, string][] = files.filter((n) => n.left && n.right).map((n) => [sidePath(n, "left"), sidePath(n, "right")]);
     setBusy(true);
+    let kind: ReportKind = "files";
     try {
-      let text = pairs.length ? await api.fileReport(pairs) : "";
-      for (const n of files.filter((n) => !(n.left && n.right))) text += `Only in ${n.left ? "left" : "right"}: ${sidePath(n, n.left ? "left" : "right")}\n`;
-      show(() => <ReportDialog text={text} onClose={closeDialog} />);
-    } catch (e) {
-      setMessage(errText(e));
+      const kinds = await Promise.all(files.map((n) => api.pathInfo(sidePath(n, n.left ? "left" : "right")).then((i) => i.kind).catch(() => "")));
+      if (kinds.length && kinds.every((k) => k === kinds[0]) && ["text", "hex", "table", "picture"].includes(kinds[0])) kind = kinds[0] as ReportKind;
     } finally {
       setBusy(false);
     }
+    const request = (): ReportRequest => ({
+      type: "files",
+      files: files.map((n) => [n.rel, n.left ? sidePath(n, "left") : null, n.right ? sidePath(n, "right") : null]),
+      leftBase: left(),
+      rightBase: right(),
+      forced: null,
+    });
+    show(() => <ReportDialog kind={kind} title={tabTitle(tab())} request={request} onClose={closeDialog} />);
   }
+
+  /** Session › Folder Compare Report: the whole comparison, honouring the view's expansion. */
+  function folderReport() {
+    const request = (): ReportRequest => ({
+      type: "folder",
+      root: result()!.root,
+      leftBase: left(),
+      rightBase: right(),
+      options: JSON.parse(JSON.stringify(opts)),
+      expanded: flatMode() ? [] : [...expanded()],
+    });
+    const cols = [settings.folderColumns.size && "size", settings.folderColumns.modified && "timestamp"].filter(Boolean) as string[];
+    show(() => <ReportDialog kind="folder" title={tabTitle(tab())} request={request} columns={cols} onClose={closeDialog} />);
+  }
+
+  async function browseBase(i: 0 | 1) {
+    const p = await openDialog({ directory: true, multiple: false, defaultPath: (i === 0 ? left() : right()) || undefined });
+    if (typeof p !== "string") return;
+    setBases(i === 0 ? [p, right()] : [left(), p]);
+  }
+
 
   function toggleIgnored() {
     const rels = effSel().map((n) => n.rel);
@@ -1113,13 +1144,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
     }
   }
 
-  async function saveSession() {
-    const n = await promptText("Save Session", "Session name:", tab().sessionName ?? "");
-    if (n) {
-      await persistSession(tab(), n);
-      setMessage(`Saved session “${n}”`);
-    }
-  }
+  const saveSession = () => saveNamedSession(tab(), setMessage);
 
   async function copyNames() {
     const text = sidesOn().flatMap((s) => sideItems(s).map((n) => sidePath(n, s))).join("\n");
@@ -1221,7 +1246,20 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
 
   const cmds: Command[] = [
     // Session
-    { id: "save-session", menu: "Session", group: "session", label: "Save Session…", keys: "Shift+Ctrl+S", run: saveSession },
+    ...sessionCommands({
+      tab,
+      title: isSync ? "Folder Sync" : "Folder Compare",
+      notify: setMessage,
+      info: { enabled: () => !!result(), groups: () => folderInfo(result()!.root, opts.criteria === "timesize") },
+    }),
+    ...(isSync
+      ? []
+      : [{ id: "session-report", menu: "Session" as const, group: "report", label: "Folder Compare Report…", enabled: idle, run: folderReport }]),
+    { id: "merge-bases", menu: "Session", group: "using", label: "Merge Base Folders", visible: () => !isSync, enabled: basesDiffer, run: () => openTab({ kind: "fmerge", paths: [left(), right(), "", left()] }) },
+    { id: "sync-bases", menu: "Session", group: "using", label: isSync ? "Compare Base Folders" : "Sync Base Folders", enabled: () => !!left() && !!right(), run: () => openTab({ kind: isSync ? "folder" : "sync", paths: [left(), right()], options: JSON.parse(JSON.stringify(tab().options)) }) },
+    { id: "browse-base", menu: "Session", group: "nav", label: "Browse for Folder", submenu: () => ["browse-left", "browse-right"], run: () => {} },
+    { id: "browse-left", menu: "Session", hidden: true, label: "Left Side…", run: () => browseBase(0) },
+    { id: "browse-right", menu: "Session", hidden: true, label: "Right Side…", run: () => browseBase(1) },
     { id: "settings", menu: "Session", group: "session", label: "Session Settings…", run: () => settingsDialog("specs") },
     { id: "swap", menu: "Session", group: "files", label: "Swap Sides", run: swap },
     { id: "back", menu: "Session", group: "nav", label: "Back", keys: "Alt+Left", enabled: () => history().back.length > 0, run: goBack },

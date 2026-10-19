@@ -23,9 +23,12 @@ export type BackupKind = "nameTildeExt" | "nameExtTilde" | "nameExtBak" | "tilde
 /** Program-wide options (Tools › Options), persisted to settings.json in the config folder. */
 export interface Settings {
   // Startup
-  workspaceLoad: "none" | "last";
-  workspaceSave: "none" | "last";
+  /** "none", "last" (the tabs open at the last exit) or the name of a saved workspace. */
+  workspaceLoad: string;
+  workspaceSave: string;
   lastWorkspace: WorkspaceTab[];
+  /** Named workspaces (Session › Save Workspace As). */
+  workspaces: Record<string, WorkspaceTab[]>;
   quickCompareShow: boolean;
   quickCompareRules: boolean;
   quickCompareOpenIfDiff: boolean;
@@ -87,6 +90,7 @@ export const DEFAULT_SETTINGS: Settings = {
   workspaceLoad: "none",
   workspaceSave: "none",
   lastWorkspace: [],
+  workspaces: {},
   quickCompareShow: false,
   quickCompareRules: true,
   quickCompareOpenIfDiff: true,
@@ -200,7 +204,8 @@ export function replaceSettings(s: Settings) {
 
 /** Changes one setting and saves. */
 export function setSetting<K extends keyof Settings>(key: K, value: Settings[K]) {
-  setSettingsStore(key as never, (typeof value === "object" && value !== null ? clone(value) : value) as never);
+  // Objects are replaced, not merged, so removed keys stay removed.
+  setSettingsStore(key as never, (typeof value === "object" && value !== null ? reconcile(clone(value)) : value) as never);
   scheduleSave();
 }
 

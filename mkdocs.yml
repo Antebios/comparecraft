@@ -62,6 +62,7 @@ nav:
   - Comparing:
       - Folder Compare: folder-compare.md
       - Folder Sync: folder-sync.md
+      - Folder Merge: folder-merge.md
       - Text Compare: text-compare.md
       - Text Merge: text-merge.md
       - Table Compare: table-compare.md

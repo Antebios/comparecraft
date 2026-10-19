@@ -12,6 +12,7 @@ CompareCraft runs on Linux, Windows and macOS.
 | --- | --- |
 | [Folder Compare](folder-compare.md) | Compare two folder trees and copy, move, delete, rename or touch items. |
 | [Folder Sync](folder-sync.md) | Update or mirror one folder into another, with a preview of every action. |
+| [Folder Merge](folder-merge.md) | Combine the changes of two folder trees against a common base into an output folder. |
 | [Text Compare](text-compare.md) | Line-by-line text comparison with intraline highlights and editing. |
 | [Text Merge](text-merge.md) | Three-way merge of left and right changes against a common base. |
 | [Table Compare](table-compare.md) | Cell-by-cell comparison of CSV and TSV data with key columns. |

@@ -109,7 +109,7 @@ What happens when there are no more differences is set on the [Next Difference p
 
 ## Change the base folders
 
-- Type a new path into a path bar and press `Enter`, or click **…** to browse.
+- Type a new path into a path bar and press `Enter`, or click **…** to browse. **Session > Browse for Folder > Left Side…** or **Right Side…** also browses for a new base folder.
 - Select a folder and choose **Set as Base Folder** to make it the new base folder (with a folder selected on each side: **Set as Base Folders**). **Set as Base on Other Side** uses the selected folder as the base of the other side.
 - **Session > Up One Level** moves to the parent folder on **Both Sides**, the **Left Side** or the **Right Side**.
 - **Session > Back** (`Alt+Left`) and **Session > Forward** (`Alt+Right`) move through the base folders you used before.
@@ -230,9 +230,16 @@ With **Show results dialog** on, a list shows the **Result** for each **File**: 
 
 ## File compare report
 
-Select one or more files that exist on both sides and choose **File Compare Report…**. A report of the differences in patch format is shown. Click **Copy to Clipboard**, or **Save As…** to save it (the default name is `report.patch`).
+Select one or more files and choose **File Compare Report…** (on the **Actions** menu and the context menu). If all selected files are of the same type, the report dialog of that viewer opens, for example **Text Compare Report**. Otherwise the **File Compare Report** dialog reports each file with the viewer for its type. See [Create reports in the application](reports.md#create-reports-in-the-application).
 
-For more report types, see [Reports](reports.md).
+## Session menu commands
+
+- **Folder Compare Info** (`Ctrl+I`) shows how many files are same, orphans, newer or different. Expand a category to list its files.
+- **Folder Compare Report…** creates a report of the comparison as shown, with the expanded folders, filters and columns of the view. See [Reports](reports.md#create-reports-in-the-application).
+- **Compare Parent Folders** compares the folders that contain the two base folders, in a new tab.
+- **Merge Base Folders** opens the two base folders in a [Folder Merge](folder-merge.md).
+- **Sync Base Folders** opens the two base folders in a [Folder Sync](folder-sync.md). In Folder Sync this command is **Compare Base Folders** and opens a Folder Compare.
+- **Save Session**, **Save Session As…**, **Locked** and **Clear Session** (`Shift+Ctrl+C`) are described in [Sessions](sessions.md).
 
 ## Synchronize folders
 
@@ -298,4 +305,4 @@ Then click **OK** or **Apply**.
 
 ## Save the session
 
-Click **★ Save Session** or press `Shift+Ctrl+S` to save this comparison, including its settings and filters, under a name. See [Sessions](sessions.md).
+Click **★ Save Session** or press `Shift+Ctrl+S` to save this comparison, including its settings and filters, under a name. **Session > Save Session As…** saves it under another name. See [Sessions](sessions.md).

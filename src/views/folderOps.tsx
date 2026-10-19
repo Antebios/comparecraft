@@ -4,10 +4,10 @@
  * side choices, an "Action:" description and Start/Cancel buttons); see
  * docs/REVERSE_ENGINEERING.md §9.
  */
-import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { setSetting, settings } from "../settings";
 import { createEffect, createMemo, createSignal, For, type JSX, Show } from "solid-js";
-import { api, errText, fmtSize, fmtTime } from "../api";
+import { errText, fmtSize, fmtTime } from "../api";
 import { Modal } from "../components/common";
 
 export type SideName = "left" | "right";
@@ -488,44 +488,6 @@ export function ContentsResults(props: { rows: { rel: string; code: number }[]; 
       <div class="modal-actions">
         <span class="muted">{plural(props.rows.length, "file")} compared</span>
         <span class="spacer" />
-        <button class="tb-btn primary" ref={(el) => setTimeout(() => el.focus())} onClick={props.onClose}>Close</button>
-      </div>
-    </Modal>
-  );
-}
-
-/* ---------- File Compare Report ---------- */
-
-export function ReportDialog(props: { text: string; onClose: () => void }) {
-  const [msg, setMsg] = createSignal("");
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(props.text);
-      setMsg("Copied to the clipboard.");
-    } catch (e) {
-      setMsg(errText(e));
-    }
-  }
-  async function saveAs() {
-    const p = await saveDialog({ title: "Save Report", defaultPath: "report.patch", filters: [{ name: "Patch", extensions: ["patch", "diff", "txt"] }] });
-    if (!p) return;
-    try {
-      const lines = props.text.split("\n");
-      if (lines[lines.length - 1] === "") lines.pop();
-      await api.saveText({ path: p, lines, encoding: "UTF-8", bom: false, eol: "\n", finalNewline: true, backup: false });
-      setMsg(`Saved ${p}`);
-    } catch (e) {
-      setMsg(errText(e));
-    }
-  }
-  return (
-    <Modal title="File Compare Report" onClose={props.onClose} wide>
-      <pre class="op-report">{props.text}</pre>
-      <div class="modal-actions">
-        <span class="muted">{msg()}</span>
-        <span class="spacer" />
-        <button class="tb-btn" onClick={copy}>Copy to Clipboard</button>
-        <button class="tb-btn" onClick={saveAs}>Save As…</button>
         <button class="tb-btn primary" ref={(el) => setTimeout(() => el.focus())} onClick={props.onClose}>Close</button>
       </div>
     </Modal>

@@ -1,5 +1,5 @@
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
-import { commandsFor, displayKeys, isVisible, MENUS, type MenuEntry, type MenuName } from "../commands";
+import { commandsFor, displayKeys, GROUP_ORDER, isVisible, MENUS, type MenuEntry, type MenuName } from "../commands";
 import { MenuList } from "./MenuList";
 
 /** Application menu bar built from the commands registered for the active scope. */
@@ -11,8 +11,15 @@ export default function MenuBar(props: { scope: string }) {
   const items = (m: MenuName): MenuEntry[] => {
     const out: MenuEntry[] = [];
     let group: string | undefined;
-    for (const c of commandsFor(props.scope)) {
-      if (c.menu !== m || c.hidden || !isVisible(c)) continue;
+    const order = GROUP_ORDER[m];
+    const rank = (g?: string) => {
+      const i = order!.indexOf(g ?? "");
+      return i >= 0 ? i : order!.indexOf("");
+    };
+    let cmds = commandsFor(props.scope).filter((c) => c.menu === m);
+    if (order) cmds = cmds.map((c, i) => ({ c, i })).sort((a, b) => rank(a.c.group) - rank(b.c.group) || a.i - b.i).map((x) => x.c);
+    for (const c of cmds) {
+      if (c.hidden || !isVisible(c)) continue;
       if (out.length && c.group !== group) out.push("-");
       group = c.group;
       out.push(c);

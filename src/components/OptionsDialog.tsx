@@ -115,16 +115,18 @@ export default function OptionsDialog(props: { page?: OptionsPage; onClose: () =
                   <>
                     <label class="opt-row">
                       When starting, load workspace:{" "}
-                      <select value={draft.workspaceLoad} onChange={(e) => set("workspaceLoad")(e.currentTarget.value as "none")}>
+                      <select value={draft.workspaceLoad} onChange={(e) => set("workspaceLoad")(e.currentTarget.value)}>
                         <option value="none">(none)</option>
                         <option value="last">Last used tabs</option>
+                        <For each={Object.keys(draft.workspaces ?? {}).sort()}>{(n) => <option value={n}>{n}</option>}</For>
                       </select>
                     </label>
                     <label class="opt-row">
                       On exit, save workspace as:{" "}
-                      <select value={draft.workspaceSave} onChange={(e) => set("workspaceSave")(e.currentTarget.value as "none")}>
+                      <select value={draft.workspaceSave} onChange={(e) => set("workspaceSave")(e.currentTarget.value)}>
                         <option value="none">(none)</option>
                         <option value="last">Last used tabs</option>
+                        <For each={Object.keys(draft.workspaces ?? {}).sort()}>{(n) => <option value={n}>{n}</option>}</For>
                       </select>
                     </label>
                   </>,

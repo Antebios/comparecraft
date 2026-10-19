@@ -104,7 +104,7 @@ mod tests {
         assert_eq!(load(), serde_json::json!({}));
         save(&serde_json::json!({"theme": "dark"})).unwrap();
         assert_eq!(load()["theme"], "dark");
-        let mk = |id: &str| Session { id: id.into(), name: id.into(), kind: "text".into(), paths: vec![id.into()], options: Value::Null, modified: 1, saved: true };
+        let mk = |id: &str| Session { id: id.into(), name: id.into(), kind: "text".into(), paths: vec![id.into()], options: Value::Null, modified: 1, saved: true, locked: false };
         import_sessions(vec![mk("a"), mk("b")], false).unwrap();
         let out = d.path().join("export.json");
         export(&out, Some(load()), Some(&["b".to_string()])).unwrap();

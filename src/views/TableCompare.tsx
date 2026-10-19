@@ -6,9 +6,10 @@ import { Btn, PathBar, ROW_H, useViewport } from "../components/common";
 import { displayKeys, registerCommands, type Command, type MenuRef } from "../commands";
 import { showContextMenu } from "../components/ContextMenu";
 import { externalCommands } from "../components/external";
-import { promptText } from "../components/Prompt";
 import { dropDown, SessionButtons } from "../components/SessionTools";
-import { persistSession, updateTab, type Tab } from "../store";
+import { openTab, persistSession, updateTab, type Tab } from "../store";
+import { tableInfo } from "../components/InfoDialog";
+import { sessionCommands } from "./sessionMenu";
 
 const COL_W = 140;
 type Filter = "all" | "diffs" | "same";
@@ -102,10 +103,6 @@ export default function TableCompare(props: { tab: Tab; active: boolean }) {
     void refresh();
   }
 
-  async function saveSession() {
-    const n = await promptText("Save Session", "Session name:", tab().sessionName ?? "");
-    if (n) await persistSession(tab(), n);
-  }
 
   /** Row kind after "Ignore Unimportant Differences" is applied. */
   const kindOf = (r: TableRow): Kind => (r.k === "unimportant" && minor() ? "same" : r.k);
@@ -200,10 +197,26 @@ export default function TableCompare(props: { tab: Tab; active: boolean }) {
     id: `show-${f}`, menu: "View", group: "filter", label, checked: () => filter() === f, run: () => setFilter(f),
   });
   registerCommands(tab().id, [
-    { id: "save-session", menu: "Session", group: "session", label: "Save Session…", keys: "Shift+Ctrl+S", run: saveSession },
+    ...sessionCommands({
+      tab,
+      title: "Table Compare",
+      notify: setMessage,
+      report: {
+        kind: "table",
+        enabled: () => !!result(),
+        request: () => ({
+          type: "pair", kind: "table", left: left(), right: right(),
+          view: { table: { ...opts, keys: [...opts.keys], unimportant: [...opts.unimportant] } },
+        }),
+      },
+      info: { enabled: () => !!result(), lines: () => tableInfo(result()!) },
+    }),
     { id: "settings", menu: "Session", group: "session", label: "Session Settings (Rules)…", checked: showRules, run: () => setShowRules(!showRules()) },
     { id: "swap", menu: "Session", group: "files", label: "Swap Sides", run: swap },
-    { id: "reload", menu: "Session", group: "files", label: "Reload Files", keys: "F5", run: refresh },
+    { id: "reload", menu: "Session", group: "files", label: "Reload", keys: "F5", run: refresh },
+    { id: "compare-using", menu: "Session", group: "using", label: "Compare Files Using", submenu: () => ["as-text", "as-hex"], run: () => {} },
+    { id: "as-text", menu: "Session", hidden: true, label: "Text Compare", enabled: () => !!left() && !!right(), run: () => openTab({ kind: "text", paths: [left(), right()] }) },
+    { id: "as-hex", menu: "Session", hidden: true, label: "Hex Compare", enabled: () => !!left() && !!right(), run: () => openTab({ kind: "hex", paths: [left(), right()] }) },
     { id: "copy", menu: "Edit", group: "clip", label: "Copy", keys: "Ctrl+C", altKeys: ["Ctrl+Insert"], enabled: () => selected().length > 0, run: copy },
     { id: "next-diff", menu: "Search", group: "diff", label: "Next Difference", keys: "Ctrl+N", altKeys: ["Alt+Down"], run: () => nav(1) },
     { id: "prev-diff", menu: "Search", group: "diff", label: "Previous Difference", keys: "Ctrl+P", altKeys: ["Alt+Up"], run: () => nav(-1) },

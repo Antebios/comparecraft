@@ -1,8 +1,52 @@
 # Reports
 
-CompareCraft scripts can write reports of folder and file comparisons: plain text for logs and e-mail, HTML for browsers, patch files for other tools, CSV statistics and XML for further processing. This page describes every report command, layout and option and shows sample output.
+CompareCraft writes reports of folder and file comparisons: plain text for logs and e-mail, HTML for browsers, patch files for other tools, CSV statistics and XML for further processing. You can create them from the application window or with script commands. This page describes both, with every layout and option, and shows sample output.
 
-Reports are created by script commands (see [Scripting](scripting.md)):
+## Create reports in the application
+
+Folder Compare and the file comparison views have a report command on the **Session** menu: **Folder Compare Report…**, **Text Compare Report…**, **Table Compare Report…**, **Hex Compare Report…** and **Picture Compare Report…**. In Folder Compare, select one or more files and choose **Actions > File Compare Report…** (also on the context menu) to report on the selected files instead.
+
+The report dialog has three parts.
+
+**Report layout** lists the layouts for the view:
+
+| Dialog | Layouts |
+|---|---|
+| Folder Compare Report | Side-by-side, Summary, XML Dump |
+| Text Compare Report | Side-by-side, Summary, Interleaved, Patch, Statistics, XML Dump |
+| Table Compare Report, Hex Compare Report | Side-by-side, Summary, Interleaved |
+| Picture Compare Report | Side-by-side, Summary |
+| File Compare Report | Side-by-side, Summary, Interleaved |
+
+File Compare Report uses the viewer-specific dialog when all selected files are of the same type, for example Text Compare Report for text files. Otherwise each file is reported with the viewer for its type.
+
+**Report options** change with the view and the layout:
+
+- A display filter: **All**, **Differences**, **Same** or **None**. In folder reports it offers the same filters as the Folder Compare toolbar, such as **Orphans** or **Left Newer**.
+- For file reports: **Ignore unimportant**, and **Show context** (with **Differences**).
+- **Include line numbers** (text, side-by-side), **Include byte addresses** (hex) or **Include row numbers** (table).
+- For the Interleaved layout: **Strikeout left differences** and **Strikeout right differences**.
+- For the Patch layout: **Patch style:** **Normal diff**, **Context diff** or **Unified diff**.
+- For folder reports: **Columns:** **Size**, **Modified**, **CRC** and **Attributes**.
+
+**Output options** choose where the report goes:
+
+- **Printer**, with **Difference highlighting:** (**Use color** or **Monochrome**) and **Wrap lines:** (**No wrap**, **Wrap words** or **Wrap characters**). Click **Print Preview** to see the report first, or **Print…** to print it.
+- **HTML report**, with **Use color stylesheet**, **Use monochrome stylesheet** or **Use custom stylesheet URL:**, and **Allow word wrapping**. Folder reports can also **Include links to file reports**. Click **View in Browser** to open the report in your web browser.
+- **Plain text**. In Text Compare Report, the Patch, Statistics and XML Dump layouts are always plain text.
+
+For HTML and plain text, click **Copy to Clipboard** or **Save As…**. **Report title:** sets the title on the first line of the report; it starts as the tab title.
+
+The report shows the comparison as it is on screen:
+
+- Folder reports include the files of expanded folders only, and use the current comparison criteria and filters.
+- Text reports include edits that have not been saved, and use the current comparison rules.
+
+CompareCraft remembers the last settings of each report dialog.
+
+## Create reports with scripts
+
+Script commands create the same reports without opening a window (see [Scripting](scripting.md)):
 
 ```sh
 ccomp @report.txt old new

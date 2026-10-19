@@ -10,6 +10,8 @@ import FindBar from "../components/FindBar";
 import { promptText } from "../components/Prompt";
 import { displayKeys, registerCommands, type Command, type MenuRef } from "../commands";
 import { openTab, persistSession, updateTab, type Tab } from "../store";
+import { textInfo } from "../components/InfoDialog";
+import { saveSession as saveNamedSession, sessionCommands } from "./sessionMenu";
 import { ReplacementDialog, RulesPanel } from "../components/RulesPanel";
 import { SessionButtons } from "../components/SessionTools";
 
@@ -684,13 +686,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
     if (typeof p === "string") await changePath(selSide(), p);
   }
 
-  async function saveSession() {
-    const n = await promptText("Save Session", "Session name:", tab().sessionName ?? "");
-    if (n) {
-      await persistSession(tab(), n);
-      setMessage(`Saved session “${n}”`);
-    }
-  }
+  const saveSession = () => saveNamedSession(tab(), setMessage);
 
   const anyDirty = () => dirty()[0] || dirty()[1];
   const hasSel = () => selRow() >= 0;
@@ -907,12 +903,25 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
     id: `show-${f}`, menu: "View", group: "filter", label, checked: () => filter() === f, run: () => setFilter(f),
   });
   registerCommands(tab().id, [
-    { id: "save-session", menu: "Session", group: "session", label: "Save Session…", keys: "Shift+Ctrl+S", run: saveSession },
+    ...sessionCommands({
+      tab,
+      title: "Text Compare",
+      dirty: anyDirty,
+      notify: setMessage,
+      report: {
+        kind: "text",
+        enabled: () => !!result(),
+        request: () => ({ type: "pair", kind: "text", left: tab().paths[0] ?? "", right: tab().paths[1] ?? "", view: { left: L(), right: R(), rules: rules() } }),
+      },
+      info: { enabled: () => !!result(), lines: () => textInfo(result()!) },
+    }),
     { id: "settings", menu: "Session", group: "session", label: "Session Settings (Rules)…", checked: showRules, run: () => setShowRules(!showRules()) },
     { id: "swap", menu: "Session", group: "files", label: "Swap Sides", run: swap },
-    { id: "reload", menu: "Session", group: "files", label: "Reload Files", keys: "F5", run: reload },
-    { id: "recompare", menu: "Session", group: "files", label: "Recompare Files", keys: "Ctrl+F5", run: () => recompute(true) },
-    { id: "as-hex", menu: "Session", group: "using", label: "Compare Files Using Hex Compare", run: () => openTab({ kind: "hex", paths: [...tab().paths] }) },
+    { id: "reload", menu: "Session", group: "files", label: "Reload", keys: "F5", run: reload },
+    { id: "recompare", menu: "Session", group: "files", label: "Recompare", keys: "Ctrl+F5", run: () => recompute(true) },
+    { id: "compare-using", menu: "Session", group: "using", label: "Compare Files Using", submenu: () => ["as-hex", "as-table"], run: () => {} },
+    { id: "as-hex", menu: "Session", hidden: true, label: "Hex Compare", enabled: () => tab().paths.slice(0, 2).every(Boolean), run: () => openTab({ kind: "hex", paths: [...tab().paths] }) },
+    { id: "as-table", menu: "Session", hidden: true, label: "Table Compare", enabled: () => tab().paths.slice(0, 2).every(Boolean), run: () => openTab({ kind: "table", paths: [...tab().paths] }) },
     { id: "as-merge", menu: "Session", group: "using", label: "Merge Files", run: () => openTab({ kind: "merge", paths: [tab().paths[0] ?? "", tab().paths[1] ?? ""] }) },
     { id: "open", menu: "File", group: "open", label: "Open File…", keys: "Ctrl+O", run: openFile },
     { id: "open-clipboard", menu: "File", group: "open", label: "Open Clipboard", keys: "Shift+Ctrl+V", enabled: () => !readOnly(selSide()), run: openClipboard },

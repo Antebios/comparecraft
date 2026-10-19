@@ -13,6 +13,8 @@ export interface Tab {
   options: Record<string, unknown>;
   sessionId: string;
   sessionName?: string;
+  /** The named session is locked against Save Session. */
+  locked?: boolean;
   dirty: boolean;
   output?: string | null;
   saveTarget?: string | null;
@@ -33,6 +35,7 @@ export const KIND_LABEL: Record<ViewKind, string> = {
   text: "Text Compare",
   folder: "Folder Compare",
   sync: "Folder Sync",
+  fmerge: "Folder Merge",
   merge: "Text Merge",
   hex: "Hex Compare",
   table: "Table Compare",
@@ -79,18 +82,44 @@ export function closeTab(id: string) {
   if (state.tabs.length === 0 && settings.tabSingleCloseWindow) void getCurrentWindow().close();
 }
 
-/** Tabs to restore on the next start ("Load workspace"). */
-export function saveWorkspace() {
-  if (settings.workspaceSave !== "last") return;
-  const ws: WorkspaceTab[] = state.tabs
-    .filter((t) => t.paths.some(Boolean))
-    .map((t) => ({ kind: t.kind, paths: [...t.paths], options: JSON.parse(JSON.stringify(t.options ?? {})), sessionName: t.sessionName }));
-  setSetting("lastWorkspace", ws);
+/** Closes every tab without closing the window (loading a workspace). */
+export function closeAllTabs() {
+  setState(produce((s) => {
+    s.tabs.splice(0);
+    s.active = "home";
+  }));
 }
 
+/** The open tabs, as stored in a workspace. */
+export function currentWorkspace(): WorkspaceTab[] {
+  return state.tabs
+    .filter((t) => t.paths.some(Boolean))
+    .map((t) => ({ kind: t.kind, paths: [...t.paths], options: JSON.parse(JSON.stringify(t.options ?? {})), sessionName: t.sessionName }));
+}
+
+/** Saves the open tabs under a name (Session › Save Workspace As). */
+export function saveNamedWorkspace(name: string) {
+  setSetting("workspaces", { ...settings.workspaces, [name]: currentWorkspace() });
+}
+
+/** Opens the tabs of a workspace. */
+export function openWorkspace(ws: WorkspaceTab[]) {
+  for (const w of ws) openTab({ kind: w.kind, paths: [...w.paths], options: { ...w.options }, sessionName: w.sessionName });
+}
+
+/** Saves the workspace chosen in Options › Startup on exit. */
+export function saveWorkspace() {
+  const target = settings.workspaceSave;
+  if (target === "none") return;
+  if (target === "last") setSetting("lastWorkspace", currentWorkspace());
+  else saveNamedWorkspace(target);
+}
+
+/** Loads the workspace chosen in Options › Startup. */
 export function restoreWorkspace() {
-  if (settings.workspaceLoad !== "last") return;
-  for (const w of settings.lastWorkspace) openTab({ kind: w.kind, paths: [...w.paths], options: { ...w.options }, sessionName: w.sessionName });
+  const src = settings.workspaceLoad;
+  if (src === "none") return;
+  openWorkspace(src === "last" ? settings.lastWorkspace : (settings.workspaces?.[src] ?? []));
 }
 
 export function activate(id: string) {
@@ -105,26 +134,52 @@ export function findTab(id: string): Tab | undefined {
   return state.tabs.find((t) => t.id === id);
 }
 
-/** Records the comparison as a recent (auto-saved) session, or as a named one. */
+/**
+ * Records the comparison as a recent (auto-saved) session, or as a named one; a named session
+ * replaces the saved session of that name unless it is locked.
+ */
 export async function persistSession(tab: Tab, name?: string) {
   if (!tab.paths.some(Boolean)) return;
   const saved = !!name;
+  const existing = name ? await api.findSession(name).catch(() => null) : null;
+  if (existing?.locked) throw new Error(`The session “${existing.name}” is locked. Use Save Session As to save it under another name.`);
   const session: Session = {
-    id: saved ? uid() : tab.sessionId,
+    id: existing?.id ?? (saved ? uid() : tab.sessionId),
     name: name ?? tabTitle(tab),
     kind: tab.kind,
     paths: [...tab.paths],
     options: JSON.parse(JSON.stringify(tab.options ?? {})),
     modified: Date.now(),
     saved,
+    locked: false,
   };
   try {
     await api.saveSession(session);
-    if (saved) updateTab(tab.id, { sessionName: name });
+    if (saved) updateTab(tab.id, { sessionName: name, locked: false });
     setSessionsVersion((v) => v + 1);
   } catch (e) {
     console.error("save session failed", e);
   }
+}
+
+/** Locks or unlocks the named session of a tab. */
+export async function setSessionLocked(tab: Tab, locked: boolean) {
+  const s = tab.sessionName ? await api.findSession(tab.sessionName) : null;
+  if (!s) throw new Error("Save the session first.");
+  await api.saveSession({ ...s, locked });
+  updateTab(tab.id, { locked });
+  setSessionsVersion((v) => v + 1);
+}
+
+/** Replaces a tab with a new one in the same place (Session › Clear Session). */
+export function replaceTab(id: string, init: Partial<Tab> & { kind: ViewKind }) {
+  const tab: Tab = { id: uid(), paths: [], titles: [], readOnly: [], options: {}, sessionId: uid(), dirty: false, ...init };
+  setState(produce((s) => {
+    const i = s.tabs.findIndex((t) => t.id === id);
+    if (i < 0) return;
+    s.tabs[i] = tab;
+    if (s.active === id) s.active = tab.id;
+  }));
 }
 
 export function openSession(s: Session) {
@@ -134,6 +189,7 @@ export function openSession(s: Session) {
     options: (s.options as Record<string, unknown>) ?? {},
     sessionId: s.saved ? uid() : s.id,
     sessionName: s.saved ? s.name : undefined,
+    locked: s.saved && !!s.locked,
   });
 }
 

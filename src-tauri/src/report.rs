@@ -1,7 +1,9 @@
 //! Plain text, XML and HTML reports of file and folder comparisons (used by scripts).
 
 use crate::diff::{self, Kind, Row};
-use crate::folder::{Node, Status};
+use crate::folder::{FolderOptions, Node, OtherFilter, Status};
+use serde::Deserialize;
+use std::cell::RefCell;
 use crate::{fileio, hex, pix, quick, table};
 use chrono::{Local, TimeZone};
 use std::fs;
@@ -71,6 +73,7 @@ impl ReportSpec {
                 "display-mismatches" => Display::Mismatches,
                 "display-context" => Display::Context,
                 "display-matches" => Display::Matches,
+                "display-none" => Display::None,
                 _ => d,
             };
         }
@@ -84,6 +87,7 @@ enum Display {
     Mismatches,
     Context,
     Matches,
+    None,
 }
 
 fn mode_name(d: Display, iu: bool) -> String {
@@ -92,6 +96,7 @@ fn mode_name(d: Display, iu: bool) -> String {
         Display::Mismatches => "Differences",
         Display::Context => "Differences, With Context",
         Display::Matches => "Same",
+        Display::None => "None",
     };
     if iu { format!("{base}, Ignoring Unimportant") } else { base.to_string() }
 }
@@ -176,6 +181,7 @@ fn pieces(diff: &[bool], d: Display) -> Vec<Piece> {
             Display::All => push(k, s, e, true),
             Display::Mismatches => push(k, s, e, k),
             Display::Matches => push(k, s, e, !k),
+            Display::None => push(k, s, e, false),
             Display::Context => {
                 if k {
                     push(k, s, e, true);
@@ -232,6 +238,32 @@ fn sbs_line(l: &str, lw: usize, m: &str, mw: usize, r: &str) -> String {
 // ---------------------------------------------------------------------------
 // Text
 
+/// In-memory state of an open viewer, used instead of the files on disk when reporting from it.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct ViewState {
+    pub left: Option<Vec<String>>,
+    pub right: Option<Vec<String>>,
+    pub rules: Option<diff::Rules>,
+    pub table: Option<table::TableOptions>,
+}
+
+thread_local! {
+    static VIEW: RefCell<Option<ViewState>> = const { RefCell::new(None) };
+}
+
+/// Runs `f` with pair reports reflecting the given viewer state.
+pub fn with_view<T>(v: ViewState, f: impl FnOnce() -> T) -> T {
+    VIEW.with(|c| *c.borrow_mut() = Some(v));
+    let out = f();
+    VIEW.with(|c| *c.borrow_mut() = None);
+    out
+}
+
+fn view<T>(f: impl FnOnce(&ViewState) -> Option<T>) -> Option<T> {
+    VIEW.with(|c| c.borrow().as_ref().and_then(f))
+}
+
 struct TextCmp {
     left: fileio::TextFile,
     right: fileio::TextFile,
@@ -239,9 +271,31 @@ struct TextCmp {
 }
 
 fn load_text_cmp(l: &str, r: &str) -> Result<TextCmp, String> {
-    let left = fileio::load_text(l).map_err(|e| format!("{l}: {e}"))?;
-    let right = fileio::load_text(r).map_err(|e| format!("{r}: {e}"))?;
-    let rows = diff::diff_lines(&left.lines, &right.lines, &diff::Rules::default()).rows;
+    let load = |p: &str, lines: Option<Vec<String>>| -> Result<fileio::TextFile, String> {
+        match lines {
+            None => fileio::load_text(p).map_err(|e| format!("{p}: {e}")),
+            Some(lines) => {
+                let mut f = fileio::load_text(p).unwrap_or_else(|_| fileio::TextFile {
+                    path: p.into(),
+                    lines: vec![],
+                    encoding: "utf-8".into(),
+                    bom: false,
+                    eol: "\n".into(),
+                    final_newline: true,
+                    size: 0,
+                    modified: None,
+                    binary: false,
+                    read_only: false,
+                });
+                f.lines = lines;
+                Ok(f)
+            }
+        }
+    };
+    let left = load(l, view(|v| v.left.clone()))?;
+    let right = load(r, view(|v| v.right.clone()))?;
+    let rules = view(|v| v.rules.clone()).unwrap_or_default();
+    let rows = diff::diff_lines(&left.lines, &right.lines, &rules).rows;
     Ok(TextCmp { left, right, rows })
 }
 
@@ -629,6 +683,7 @@ fn hex_layout(h: &HexCmp, d: Display) -> (Vec<HexRow>, Vec<Piece>) {
     let mut regions: Vec<(usize, usize)> = vec![];
     match d {
         Display::All => regions.push((0, n)),
+        Display::None => {}
         Display::Matches => {
             let mut i = 0;
             while i < n {
@@ -771,7 +826,8 @@ fn hex_body(h: &HexCmp, spec: &ReportSpec) -> Vec<String> {
 // Table
 
 fn load_table_cmp(l: &str, r: &str) -> Result<table::TableResult, String> {
-    table::compare_tables(l, r, &table::TableOptions { header: false, ..Default::default() }).map_err(|e| e.to_string())
+    let opts = view(|v| v.table.clone()).unwrap_or(table::TableOptions { header: false, ..Default::default() });
+    table::compare_tables(l, r, &opts).map_err(|e| e.to_string())
 }
 
 fn col_letter(mut i: usize) -> String {
@@ -1132,6 +1188,7 @@ fn folder_display(spec: &ReportSpec) -> (&'static [FClass], &'static str) {
             "display-left-orphans" => (&[LOrphan], "Left Orphans"),
             "display-right-orphans" => (&[ROrphan], "Right Orphans"),
             "display-matches" => (&[Same], "Same"),
+            "display-none" => (&[], "None"),
             _ => d,
         };
     }
@@ -1167,6 +1224,35 @@ fn col_label(c: Col) -> &'static str {
         Col::Modified => "Modified",
         Col::Attributes => "Attributes",
     }
+}
+
+fn describe_filter(f: &OtherFilter) -> Option<String> {
+    match f.kind.as_str() {
+        "date" => {
+            let rel = if f.newer { "newer" } else { "older" };
+            if let Some(d) = f.days {
+                Some(format!("Files {rel} than {d} day(s) ago are excluded."))
+            } else {
+                f.date.map(|ms| format!("Files {rel} than {} are excluded.", fmt_time(ms)))
+            }
+        }
+        "size" => Some(format!("Files {} than {} bytes are excluded.", if f.larger { "larger" } else { "smaller" }, f.size)),
+        _ => None,
+    }
+}
+
+/// Report lines describing the name and other filters of a folder comparison.
+pub fn folder_filter_lines(opts: &FolderOptions) -> Vec<String> {
+    let mut out = vec![];
+    let inc = opts.include.trim();
+    if !inc.is_empty() && inc != "*" {
+        out.push(format!("Filters:  {inc}"));
+    }
+    let d: Vec<String> = opts.other_filters.iter().filter(|f| f.enabled).filter_map(describe_filter).collect();
+    if !d.is_empty() {
+        out.push(format!("Filters:  {}", d.join("  ")));
+    }
+    out
 }
 
 /// The loaded folder comparison and its presentation state.
@@ -1656,5 +1742,38 @@ mod tests {
         let shown: Vec<(usize, usize)> = ps.iter().filter(|p| p.shown).map(|p| (p.start, p.end)).collect();
         assert_eq!(shown, vec![(13, 19), (19, 20), (20, 26)]);
         assert!(pieces(&[false, false], Display::Context).iter().all(|p| !p.shown));
+    }
+
+    #[test]
+    fn display_none_hides_everything() {
+        assert!(pieces(&[true, false, true], Display::None).iter().all(|p| !p.shown));
+    }
+
+    #[test]
+    fn filter_lines() {
+        let mut o = FolderOptions::default();
+        o.include = "*".into();
+        assert!(folder_filter_lines(&o).is_empty());
+        o.include = "*.rs;*.toml".into();
+        assert_eq!(folder_filter_lines(&o), vec!["Filters:  *.rs;*.toml".to_string()]);
+    }
+
+    #[test]
+    fn view_state_overrides_file_contents() {
+        let dir = std::env::temp_dir().join(format!("cc-report-view-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (l, r) = (dir.join("l.txt"), dir.join("r.txt"));
+        std::fs::write(&l, "alpha\nbeta\n").unwrap();
+        std::fs::write(&r, "alpha\nbeta\n").unwrap();
+        let spec = ReportSpec { layout: "side-by-side".into(), options: vec!["display-all".into()], ..ReportSpec::default() };
+        let (ls, rs) = (l.to_string_lossy().into_owned(), r.to_string_lossy().into_owned());
+        let saved = pair_report("text", &ls, &rs, &spec).unwrap().content;
+        assert!(!saved.contains("edited"));
+        let view = ViewState { left: Some(vec!["alpha".into(), "edited".into()]), ..ViewState::default() };
+        let unsaved = with_view(view, || pair_report("text", &ls, &rs, &spec)).unwrap().content;
+        assert!(unsaved.contains("edited"), "{unsaved}");
+        // The override applies only inside with_view.
+        assert_eq!(pair_report("text", &ls, &rs, &spec).unwrap().content.contains("edited"), false);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

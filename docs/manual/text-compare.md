@@ -120,7 +120,7 @@ Turn on **File > Create Backup on Save** (or **Create backup on save** in the ru
 
 ### Reloading
 
-**Session > Reload Files** (`F5`, or **⟳ Refresh** on the toolbar) reads both files from disk again. If you have unsaved changes, CompareCraft asks "Reload from disk and discard unsaved changes?" **Session > Recompare Files** (`Ctrl+F5`) runs the comparison again without reloading.
+**Session > Reload** (`F5`, or **⟳ Refresh** on the toolbar) reads both files from disk again. If you have unsaved changes, CompareCraft asks "Reload from disk and discard unsaved changes?" **Session > Recompare** (`Ctrl+F5`) runs the comparison again without reloading.
 
 ## Find text
 

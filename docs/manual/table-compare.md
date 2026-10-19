@@ -72,8 +72,8 @@ Select rows on one side and click **⧉ Copy** (`Ctrl+C` or `Ctrl+Insert`, **Edi
 ## Other commands
 
 - **⇄ Swap** (**Session > Swap Sides**) exchanges the two files.
-- **⟳ Reload** (`F5`, **Session > Reload Files**) reads the files again.
+- **⟳ Reload** (`F5`, **Session > Reload**) reads the files again.
 - **File > Open with Default Application** and **File > Show in File Manager** (on macOS: **Reveal in Finder**) act on the file of the current side.
-- **Session > Save Session…** (`Shift+Ctrl+S`) saves the comparison with its rules and key columns. See [Sessions](sessions.md).
+- **Session > Save Session** (`Shift+Ctrl+S`) saves the comparison with its rules and key columns. See [Sessions](sessions.md).
 
-Right-click the table for a context menu with **Copy**, the navigation and filter commands, **Reload Files**, **Swap Sides**, **Open with Default Application** and **Show in File Manager**.
+Right-click the table for a context menu with **Copy**, the navigation and filter commands, **Reload**, **Swap Sides**, **Open with Default Application** and **Show in File Manager**.

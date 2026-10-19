@@ -15,8 +15,12 @@ You can change any shortcut on the [Toolbars, Shortcuts page of the Options](opt
 | --- | --- |
 | Session > Home | `Alt+Home` |
 | Session > New Tab | `Ctrl+T` |
+| Session > Open Session… | `Shift+Ctrl+O` |
 | Session > Select Next Tab | `Ctrl+Tab` |
 | Session > Select Previous Tab | `Shift+Ctrl+Tab` |
+| Session > Save Session | `Shift+Ctrl+S` |
+| Session > Clear Session | `Shift+Ctrl+C` |
+| Session > *(view name)* Info, for example Folder Compare Info | `Ctrl+I` |
 | Session > Close Tab | `Ctrl+W` |
 | Session > Exit | `Ctrl+Q` |
 | Tools > Options… (macOS only) | `Ctrl+,` |
@@ -41,7 +45,7 @@ You can change any shortcut on the [Toolbars, Shortcuts page of the Options](opt
 
 | Command | Shortcut |
 | --- | --- |
-| Save Session… | `Shift+Ctrl+S` |
+| Save Session | `Shift+Ctrl+S` |
 | Back | `Alt+Left` |
 | Forward | `Alt+Right` |
 
@@ -105,9 +109,9 @@ You can change any shortcut on the [Toolbars, Shortcuts page of the Options](opt
 
 | Command | Shortcut |
 | --- | --- |
-| Save Session… | `Shift+Ctrl+S` |
-| Reload Files | `F5` |
-| Recompare Files | `Ctrl+F5` |
+| Save Session | `Shift+Ctrl+S` |
+| Reload | `F5` |
+| Recompare | `Ctrl+F5` |
 | Open File… | `Ctrl+O` |
 | Open Clipboard | `Shift+Ctrl+V` |
 | Save | `Ctrl+S` |
@@ -159,8 +163,8 @@ In the find bar, `Enter` finds the next match, `Shift+Enter` finds the previous 
 
 | Command | Shortcut |
 | --- | --- |
-| Save Session… | `Shift+Ctrl+S` |
-| Reload Files | `F5` |
+| Save Session | `Shift+Ctrl+S` |
+| Reload | `F5` |
 | Save Output | `Ctrl+S` |
 | Undo | `Ctrl+Z` |
 | Redo | `Ctrl+Y` or `Shift+Ctrl+Z` |
@@ -174,12 +178,27 @@ In the find bar, `Enter` finds the next match, `Shift+Enter` finds the previous 
 | Next Conflict Section | `Alt+N` |
 | Previous Conflict Section | `Alt+P` |
 
+## Folder Merge
+
+| Command | Shortcut |
+| --- | --- |
+| Refresh | `F5` |
+| Merge | `Ctrl+M` |
+| Take Left | `Ctrl+L` |
+| Take Right | `Ctrl+R` |
+| Merge Files | `Enter` |
+| Select All | `Ctrl+A` |
+| Next Conflict | `Alt+N` |
+| Previous Conflict | `Alt+P` |
+| Row Up / Row Down | `Up` / `Down` |
+| Extend Selection Up / Down | `Shift+Up` / `Shift+Down` |
+
 ## Table Compare
 
 | Command | Shortcut |
 | --- | --- |
-| Save Session… | `Shift+Ctrl+S` |
-| Reload Files | `F5` |
+| Save Session | `Shift+Ctrl+S` |
+| Reload | `F5` |
 | Copy | `Ctrl+C` or `Ctrl+Insert` |
 | Next Difference | `Ctrl+N` or `Alt+Down` |
 | Previous Difference | `Ctrl+P` or `Alt+Up` |
@@ -191,6 +210,7 @@ In the find bar, `Enter` finds the next match, `Shift+Enter` finds the previous 
 | Command | Shortcut |
 | --- | --- |
 | Reload | `F5` |
+| Recompare | `Ctrl+F5` |
 | Next Difference | `Ctrl+N` or `Alt+Down` |
 | Previous Difference | `Ctrl+P` or `Alt+Up` |
 | Go To Offset… | `Ctrl+G` |

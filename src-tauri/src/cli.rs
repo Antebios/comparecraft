@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone, Default, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct LaunchSpec {
-    /// "home" | "text" | "edit" | "patch" | "folder" | "sync" | "merge" | "hex" | "table" | "picture" | "session"
+    /// "home" | "text" | "edit" | "patch" | "folder" | "sync" | "fmerge" | "merge" | "hex" | "table" | "picture" | "session"
     pub kind: String,
     pub paths: Vec<String>,
     pub titles: Vec<Option<String>>,
@@ -229,7 +229,8 @@ fn viewer_kind(fv: &str) -> Option<&'static str> {
         "hexcompare" | "hex" => "hex",
         "tablecompare" | "table" | "datacompare" => "table",
         "picturecompare" | "picture" | "mediacompare" => "picture",
-        "foldercompare" | "folder" | "foldermerge" => "folder",
+        "foldercompare" | "folder" => "folder",
+        "foldermerge" | "fmerge" => "fmerge",
         "foldersync" | "sync" => "sync",
         _ => return None,
     })
@@ -310,6 +311,7 @@ pub fn resolve(a: &Args, cwd: &Path) -> Outcome {
                 let k = detect_kind(&paths[0]);
                 if Path::new(&paths[0]).exists() { k } else { detect_kind(&paths[1]) }
             }
+            _ if folderish(&paths[0]) => "fmerge".into(),
             _ => "merge".into(),
         }
     };

@@ -6,6 +6,8 @@ import { showContextMenu } from "../components/ContextMenu";
 import { externalCommands } from "../components/external";
 import { SessionButtons } from "../components/SessionTools";
 import { persistSession, updateTab, type Tab } from "../store";
+import { pictureInfo } from "../components/InfoDialog";
+import { sessionCommands } from "./sessionMenu";
 
 const DEFAULTS: PixOptions = {
   mode: "tolerance",
@@ -225,6 +227,16 @@ export default function PictureCompare(props: { tab: Tab; active: boolean }) {
     run: () => setOpts({ mode: m }),
   });
   registerCommands(tab().id, [
+    ...sessionCommands({
+      tab,
+      title: "Picture Compare",
+      report: {
+        kind: "picture",
+        enabled: () => !!result(),
+        request: () => ({ type: "pair", kind: "picture", left: tab().paths[0] ?? "", right: tab().paths[1] ?? "" }),
+      },
+      info: { enabled: () => !!result(), lines: () => pictureInfo(result()!, opts().ignoreUnimportant) },
+    }),
     { id: "swap", menu: "Session", group: "files", label: "Swap Sides", run: swap },
     { id: "reload", menu: "Session", group: "files", label: "Reload", keys: "F5", run: load },
     modeCmd("tolerance", "Tolerance Mode", "Ctrl+1"),

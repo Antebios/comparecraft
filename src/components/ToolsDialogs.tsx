@@ -7,7 +7,7 @@ import { Modal } from "./common";
 
 /** Groups of settings that can be exported/imported separately. */
 const SETTING_GROUPS: { id: string; label: string; keys: (keyof Settings)[] }[] = [
-  { id: "options", label: "Program options", keys: Object.keys(DEFAULT_SETTINGS).filter((k) => !["keymap", "colors", "theme", "filterPresets", "openWith", "lastWorkspace"].includes(k)) as (keyof Settings)[] },
+  { id: "options", label: "Program options", keys: Object.keys(DEFAULT_SETTINGS).filter((k) => !["keymap", "colors", "theme", "filterPresets", "openWith", "lastWorkspace", "workspaces"].includes(k)) as (keyof Settings)[] },
   { id: "colors", label: "Colors and theme", keys: ["theme", "colors", "uiFontSize", "editorFont", "editorFontSize"] },
   { id: "keymap", label: "Keyboard shortcuts", keys: ["keymap"] },
   { id: "presets", label: "Name filter presets", keys: ["filterPresets"] },
@@ -291,7 +291,7 @@ export function ProfilesDialog(props: { onClose: () => void; onDone: (msg: strin
       </div>
       <div class="opt-row">
         <input type="text" placeholder="New profile name" value={name()} onInput={(e) => setName(e.currentTarget.value)} />
-        <button disabled={!name().trim()} onClick={() => (store({ ...profiles(), [name().trim()]: { ...snapshotSettings(), lastWorkspace: [] } }), setSel(name().trim()), setName(""))}>
+        <button disabled={!name().trim()} onClick={() => (store({ ...profiles(), [name().trim()]: { ...snapshotSettings(), lastWorkspace: [], workspaces: {} } }), setSel(name().trim()), setName(""))}>
           Save Current As
         </button>
       </div>
@@ -302,7 +302,7 @@ export function ProfilesDialog(props: { onClose: () => void; onDone: (msg: strin
           class="primary"
           disabled={!sel()}
           onClick={() => {
-            replaceSettings({ ...profiles()[sel()], lastWorkspace: settings.lastWorkspace });
+            replaceSettings({ ...profiles()[sel()], lastWorkspace: settings.lastWorkspace, workspaces: settings.workspaces });
             props.onDone(`Profile “${sel()}” loaded`);
             props.onClose();
           }}
