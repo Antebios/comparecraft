@@ -1,9 +1,10 @@
 //! Folder comparison and synchronization.
 
 use crate::fileio::{make_backup, modified_ms, BackupSpec};
-use crate::quick::{crc32_file, files_binary_equal, rules_verdict, BINARY_SAME, RULES_SAME, SIMILAR};
+use crate::quick::{crc32_file, files_binary_equal, rules_verdict, BINARY_DIFFERENT, BINARY_SAME, RULES_SAME, SIMILAR};
 use crate::snapshot::{self, Snapshot};
 use serde::{Deserialize, Serialize};
+use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::io::{self, Read};
@@ -138,6 +139,17 @@ pub enum Status {
     Error,
 }
 
+/// Verdict of a content comparison of a file pair, shown in the center column.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum Content {
+    SameBinary,
+    Same,
+    Similar,
+    Different,
+    DifferentBinary,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Node {
@@ -158,6 +170,9 @@ pub struct Node {
     pub newer: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// Result of the content comparison, when the criteria compared contents.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content: Option<Content>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub children: Vec<Node>,
 }
@@ -175,6 +190,7 @@ impl Node {
             status,
             newer: None,
             error: None,
+            content: None,
             children: vec![],
         }
     }
@@ -514,6 +530,45 @@ pub(crate) fn open_source(path: &str) -> io::Result<Option<Loc>> {
     Ok(None)
 }
 
+/// Display order of names: letters and digits first, ignoring punctuation and spaces,
+/// then accents, then punctuation, then case (lower before upper).
+pub fn name_order(a: &str, b: &str) -> Ordering {
+    use unicode_normalization::char::is_combining_mark;
+    use unicode_normalization::UnicodeNormalization;
+    struct Keys {
+        primary: Vec<char>,
+        accents: Vec<String>,
+        punct: Vec<(bool, char)>,
+        case: Vec<bool>,
+    }
+    let keys = |s: &str| {
+        let mut k = Keys { primary: vec![], accents: vec![], punct: vec![], case: vec![] };
+        for c in s.nfd() {
+            if is_combining_mark(c) {
+                if let Some(last) = k.accents.last_mut() {
+                    last.push(c);
+                }
+                continue;
+            }
+            let lower = c.to_lowercase().next().unwrap_or(c);
+            if c.is_alphanumeric() {
+                k.primary.push(lower);
+                k.accents.push(String::new());
+            }
+            k.punct.push((c.is_alphanumeric(), lower));
+            k.case.push(c.is_uppercase());
+        }
+        k
+    };
+    let (x, y) = (keys(a), keys(b));
+    x.primary.cmp(&y.primary).then_with(|| x.accents.cmp(&y.accents)).then_with(|| x.punct.cmp(&y.punct)).then_with(|| x.case.cmp(&y.case)).then_with(|| a.cmp(b))
+}
+
+/// Folders first, then by display name order.
+fn entry_order(a: &(String, bool), b: &(String, bool)) -> Ordering {
+    b.1.cmp(&a.1).then_with(|| name_order(&a.0, &b.0))
+}
+
 struct Listing {
     entries: BTreeMap<(String, bool), (String, Meta)>,
 }
@@ -564,9 +619,10 @@ fn timesize(l: &Side, r: &Side, o: &FolderOptions) -> Status {
     if l.size == r.size && times_eq { Status::Same } else { Status::Diff }
 }
 
-/// Compares two files (`lf`/`rf` are the files themselves).
-fn compare_files(lf: &Loc, rf: &Loc, lm: &Meta, rm: &Meta, l: &Side, r: &Side, o: &FolderOptions) -> io::Result<Status> {
+/// Compares two files (`lf`/`rf` are the files themselves), with the content verdict when contents were compared.
+fn compare_files(lf: &Loc, rf: &Loc, lm: &Meta, rm: &Meta, l: &Side, r: &Side, o: &FolderOptions) -> io::Result<(Status, Option<Content>)> {
     let same_size = l.size == r.size;
+    let binary = |eq: bool| if eq { (Status::Same, Some(Content::SameBinary)) } else { (Status::Diff, Some(Content::DifferentBinary)) };
     let (lp, rp) = match (lf.disk(), rf.disk()) {
         (Some(lp), Some(rp)) => (lp, rp),
         // A snapshot side has no content: use CRCs when both are known, else size and time.
@@ -581,33 +637,36 @@ fn compare_files(lf: &Loc, rf: &Loc, lm: &Meta, rm: &Meta, l: &Side, r: &Side, o
             let has_crc = lm.crc.is_some() || rm.crc.is_some();
             if has_crc && matches!(o.criteria.as_str(), "crc" | "binary" | "rules") {
                 if !same_size {
-                    return Ok(Status::Diff);
+                    return Ok(binary(false));
                 }
                 if let (Some(a), Some(b)) = (crc(lf, lm)?, crc(rf, rm)?) {
-                    return Ok(if a == b { Status::Same } else { Status::Diff });
+                    return Ok(binary(a == b));
                 }
             }
-            return Ok(timesize(l, r, o));
+            return Ok((timesize(l, r, o), None));
         }
     };
     Ok(match o.criteria.as_str() {
-        "size" => if same_size { Status::Same } else { Status::Diff },
-        "binary" => if same_size && files_binary_equal(lp, rp)? { Status::Same } else { Status::Diff },
-        "crc" => if same_size && crc32_file(lp)? == crc32_file(rp)? { Status::Same } else { Status::Diff },
+        "size" => (if same_size { Status::Same } else { Status::Diff }, None),
+        "binary" => binary(same_size && files_binary_equal(lp, rp)?),
+        "crc" => binary(same_size && crc32_file(lp)? == crc32_file(rp)?),
         "rules" => {
             if same_size && files_binary_equal(lp, rp)? {
-                Status::Same
+                (Status::Same, Some(Content::SameBinary))
             } else if l.size > 32 * 1024 * 1024 || r.size > 32 * 1024 * 1024 {
-                Status::Diff
+                (Status::Diff, Some(Content::Different))
             } else {
                 match rules_verdict(&fs::read(lp)?, &fs::read(rp)?) {
-                    BINARY_SAME | RULES_SAME => Status::Same,
-                    SIMILAR => Status::Similar,
-                    _ => Status::Diff,
+                    BINARY_SAME => (Status::Same, Some(Content::SameBinary)),
+                    RULES_SAME => (Status::Same, Some(Content::Same)),
+                    SIMILAR => (Status::Similar, Some(Content::Similar)),
+                    // Binary content is compared byte for byte.
+                    BINARY_DIFFERENT => (Status::Diff, Some(Content::DifferentBinary)),
+                    _ => (Status::Diff, Some(Content::Different)),
                 }
             }
         }
-        _ => timesize(l, r, o),
+        _ => (timesize(l, r, o), None),
     })
 }
 
@@ -630,7 +689,9 @@ fn orphan_tree(parent: &Loc, rel: &str, name: &str, m: &Meta, left: bool, cx: &C
         let loc = parent.join(name);
         match list(&loc, rel, cx) {
             Ok(l) => {
-                for (_, (cname, cm)) in l.entries {
+                let mut entries: Vec<_> = l.entries.into_iter().collect();
+                entries.sort_by(|a, b| entry_order(&a.0, &b.0));
+                for (_, (cname, cm)) in entries {
                     let crel = format!("{rel}/{cname}");
                     node.children.push(orphan_tree(&loc, &crel, &cname, &cm, left, cx, sum));
                 }
@@ -660,7 +721,7 @@ fn compare_dirs(lp: &Loc, rp: &Loc, rel: &str, cx: &Ctx, sum: &mut Summary) -> i
     }
     let hidden: Vec<&(String, bool)> = aligned.values().collect();
     let mut keys: Vec<(String, bool)> = ll.entries.keys().chain(rl.entries.keys().filter(|k| !hidden.contains(k))).cloned().collect();
-    keys.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.to_lowercase().cmp(&b.0.to_lowercase())).then_with(|| a.0.cmp(&b.0)));
+    keys.sort_by(entry_order);
     keys.dedup();
     let mut out = Vec::new();
     for key in keys {
@@ -706,9 +767,9 @@ fn pair_node(lp: &Loc, rp: &Loc, crel: &str, ln: &str, lm: &Meta, rn: &str, rm: 
         node
     } else {
         sum.files += 1;
-        let (status, error) = match compare_files(&lp.join(ln), &rp.join(rn), lm, rm, &ls, &rs, o) {
-            Ok(s) => (s, None),
-            Err(e) => (Status::Error, Some(e.to_string())),
+        let (status, content, error) = match compare_files(&lp.join(ln), &rp.join(rn), lm, rm, &ls, &rs, o) {
+            Ok((s, c)) => (s, c, None),
+            Err(e) => (Status::Error, None, Some(e.to_string())),
         };
         match status {
             Status::Same => sum.same += 1,
@@ -721,6 +782,7 @@ fn pair_node(lp: &Loc, rp: &Loc, crel: &str, ln: &str, lm: &Meta, rn: &str, rm: 
         node.left = Some(ls);
         node.right = Some(rs);
         node.error = error;
+        node.content = content;
         node
     }
 }
@@ -855,7 +917,7 @@ fn compare_flat(left: &Loc, right: &Loc, cx: &Ctx, sum: &mut Summary) -> io::Res
         node.rel = rel;
         out.push(node);
     }
-    out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()).then_with(|| a.rel.cmp(&b.rel)));
+    out.sort_by(|a, b| name_order(&a.name, &b.name).then_with(|| a.rel.cmp(&b.rel)));
     Ok(out)
 }
 
@@ -1221,6 +1283,13 @@ fn remove(p: &Path, use_trash: bool) -> io::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn name_order_ignores_punctuation_then_accents_then_case() {
+        let mut v = vec!["9.txt", "b.txt", "a.txt", "Ä.txt", "a-c.txt", "ab.txt", "a_b.txt", "A2.txt", "10.txt", "x.y.w", "xy", "Zeta.txt", "zeta2.txt", "b c.txt"];
+        v.sort_by(|a, b| super::name_order(a, b));
+        assert_eq!(v, ["10.txt", "9.txt", "A2.txt", "a_b.txt", "ab.txt", "a-c.txt", "a.txt", "Ä.txt", "b c.txt", "b.txt", "xy", "x.y.w", "zeta2.txt", "Zeta.txt"]);
+    }
+
     use super::*;
     use std::time::{Duration, SystemTime};
 

@@ -41,6 +41,7 @@ regex = "1"
 tauri-plugin-clipboard-manager = "2"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "bmp", "tiff", "webp", "ico", "tga", "pnm", "qoi"] }
 chrono = "0.4.45"
+unicode-normalization = "0.1"
 
 [dev-dependencies]
 tempfile = "3"

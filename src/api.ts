@@ -170,6 +170,8 @@ export interface Alignment {
   right: string;
 }
 export type Status = "same" | "similar" | "diff" | "left" | "right" | "error";
+/** Verdict of a content comparison of a file pair. */
+export type ContentVerdict = "sameBinary" | "same" | "similar" | "different" | "differentBinary";
 export interface Side {
   name: string;
   size: number;
@@ -184,6 +186,8 @@ export interface FNode {
   status: Status;
   newer?: "left" | "right";
   error?: string;
+  /** Set when the criteria compared the files' contents. */
+  content?: ContentVerdict;
   children?: FNode[];
   /** Ignore folder structure: each side's relative path. */
   leftPath?: string;

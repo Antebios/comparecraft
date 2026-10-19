@@ -1,7 +1,7 @@
 //! Plain text, XML and HTML reports of file and folder comparisons (used by scripts).
 
 use crate::diff::{self, Kind, Row};
-use crate::folder::{FolderOptions, Node, OtherFilter, Status};
+use crate::folder::{Content, FolderOptions, Node, OtherFilter, Status};
 use serde::Deserialize;
 use std::cell::RefCell;
 use crate::{fileio, hex, pix, quick, table};
@@ -1161,7 +1161,7 @@ pub enum FClass {
 
 pub fn file_class(n: &Node, timesize: bool) -> FClass {
     match n.status {
-        Status::Same | Status::Similar => FClass::Same,
+        Status::Same => FClass::Same,
         Status::Left => FClass::LOrphan,
         Status::Right => FClass::ROrphan,
         Status::Diff if timesize && n.newer.as_deref() == Some("left") => FClass::LNewer,
@@ -1275,8 +1275,17 @@ struct Vis<'a> {
     children: Vec<Vis<'a>>,
 }
 
+/// An orphan folder is itself an orphan item, shown even when empty.
+fn orphan_dir(n: &Node, accept: &[FClass]) -> bool {
+    match n.status {
+        Status::Left => accept.contains(&FClass::LOrphan),
+        Status::Right => accept.contains(&FClass::ROrphan),
+        _ => false,
+    }
+}
+
 fn has_accepted(n: &Node, accept: &[FClass], timesize: bool) -> bool {
-    n.children.iter().any(|c| if c.dir { has_accepted(c, accept, timesize) } else { accept.contains(&file_class(c, timesize)) })
+    n.children.iter().any(|c| if c.dir { orphan_dir(c, accept) || has_accepted(c, accept, timesize) } else { accept.contains(&file_class(c, timesize)) })
 }
 
 fn visible<'a>(n: &'a Node, lp: Option<&Path>, rp: Option<&Path>, cx: &FolderCtx, accept: &[FClass], all: bool) -> Vec<Vis<'a>> {
@@ -1285,7 +1294,7 @@ fn visible<'a>(n: &'a Node, lp: Option<&Path>, rp: Option<&Path>, cx: &FolderCtx
         let lpath = c.left.as_ref().and_then(|s| lp.map(|p| p.join(&s.name)));
         let rpath = c.right.as_ref().and_then(|s| rp.map(|p| p.join(&s.name)));
         if c.dir {
-            if !all && !has_accepted(c, accept, cx.timesize) {
+            if !all && !orphan_dir(c, accept) && !has_accepted(c, accept, cx.timesize) {
                 continue;
             }
             let children = if (cx.expanded)(&c.rel) { visible(c, lpath.as_deref(), rpath.as_deref(), cx, accept, all) } else { vec![] };
@@ -1339,15 +1348,16 @@ fn connectors(items: &[Vis], depth: usize, anc: [&[bool]; 2], out: &mut Vec<[Vec
             let present = |n: &Node| if left { n.left.is_some() } else { n.right.is_some() };
             next[s] = anc[s].to_vec();
             if depth >= 2 {
-                let own = if !present(v.node) {
-                    Conn::None
-                } else if items[i + 1..].iter().any(|x| present(x.node)) {
-                    Conn::T
-                } else {
-                    Conn::L
+                let later = items[i + 1..].iter().any(|x| present(x.node));
+                // A missing item still shows the line running on to its later siblings.
+                let own = match (present(v.node), later) {
+                    (true, true) => Conn::T,
+                    (true, false) => Conn::L,
+                    (false, true) => Conn::I,
+                    (false, false) => Conn::None,
                 };
                 row[s] = anc[s].iter().map(|&c| if c { Conn::I } else { Conn::None }).chain(std::iter::once(own)).collect();
-                next[s].push(own == Conn::T);
+                next[s].push(later);
             }
         }
         out.push(row);
@@ -1410,7 +1420,7 @@ fn side_values(n: &Node, path: Option<&Path>, left: bool, cols: &[Col]) -> Optio
     Some(
         cols.iter()
             .map(|c| match c {
-                Col::Size => if n.dir { side_tree_files(n, left).0 } else { side.size }.to_string(),
+                Col::Size => thousands(if n.dir { side_tree_files(n, left).0 } else { side.size }),
                 Col::Crc => {
                     if n.dir {
                         if side_tree_files(n, left).1 > 0 { String::new() } else { "00000000".into() }
@@ -1423,6 +1433,19 @@ fn side_values(n: &Node, path: Option<&Path>, left: bool, cols: &[Col]) -> Optio
             })
             .collect(),
     )
+}
+
+/// A byte count with comma thousands separators.
+pub fn thousands(n: u64) -> String {
+    let digits = n.to_string();
+    let mut out = String::new();
+    for (i, ch) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(ch);
+    }
+    out
 }
 
 fn pad_col(v: &str, c: Col, w: usize) -> String {
@@ -1484,8 +1507,9 @@ fn folder_sbs(spec: &ReportSpec, cx: &FolderCtx) -> Vec<String> {
     let join = |c: &[String], w: &[usize]| -> String {
         c.iter().enumerate().map(|(i, v)| if i == 0 { format!("{v:<w$}", w = w[0]) } else { pad_col(v, cols[i - 1], w[i]) }).collect::<Vec<_>>().join(" ")
     };
-    let label_cells: Vec<String> = labels.iter().map(|s| s.to_string()).collect();
-    let (hl, hr) = (join(&label_cells, &wl), join(&label_cells, &wr));
+    // Column labels are all left-aligned.
+    let head = |w: &[usize]| -> String { labels.iter().zip(w).map(|(l, &w)| format!("{l:<w$}")).collect::<Vec<_>>().join(" ") };
+    let (hl, hr) = (head(&wl), head(&wr));
     let (lw, rw) = (chars(&hl), chars(&hr));
     let mw = flat.iter().map(|(v, _)| class_marker(v.class).len()).max().unwrap_or(0);
     let dash = "-".repeat(lw + 1 + mw + 1 + rw);
@@ -1558,11 +1582,11 @@ fn folder_summary(spec: &ReportSpec, cx: &FolderCtx) -> Vec<String> {
             vals.chain(std::iter::once(col_label(c).len())).max().unwrap_or(0)
         })
         .collect();
-    let row = |name: &str, vals: &[String]| -> String {
+    let row = |name: &str, vals: &[String], head: bool| -> String {
         let mut s = format!("{name:<nw$}");
         for (i, v) in vals.iter().enumerate() {
             s.push(' ');
-            s.push_str(&pad_col(v, cols[i], cw[i]));
+            s.push_str(&if head { format!("{v:<w$}", w = cw[i]) } else { pad_col(v, cols[i], cw[i]) });
         }
         s.trim_end().to_string()
     };
@@ -1571,13 +1595,13 @@ fn folder_summary(spec: &ReportSpec, cx: &FolderCtx) -> Vec<String> {
     let mut out = folder_header(spec, cx, mode);
     for (title, entries) in &shown {
         out.push(String::new());
-        out.push(row(title, &labels));
+        out.push(row(title, &labels, true));
         out.push(dash.clone());
         for e in entries {
-            out.push(row(&e.0, &e.1));
+            out.push(row(&e.0, &e.1, false));
             if let Some(s) = &e.2 {
                 if !cols.is_empty() {
-                    out.push(row("", s));
+                    out.push(row("", s, false));
                 }
             }
         }
@@ -1603,7 +1627,7 @@ fn folder_xml(spec: &ReportSpec, cx: &FolderCtx) -> Vec<String> {
         let size = if n.dir { side_tree_files(n, left).0 } else { s.size };
         out.push(format!("{ind}<{tag}>"));
         out.push(format!("{ind}\t<name>{}</name>", xml_escape(&s.name)));
-        out.push(format!("{ind}\t<size>{size}</size>"));
+        out.push(format!("{ind}\t<size>{}</size>", thousands(size)));
         out.push(format!("{ind}\t<modified>{}</modified>", s.modified.map(fmt_time).unwrap_or_default()));
         out.push(format!("{ind}</{tag}>"));
     }

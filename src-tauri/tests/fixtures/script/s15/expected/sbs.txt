@@ -1,0 +1,57 @@
+Folder Compare
+Produced: <TS>
+
+Mode:  All
+Left base folder: @ROOT@/L5
+Right base folder: @ROOT@/R5
+Name             Size  Modified                  Name             Size  Modified
+----------------------------------------------------------------------------------------------
+names               50 <TS>
++dira                0 <TS>
++dirB                0 <TS>
++10.txt              2 <TS> >>
++9.txt               2 <TS> >>
++A2.txt              2 <TS> >>
++a_b.txt             2 <TS> >>
++ab.txt              2 <TS> >>
++a-c.txt             2 <TS> >>
++a.txt               2 <TS> >>
++Ä.txt               2 <TS> >>
++b1.txt              2 <TS> >>
++b-a.txt             2 <TS> >>
++bb.txt              2 <TS> >>
++b c.txt             2 <TS> >>
++b.txt               2 <TS> >>
++e.txt               2 <TS> >>
++é.txt               2 <TS> >>
++f.txt               2 <TS> >>
++#h                  2 <TS> >>
++.hidden             2 <TS> >>
++(p)                 2 <TS> >>
++~x.txt              2 <TS> >>
++xy                  2 <TS> >>
++x.y.w               2 <TS> >>
++_y.txt              2 <TS> >>
++zeta2.txt           2 <TS> >>
+\Zeta.txt            2 <TS> >>
+sub                 10 <TS>    sub                 10 <TS>
++deep                2 <TS>    +deep                4 <TS>
+|\d1.txt             2 <TS> =  |+d1.txt             2 <TS>
+|                                             << |\e2.txt             2 <TS>
++a.txt               2 <TS> =  +a.txt               2 <TS>
++b.txt               2 <TS> >> |
++c.txt               2 <TS> >> |
+|                                             << +m.txt               2 <TS>
+|                                             << \n.txt               2 <TS>
+\z.txt               2 <TS> >>
+big.bin          1,234 <TS> <> big.bin          1,230 <TS>
+crlf.txt             8 <TS> =  crlf.txt            10 <TS>
+diffsamesize.txt     8 <TS> <> diffsamesize.txt     8 <TS>
+diffsize.txt         6 <TS> <> diffsize.txt        17 <TS>
+lonly.txt            5 <TS> >>
+                                              << ronly.txt            5 <TS>
+rulessz.txt          5 <TS> <> rulessz.txt          7 <TS>
+rules.txt            6 <TS> <> rules.txt            8 <TS>
+samecontent.txt      8 <TS> =  samecontent.txt      8 <TS>
+same.txt            12 <TS> =  same.txt            12 <TS>
+----------------------------------------------------------------------------------------------

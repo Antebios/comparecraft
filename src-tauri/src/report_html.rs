@@ -300,63 +300,136 @@ fn png(w: u32, h: u32, f: impl Fn(u32, u32) -> [u8; 4]) -> Vec<u8> {
 }
 
 const CLEAR: [u8; 4] = [0, 0, 0, 0];
-const LINE: [u8; 4] = [128, 128, 128, 255];
+const BLACK: [u8; 4] = [0, 0, 0, 255];
+const WHITE: [u8; 4] = [255, 255, 255, 255];
 
-fn icon(name: &str) -> Vec<u8> {
+fn shade(c: [u8; 3], f: f32) -> [u8; 4] {
+    let ch = |v: u8| if f >= 1.0 { (v as f32 + (255.0 - v as f32) * (f - 1.0)).round() as u8 } else { (v as f32 * f).round() as u8 };
+    [ch(c[0]), ch(c[1]), ch(c[2]), 255]
+}
+
+/// A 16x16 folder: closed, or open with its front flap tilted forward.
+fn folder_icon(state: &str, open: bool, mono: bool) -> Vec<u8> {
+    // (fill, outline); `None` fill draws a hollow folder.
+    let (fill, edge): (Option<[u8; 3]>, [u8; 3]) = match (state, mono) {
+        ("Same", _) => (Some([0x60, 0x60, 0x60]), [0x14, 0x14, 0x14]),
+        (_, true) => (None, [0x80, 0x80, 0x80]),
+        ("Diff" | "Newer", _) => (Some([0xf0, 0x70, 0x70]), [0x5b, 0x37, 0x37]),
+        ("Orphan", _) => (Some([0x98, 0x50, 0xe0]), [0x3a, 0x1c, 0x5a]),
+        _ => (Some([0xa8, 0xa8, 0xa8]), [0x50, 0x50, 0x50]),
+    };
+    let edge = [edge[0], edge[1], edge[2], 255];
+    let body = move |y: u32| match fill {
+        Some(c) => shade(c, 1.25 - y as f32 * 0.04),
+        None => CLEAR,
+    };
+    png(16, 16, move |x, y| {
+        let (x, y) = (x as i32, y as i32);
+        // Tab across the top left, then the back panel.
+        if (1..=3).contains(&y) && x <= 6 - (y == 1) as i32 {
+            return if y == 1 || x == 0 || x == 6 - (y == 1) as i32 { edge } else { body(y as u32) };
+        }
+        if !open {
+            if !(3..=13).contains(&y) || x > 14 {
+                return CLEAR;
+            }
+            return if y == 13 || x == 0 || x == 14 || (y == 3 && x >= 6) || y == 4 { edge } else { body(y as u32) };
+        }
+        if (3..=5).contains(&y) && x <= 13 {
+            return if x == 0 || x == 13 || (y == 3 && x >= 6) { edge } else { body(y as u32 + 2) };
+        }
+        // Front flap: a parallelogram leaning right by one pixel every two rows.
+        if (5..=13).contains(&y) {
+            let lean = (13 - y) / 2;
+            let (l, r) = (lean, 13 + lean.min(2));
+            if x == 0 && y < 13 {
+                return edge;
+            }
+            if x < l || x > r {
+                return CLEAR;
+            }
+            return if y == 5 || y == 13 || x == l || x == r { edge } else { body(y as u32 + 2) };
+        }
+        CLEAR
+    })
+}
+
+/// A 28x16 content comparison glyph: optional "01" binary mark and the verdict sign.
+fn content_icon(kind: &str, mono: bool) -> Vec<u8> {
+    let binary = kind.ends_with("Binary");
+    let sign = kind.trim_start_matches("Content").trim_end_matches("Binary");
+    let gray = [0x80, 0x80, 0x80, 255];
+    let ink = match (sign, mono) {
+        ("Different", false) => [0xff, 0, 0, 255],
+        ("Different", true) => [0x55, 0x55, 0x55, 255],
+        ("Similar", _) => [0x84, 0x84, 0x84, 255],
+        _ => BLACK,
+    };
+    let glyph = move |x: i32, y: i32| -> bool {
+        let bar = |y0: i32| (11..=18).contains(&x) && (y0..=y0 + 1).contains(&y);
+        match sign {
+            "Same" => bar(5) || bar(8),
+            "Different" => bar(5) || bar(8) || (3..=11).contains(&y) && x == 17 - (y - 3) / 2,
+            // Two tildes, each two pixels thick.
+            _ => {
+                const OFF: [i32; 8] = [0, -1, -1, 0, 0, 1, 1, 0];
+                let wave = |y0: i32| (11..=18).contains(&x) && (0..=1).contains(&(y - y0 - OFF[(x - 11) as usize]));
+                wave(5) || wave(8)
+            }
+        }
+    };
+    png(28, 16, move |x, y| {
+        let (x, y) = (x as i32, y as i32);
+        if glyph(x, y) {
+            return ink;
+        }
+        if (-1..=1).any(|dx| (-1..=1).any(|dy| glyph(x + dx, y + dy))) {
+            return WHITE;
+        }
+        if binary {
+            let zero = (1..=4).contains(&x) && (4..=12).contains(&y) && (x == 1 || x == 4 || y == 4 || y == 12);
+            let one = (x == 7 && (4..=12).contains(&y)) || (x == 6 && y == 5) || (y == 12 && (6..=8).contains(&x));
+            if zero || one {
+                return gray;
+            }
+        }
+        CLEAR
+    })
+}
+
+fn icon(name: &str, mono: bool) -> Vec<u8> {
     match name {
-        "LINE_I" => png(12, 20, |x, _| if x == 5 { LINE } else { CLEAR }),
-        "LINE_T" => png(12, 20, |x, y| if x == 5 || (y == 10 && x > 5) { LINE } else { CLEAR }),
-        "LINE_L" => png(12, 20, |x, y| if (x == 5 && y <= 10) || (y == 10 && x > 5) { LINE } else { CLEAR }),
+        "LINE_I" => png(12, 20, |x, _| if x == 5 { BLACK } else { CLEAR }),
+        "LINE_T" => png(12, 20, |x, y| if x == 5 || (y == 10 && (6..=10).contains(&x)) { BLACK } else { CLEAR }),
+        "LINE_L" => png(12, 20, |x, y| if (x == 5 && y <= 10) || (y == 10 && (6..=10).contains(&x)) { BLACK } else { CLEAR }),
         "LINE_NONE" => png(12, 20, |_, _| CLEAR),
         "BOX_PLUS" | "BOX_MINUS" => {
             let plus = name == "BOX_PLUS";
             png(10, 20, move |x, y| {
-                let (bx, by) = (x as i32, y as i32 - 6);
+                let (bx, by) = (x as i32, y as i32 - 5);
                 if !(0..9).contains(&bx) || !(0..9).contains(&by) {
                     CLEAR
-                } else if bx == 0 || bx == 8 || by == 0 || by == 8 {
-                    LINE
-                } else if (by == 4 && (2..=6).contains(&bx)) || (plus && bx == 4 && (2..=6).contains(&by)) {
-                    [0, 0, 0, 255]
+                } else if bx == 0 || bx == 8 || by == 0 || by == 8 || (by == 4 && (2..=6).contains(&bx)) || (plus && bx == 4 && (2..=6).contains(&by)) {
+                    BLACK
                 } else {
-                    [255, 255, 255, 255]
+                    CLEAR
                 }
             })
         }
         "TableHeaderSigMod" | "TableHeaderSigAdd" => {
             let fill = if name == "TableHeaderSigMod" { [230, 60, 60, 255] } else { [150, 80, 220, 255] };
-            png(10, 10, move |x, y| if x == 0 || y == 0 || x == 9 || y == 9 { [255, 255, 255, 255] } else { fill })
+            png(10, 10, move |x, y| if x == 0 || y == 0 || x == 9 || y == 9 { WHITE } else { fill })
         }
-        n if n.starts_with("Dir") => {
-            let open = n.ends_with("Expanded");
-            let state = n.trim_start_matches("Dir").trim_end_matches("Expanded");
-            let fill: [u8; 4] = match state {
-                "Diff" => [235, 80, 80, 255],
-                "Orphan" => [170, 110, 230, 255],
-                "Newer" => [235, 80, 80, 255],
-                "Older" => [170, 170, 170, 255],
-                _ => [235, 200, 90, 255],
-            };
-            png(16, 16, move |x, y| {
-                let edge = [90, 70, 40, 255];
-                let tab = (1..=6).contains(&x) && (2..=3).contains(&y);
-                let body = (1..=14).contains(&x) && (4..=13).contains(&y);
-                if tab || (body && (x == 1 || x == 14 || y == 4 || y == 13)) {
-                    edge
-                } else if body {
-                    if open && y >= 7 { [fill[0].saturating_add(20), fill[1].saturating_add(20), fill[2].saturating_add(20), 255] } else { fill }
-                } else {
-                    CLEAR
-                }
-            })
-        }
+        n if n.starts_with("Content") => content_icon(n, mono),
+        n if n.starts_with("Dir") => folder_icon(n.trim_start_matches("Dir").trim_end_matches("Expanded"), n.ends_with("Expanded"), mono),
         _ => vec![],
     }
 }
 
 fn attach_icons(doc: &mut Doc, names: &[&str]) {
     for n in names {
-        doc.attach(&format!("BcImages/{n}.png"), icon(n));
+        let data = icon(n, doc.mono);
+        doc.attach(&format!("BcImages/{n}.png"), data);
     }
 }
 
@@ -939,6 +1012,16 @@ fn link_report(spec: &ReportSpec, v: &Vis, doc: &mut Doc) -> Option<String> {
     Some(name)
 }
 
+fn content_icon_name(c: Content) -> &'static str {
+    match c {
+        Content::SameBinary => "ContentSameBinary",
+        Content::Same => "ContentSame",
+        Content::Similar => "ContentSimilar",
+        Content::Different => "ContentDifferent",
+        Content::DifferentBinary => "ContentDifferentBinary",
+    }
+}
+
 pub(super) fn folder_sbs(spec: &ReportSpec, cx: &FolderCtx) -> Output {
     let (accept, mode) = folder_display(spec);
     let cols = folder_columns(spec);
@@ -952,7 +1035,8 @@ pub(super) fn folder_sbs(spec: &ReportSpec, cx: &FolderCtx) -> Output {
     attach_icons(&mut doc, &FOLDER_ICONS);
     if links {
         for n in FOLDER_ICONS.iter().chain(&TABLE_ICONS) {
-            doc.attach(&format!("BcFiles/BcImages/{n}.png"), icon(n));
+            let data = icon(n, doc.mono);
+            doc.attach(&format!("BcFiles/BcImages/{n}.png"), data);
         }
     }
     let mut header = vec![cell("DirItemHeader", "Name")];
@@ -973,7 +1057,8 @@ pub(super) fn folder_sbs(spec: &ReportSpec, cx: &FolderCtx) -> Output {
                     let name = html_escape(&s.name);
                     if v.node.dir {
                         let icon_name = format!("Dir{}{}", dir_state(v.node, left, cx.timesize).name(), if (cx.expanded)(&v.node.rel) { "Expanded" } else { "" });
-                        doc.attach(&format!("BcImages/{icon_name}.png"), icon(&icon_name));
+                        let data = icon(&icon_name, doc.mono);
+                        doc.attach(&format!("BcImages/{icon_name}.png"), data);
                         let img = format!("<img src=\"BcImages/{icon_name}.png\" width=\"16\" height=\"16\" alt=\"<DIR>\" align=\"middle\">");
                         row.push(cell("DirItemDefault AlignLeft", format!("{prefix}{img} {name}")));
                         for (k, val) in vals.iter().enumerate() {
@@ -1000,7 +1085,15 @@ pub(super) fn folder_sbs(spec: &ReportSpec, cx: &FolderCtx) -> Output {
                 }
             }
             if left {
-                row.push(nbsp("DirItemDefault AlignLeft"));
+                match v.node.content.filter(|_| !v.node.dir) {
+                    Some(c) => {
+                        let name = content_icon_name(c);
+                        let data = icon(name, doc.mono);
+                        doc.attach(&format!("BcImages/{name}.png"), data);
+                        row.push(cell("DirItemDefault AlignLeft", format!("<img src=\"BcImages/{name}.png\" width=\"28\" height=\"16\" alt=\"<CC>\" align=\"middle\"> ")));
+                    }
+                    None => row.push(nbsp("DirItemDefault AlignLeft")),
+                }
             }
         }
         rows.push(row);
@@ -1016,7 +1109,6 @@ pub(super) fn folder_summary(spec: &ReportSpec, cx: &FolderCtx, groups: Vec<(Str
     let cols = folder_columns(spec);
     let mut doc = Doc::new(spec, "Folder Compare", Css::Dir);
     doc.mono = true;
-    attach_icons(&mut doc, &FOLDER_ICONS);
     let mut table = vec![];
     for (title, entries) in groups {
         let mut h = vec![cell("DirItemHeader", conv(&title, true, true))];
@@ -1046,6 +1138,28 @@ pub(super) fn folder_summary(spec: &ReportSpec, cx: &FolderCtx, groups: Vec<(Str
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn icon_sizes() {
+        let size = |n: &str, mono: bool| {
+            let img = image::load_from_memory(&icon(n, mono)).unwrap();
+            (img.width(), img.height())
+        };
+        for mono in [false, true] {
+            for n in ["ContentSameBinary", "ContentSame", "ContentSimilar", "ContentDifferent", "ContentDifferentBinary"] {
+                assert_eq!(size(n, mono), (28, 16), "{n}");
+            }
+            for n in ["DirSame", "DirDiffExpanded", "DirNewerExpanded", "DirOlder", "DirOrphanExpanded"] {
+                assert_eq!(size(n, mono), (16, 16), "{n}");
+            }
+            for n in ["LINE_I", "LINE_T", "LINE_L", "LINE_NONE"] {
+                assert_eq!(size(n, mono), (12, 20), "{n}");
+            }
+        }
+        // The mono palette draws the "different" sign in gray instead of red.
+        assert_ne!(icon("ContentDifferent", false), icon("ContentDifferent", true));
+        assert_eq!(icon("ContentSame", false), icon("ContentSame", true));
+    }
 
     #[test]
     fn space_runs() {

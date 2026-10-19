@@ -13,6 +13,7 @@ import {
   type FolderOptions,
   type FolderResult,
   type Status,
+  type ContentVerdict,
   type Summary,
   type ViewKind,
   type ReportRequest,
@@ -954,11 +955,18 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
       setBusy(false);
     }
     const st = (c: number): Status => (c === 1 || c === 2 ? "same" : c === 12 ? "similar" : c === 11 || c === 13 ? "diff" : "error");
+    const verdict = (c: number): ContentVerdict | undefined => {
+      if (c === 1) return "sameBinary";
+      if (c !== 2 && c !== 11 && c !== 12 && c !== 13) return undefined;
+      if (c === 11 || mode !== "rules") return "differentBinary";
+      return c === 2 ? "same" : c === 12 ? "similar" : "different";
+    };
     patchTree((byRel) => {
       for (const { rel, code } of codes) {
         const n = byRel.get(rel);
         if (!n) continue;
         n.status = st(code);
+        n.content = verdict(code);
         n.newer = n.status === "diff" ? n.newer ?? ((n.left!.modified ?? 0) > (n.right!.modified ?? 0) ? "left" : (n.right!.modified ?? 0) > (n.left!.modified ?? 0) ? "right" : undefined) : undefined;
       }
     });

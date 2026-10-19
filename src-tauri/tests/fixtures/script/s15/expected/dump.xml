@@ -1,0 +1,403 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bcreport created="<TS>">
+	<foldercomp>
+		<ltpath>@ROOT@/L5</ltpath>
+		<rtpath>@ROOT@/R5</rtpath>
+		<foldercomp>
+			<lt>
+				<name>names</name>
+				<size>50</size>
+				<modified><TS></modified>
+			</lt>
+			<foldercomp>
+				<lt>
+					<name>dira</name>
+					<size>0</size>
+					<modified><TS></modified>
+				</lt>
+			</foldercomp>
+			<foldercomp>
+				<lt>
+					<name>dirB</name>
+					<size>0</size>
+					<modified><TS></modified>
+				</lt>
+			</foldercomp>
+			<filecomp status="ltonly">
+				<lt>
+					<name>10.txt</name>
+					<size>2</size>
+					<modified><TS></modified>
+				</lt>
+			</filecomp>
+			<filecomp status="ltonly">
+				<lt>
+					<name>9.txt</name>
+					<size>2</size>
+					<modified><TS></modified>
+				</lt>
+			</filecomp>
+			<filecomp status="ltonly">
+				<lt>
+					<name>A2.txt</name>
+					<size>2</size>
+					<modified><TS></modified>
+				</lt>
+			</filecomp>
+			<filecomp status="ltonly">
+				<lt>
+					<name>a_b.txt</name>
+					<size>2</size>
+					<modified><TS></modified>
+				</lt>
+			</filecomp>
+			<filecomp status="ltonly">
+				<lt>
+					<name>ab.txt</name>
+					<size>2</size>
+					<modified><TS></modified>
+				</lt>
+			</filecomp>
+			<filecomp status="ltonly">
+				<lt>
+					<name>a-c.txt</name>
+					<size>2</size>
+					<modified><TS></modified>
+				</lt>
+			</filecomp>
+			<filecomp status="ltonly">
+				<lt>
+					<name>a.txt</name>
+					<size>2</size>
+					<modified><TS></modified>
+				</lt>
+			</filecomp>
+			<filecomp status="ltonly">
+				<lt>
+					<name>Ä.txt</name>
+					<size>2</size>
+					<modified><TS></modified>
+				</lt>
+			</filecomp>
+			<filecomp status="ltonly">
+				<lt>
+					<name>b1.txt</name>
+					<size>2</size>
+					<modified><TS></modified>
+				</lt>
+			</filecomp>
+			<filecomp status="ltonly">
+				<lt>
+					<name>b-a.txt</name>
+					<size>2</size>
+					<modified><TS></modified>
+				</lt>
+			</filecomp>
+			<filecomp status="ltonly">
+				<lt>
+					<name>bb.txt</name>
+					<size>2</size>
+					<modified><TS></modified>
+				</lt>
+			</filecomp>
+			<filecomp status="ltonly">
+				<lt>
+					<name>b c.txt</name>
+					<size>2</size>
+					<modified><TS></modified>
+				</lt>
+			</filecomp>
+			<filecomp status="ltonly">
+				<lt>
+					<name>b.txt</name>
+					<size>2</size>
+					<modified><TS></modified>
+				</lt>
+			</filecomp>
+			<filecomp status="ltonly">
+				<lt>
+					<name>e.txt</name>
+					<size>2</size>
+					<modified><TS></modified>
+				</lt>
+			</filecomp>
+			<filecomp status="ltonly">
+				<lt>
+					<name>é.txt</name>
+					<size>2</size>
+					<modified><TS></modified>
+				</lt>
+			</filecomp>
+			<filecomp status="ltonly">
+				<lt>
+					<name>f.txt</name>
+					<size>2</size>
+					<modified><TS></modified>
+				</lt>
+			</filecomp>
+			<filecomp status="ltonly">
+				<lt>
+					<name>#h</name>
+					<size>2</size>
+					<modified><TS></modified>
+				</lt>
+			</filecomp>
+			<filecomp status="ltonly">
+				<lt>
+					<name>.hidden</name>
+					<size>2</size>
+					<modified><TS></modified>
+				</lt>
+			</filecomp>
+			<filecomp status="ltonly">
+				<lt>
+					<name>(p)</name>
+					<size>2</size>
+					<modified><TS></modified>
+				</lt>
+			</filecomp>
+			<filecomp status="ltonly">
+				<lt>
+					<name>~x.txt</name>
+					<size>2</size>
+					<modified><TS></modified>
+				</lt>
+			</filecomp>
+			<filecomp status="ltonly">
+				<lt>
+					<name>xy</name>
+					<size>2</size>
+					<modified><TS></modified>
+				</lt>
+			</filecomp>
+			<filecomp status="ltonly">
+				<lt>
+					<name>x.y.w</name>
+					<size>2</size>
+					<modified><TS></modified>
+				</lt>
+			</filecomp>
+			<filecomp status="ltonly">
+				<lt>
+					<name>_y.txt</name>
+					<size>2</size>
+					<modified><TS></modified>
+				</lt>
+			</filecomp>
+			<filecomp status="ltonly">
+				<lt>
+					<name>zeta2.txt</name>
+					<size>2</size>
+					<modified><TS></modified>
+				</lt>
+			</filecomp>
+			<filecomp status="ltonly">
+				<lt>
+					<name>Zeta.txt</name>
+					<size>2</size>
+					<modified><TS></modified>
+				</lt>
+			</filecomp>
+		</foldercomp>
+		<foldercomp>
+			<lt>
+				<name>sub</name>
+				<size>10</size>
+				<modified><TS></modified>
+			</lt>
+			<rt>
+				<name>sub</name>
+				<size>10</size>
+				<modified><TS></modified>
+			</rt>
+			<foldercomp>
+				<lt>
+					<name>deep</name>
+					<size>2</size>
+					<modified><TS></modified>
+				</lt>
+				<rt>
+					<name>deep</name>
+					<size>4</size>
+					<modified><TS></modified>
+				</rt>
+				<filecomp status="same">
+					<lt>
+						<name>d1.txt</name>
+						<size>2</size>
+						<modified><TS></modified>
+					</lt>
+					<rt>
+						<name>d1.txt</name>
+						<size>2</size>
+						<modified><TS></modified>
+					</rt>
+				</filecomp>
+				<filecomp status="rtonly">
+					<rt>
+						<name>e2.txt</name>
+						<size>2</size>
+						<modified><TS></modified>
+					</rt>
+				</filecomp>
+			</foldercomp>
+			<filecomp status="same">
+				<lt>
+					<name>a.txt</name>
+					<size>2</size>
+					<modified><TS></modified>
+				</lt>
+				<rt>
+					<name>a.txt</name>
+					<size>2</size>
+					<modified><TS></modified>
+				</rt>
+			</filecomp>
+			<filecomp status="ltonly">
+				<lt>
+					<name>b.txt</name>
+					<size>2</size>
+					<modified><TS></modified>
+				</lt>
+			</filecomp>
+			<filecomp status="ltonly">
+				<lt>
+					<name>c.txt</name>
+					<size>2</size>
+					<modified><TS></modified>
+				</lt>
+			</filecomp>
+			<filecomp status="rtonly">
+				<rt>
+					<name>m.txt</name>
+					<size>2</size>
+					<modified><TS></modified>
+				</rt>
+			</filecomp>
+			<filecomp status="rtonly">
+				<rt>
+					<name>n.txt</name>
+					<size>2</size>
+					<modified><TS></modified>
+				</rt>
+			</filecomp>
+			<filecomp status="ltonly">
+				<lt>
+					<name>z.txt</name>
+					<size>2</size>
+					<modified><TS></modified>
+				</lt>
+			</filecomp>
+		</foldercomp>
+		<filecomp status="diff">
+			<lt>
+				<name>big.bin</name>
+				<size>1,234</size>
+				<modified><TS></modified>
+			</lt>
+			<rt>
+				<name>big.bin</name>
+				<size>1,230</size>
+				<modified><TS></modified>
+			</rt>
+		</filecomp>
+		<filecomp status="same">
+			<lt>
+				<name>crlf.txt</name>
+				<size>8</size>
+				<modified><TS></modified>
+			</lt>
+			<rt>
+				<name>crlf.txt</name>
+				<size>10</size>
+				<modified><TS></modified>
+			</rt>
+		</filecomp>
+		<filecomp status="diff">
+			<lt>
+				<name>diffsamesize.txt</name>
+				<size>8</size>
+				<modified><TS></modified>
+			</lt>
+			<rt>
+				<name>diffsamesize.txt</name>
+				<size>8</size>
+				<modified><TS></modified>
+			</rt>
+		</filecomp>
+		<filecomp status="diff">
+			<lt>
+				<name>diffsize.txt</name>
+				<size>6</size>
+				<modified><TS></modified>
+			</lt>
+			<rt>
+				<name>diffsize.txt</name>
+				<size>17</size>
+				<modified><TS></modified>
+			</rt>
+		</filecomp>
+		<filecomp status="ltonly">
+			<lt>
+				<name>lonly.txt</name>
+				<size>5</size>
+				<modified><TS></modified>
+			</lt>
+		</filecomp>
+		<filecomp status="rtonly">
+			<rt>
+				<name>ronly.txt</name>
+				<size>5</size>
+				<modified><TS></modified>
+			</rt>
+		</filecomp>
+		<filecomp status="diff">
+			<lt>
+				<name>rulessz.txt</name>
+				<size>5</size>
+				<modified><TS></modified>
+			</lt>
+			<rt>
+				<name>rulessz.txt</name>
+				<size>7</size>
+				<modified><TS></modified>
+			</rt>
+		</filecomp>
+		<filecomp status="diff">
+			<lt>
+				<name>rules.txt</name>
+				<size>6</size>
+				<modified><TS></modified>
+			</lt>
+			<rt>
+				<name>rules.txt</name>
+				<size>8</size>
+				<modified><TS></modified>
+			</rt>
+		</filecomp>
+		<filecomp status="same">
+			<lt>
+				<name>samecontent.txt</name>
+				<size>8</size>
+				<modified><TS></modified>
+			</lt>
+			<rt>
+				<name>samecontent.txt</name>
+				<size>8</size>
+				<modified><TS></modified>
+			</rt>
+		</filecomp>
+		<filecomp status="same">
+			<lt>
+				<name>same.txt</name>
+				<size>12</size>
+				<modified><TS></modified>
+			</lt>
+			<rt>
+				<name>same.txt</name>
+				<size>12</size>
+				<modified><TS></modified>
+			</rt>
+		</filecomp>
+	</foldercomp>
+</bcreport>

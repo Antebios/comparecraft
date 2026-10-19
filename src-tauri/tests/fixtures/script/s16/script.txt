@@ -1,0 +1,4 @@
+load @ROOT@/L5 @ROOT@/R5
+expand all
+criteria binary
+folder-report layout:side-by-side options:display-mismatches output-to:@ROOT@/out16/bin.html output-options:html-color

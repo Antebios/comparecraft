@@ -216,13 +216,25 @@ A side-by-side text report with the color style sheet and line numbers:
 
 A side-by-side folder report with the color style sheet, after `expand all`:
 
-![An HTML side-by-side folder report with folder icons, tree lines, sizes and modification times](images/report-folder-output.jpg)
+![An HTML side-by-side folder report with folder icons, tree lines, sizes, modification times and content comparison icons](images/report-folder-output.jpg)
+
+When the comparison criteria compared file contents (`binary`, `crc` or `rules-based`), the center column of a side-by-side folder report shows the result of each content comparison as an icon:
+
+| Icon | Meaning |
+|---|---|
+| `01` and `=` | The files are binary identical |
+| `=` | The files match by the comparison rules but are not binary identical, for example different line endings |
+| `≈` | The files differ only in unimportant text |
+| `≠` | The files differ |
+| `01` and `≠` | The files differ byte for byte (binary criteria, or binary content with rules-based criteria) |
+
+With `criteria timestamp size` no contents are compared and the column stays empty. With `html-mono`, the icons are drawn in shades of gray.
 
 Some reports need images or additional pages. These are written to folders next to the report file:
 
 | Folder | Contents |
 |---|---|
-| `BcImages/` | Tree lines and folder icons used in folder reports, and the difference images of picture reports. |
+| `BcImages/` | Tree lines, folder icons and content comparison icons used in folder reports, and the difference images of picture reports. Only the icons a report uses are written. |
 | `BcFiles/` | With `include-file-links`: one HTML page for each file comparison linked from a folder report. These pages have their own `BcImages/` folder inside `BcFiles/`. |
 
 When copying or publishing an HTML report, copy these folders along with it. For example, this script:
@@ -237,7 +249,7 @@ creates:
 
 ```text
 out/folder.html
-out/BcImages/            (tree and folder images)
+out/BcImages/            (tree, folder and content images)
 out/BcFiles/             (one page per linked file comparison)
 out/BcFiles/BcImages/
 ```
@@ -345,7 +357,7 @@ Right base folder: /home/me/project/right
 Name       Size Modified                  Name       Size Modified
 --------------------------------------------------------------------------------
 docs         23 10/05/2026 02:30:00 PM    docs         28 10/05/2026 02:30:00 PM
-                                       << +new.txt      9 09/20/2026 08:00:00 AM
+|                                      << +new.txt      9 09/20/2026 08:00:00 AM
 +notes.md    19 09/20/2026 08:00:00 AM =  \notes.md    19 09/20/2026 08:00:00 AM
 \old.txt      4 09/20/2026 08:00:00 AM >>
 src         142 10/05/2026 02:30:00 PM    src         171 10/05/2026 02:30:00 PM
@@ -358,11 +370,11 @@ Cargo.toml   30 10/01/2026 09:00:00 AM << Cargo.toml   30 10/05/2026 02:30:00 PM
 | Marker | Meaning |
 |---|---|
 | `=` | The files match |
-| `<>` | The files differ |
+| `<>` | The files differ, including files that differ only in unimportant text |
 | `>>` | The left file is newer, or the item exists only on the left |
 | `<<` | The right file is newer, or the item exists only on the right |
 
-The `+` and `\` characters in front of names draw the folder tree. If filters are in effect, the report header has a `Filters:` line describing them.
+The `+`, `\` and `|` characters in front of names draw the folder tree; a `|` on a side where an item is missing continues the line to that side's next item. Sizes use thousands separators, for example `3,222,473`. If filters are in effect, the report header has a `Filters:` line describing them.
 
 The same comparison with `layout:summary options:display-mismatches` lists the items in groups:
 

@@ -1,0 +1,8 @@
+load @ROOT@/L5 @ROOT@/R5
+expand all
+criteria rules-based
+folder-report layout:side-by-side options:display-all output-to:@ROOT@/out15/sbs.txt
+folder-report layout:side-by-side options:display-all output-to:@ROOT@/out15/sbs.html output-options:html-color
+folder-report layout:side-by-side options:display-mismatches output-to:@ROOT@/out15/mono.html output-options:html-mono
+folder-report layout:summary options:display-all output-to:@ROOT@/out15/sum.txt
+folder-report layout:xml options:display-all output-to:@ROOT@/out15/dump.xml

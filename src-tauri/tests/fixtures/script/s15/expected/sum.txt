@@ -1,0 +1,76 @@
+Folder Compare
+Produced: <TS>
+
+Mode:  All
+Left base folder: @ROOT@/L5
+Right base folder: @ROOT@/R5
+
+Same Files (5)         Size  Modified
+---------------------------------------------------
+sub/deep/d1.txt            2 <TS>
+sub/a.txt                  2 <TS>
+crlf.txt                   8 <TS>
+samecontent.txt            8 <TS>
+same.txt                  12 <TS>
+---------------------------------------------------
+
+Left Orphan Files (29) Size  Modified
+---------------------------------------------------
+names/10.txt               2 <TS>
+names/9.txt                2 <TS>
+names/A2.txt               2 <TS>
+names/a_b.txt              2 <TS>
+names/ab.txt               2 <TS>
+names/a-c.txt              2 <TS>
+names/a.txt                2 <TS>
+names/Ä.txt                2 <TS>
+names/b1.txt               2 <TS>
+names/b-a.txt              2 <TS>
+names/bb.txt               2 <TS>
+names/b c.txt              2 <TS>
+names/b.txt                2 <TS>
+names/e.txt                2 <TS>
+names/é.txt                2 <TS>
+names/f.txt                2 <TS>
+names/#h                   2 <TS>
+names/.hidden              2 <TS>
+names/(p)                  2 <TS>
+names/~x.txt               2 <TS>
+names/xy                   2 <TS>
+names/x.y.w                2 <TS>
+names/_y.txt               2 <TS>
+names/zeta2.txt            2 <TS>
+names/Zeta.txt             2 <TS>
+sub/b.txt                  2 <TS>
+sub/c.txt                  2 <TS>
+sub/z.txt                  2 <TS>
+lonly.txt                  5 <TS>
+---------------------------------------------------
+
+Right Orphan Files (4) Size  Modified
+---------------------------------------------------
+sub/deep/e2.txt            2 <TS>
+sub/m.txt                  2 <TS>
+sub/n.txt                  2 <TS>
+ronly.txt                  5 <TS>
+---------------------------------------------------
+
+Left Newer Files (0)   Size  Modified
+---------------------------------------------------
+
+Right Newer Files (0)  Size  Modified
+---------------------------------------------------
+
+Difference Files (5)   Size  Modified
+---------------------------------------------------
+big.bin                1,234 <TS>
+                       1,230 <TS>
+diffsamesize.txt           8 <TS>
+                           8 <TS>
+diffsize.txt               6 <TS>
+                          17 <TS>
+rulessz.txt                5 <TS>
+                           7 <TS>
+rules.txt                  6 <TS>
+                           8 <TS>
+---------------------------------------------------
