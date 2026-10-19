@@ -18,13 +18,13 @@ fn isolate_config() {
 }
 
 fn copy_tree(from: &Path, to: &Path) {
-    fs::create_dir_all(to).unwrap();
     for e in fs::read_dir(from).unwrap() {
         let e = e.unwrap();
         let p = e.path();
         if p.is_dir() {
             copy_tree(&p, &to.join(e.file_name()));
         } else {
+            fs::create_dir_all(to).unwrap();
             fs::copy(&p, to.join(e.file_name())).unwrap();
         }
     }
@@ -33,6 +33,9 @@ fn copy_tree(from: &Path, to: &Path) {
 /// Copies the fixture trees and restores their modification times.
 fn setup(root: &Path) {
     copy_tree(&fixtures().join("trees"), root);
+    for rel in ["L5/names/dira", "L5/names/dirB"] {
+        fs::create_dir_all(root.join(rel)).unwrap();
+    }
     let now = filetime::FileTime::now();
     for line in fs::read_to_string(fixtures().join("mtimes.txt")).unwrap().lines() {
         let (rel, t) = line.split_once('\t').unwrap();
