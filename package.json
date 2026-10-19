@@ -21,7 +21,7 @@
     "docs:install": "node scripts/docs.mjs install",
     "docs:serve": "node scripts/docs.mjs serve",
     "docs:build": "node scripts/docs.mjs build",
-    "package:arch": "cd packaging/arch && makepkg -si"
+    "package:arch": "cd packaging/arch && makepkg -sfi"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.4",

@@ -1,5 +1,5 @@
 # Maintainer: Your Name <you@example.com>
-# Build from a local checkout:  cd packaging/arch && makepkg -si
+# Build from a local checkout:  cd packaging/arch && makepkg -sfi
 pkgname=comparecraft
 pkgver=0.1.0
 pkgrel=1

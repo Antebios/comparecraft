@@ -259,8 +259,11 @@ Installers go to `src-tauri/target/release/bundle/`. The bare binaries are `src-
 - **Arch / Omarchy:**
 
   ```sh
-  npm run package:arch               # or: cd packaging/arch && makepkg -si
+  npm run package:arch               # or: cd packaging/arch && makepkg -sfi
   ```
+
+  This rebuilds the package from the current checkout, even when an archive with the same version already exists.
+  Close any running CompareCraft instances before launching the newly installed version.
 
 - **Desktop entry:** the Arch package installs [`packaging/linux/comparecraft.desktop`](packaging/linux/comparecraft.desktop);
   the `.deb`, `.rpm` and AppImage bundles generate their own.
