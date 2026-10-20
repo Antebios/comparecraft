@@ -1,7 +1,7 @@
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { createMemo, createResource, createSignal, For, type JSX, Match, onMount, Show, Switch } from "solid-js";
+import { createMemo, createSignal, For, type JSX, Match, onMount, Show, Switch } from "solid-js";
 import { createStore, unwrap } from "solid-js/store";
-import { api, errText, type ShellItem } from "../api";
+import { api, errText, type ShellItem, type ShellStatus } from "../api";
 import { allCommands, chordOf, displayKeys, labelOf } from "../commands";
 import { COLOR_VARS, DEFAULT_SETTINGS, replaceSettings, snapshotSettings, type BackupKind, type Settings } from "../settings";
 import { trapFocus } from "./common";
@@ -34,10 +34,14 @@ const BACKUP_KINDS: [BackupKind, string][] = [
 
 const SHELL_LABELS: Record<ShellItem["id"], string> = {
   compare: "Compare (two selected items)",
+  selectLeft: "Select Left File for Compare",
+  compareStaged: "Compare to Selected Left File",
   sync: "Sync folders",
   merge: "Merge (three selected files)",
   edit: "Edit text file",
 };
+
+const SHELL_IDS: ShellItem["id"][] = ["compare", "selectLeft", "compareStaged", "sync", "merge", "edit"];
 
 export default function OptionsDialog(props: { page?: OptionsPage; onClose: () => void }) {
   const [draft, setDraft] = createStore<Settings>(snapshotSettings());
@@ -51,16 +55,39 @@ export default function OptionsDialog(props: { page?: OptionsPage; onClose: () =
     return PAGES.filter((p) => `${p.label} ${p.keywords}`.toLowerCase().includes(q));
   });
 
-  // File manager integration is applied immediately on Apply, separately from settings.json.
-  const [shell, { mutate: setShell }] = createResource(() => api.shellIntegrationStatus().catch(() => ({ supported: false, items: [] as ShellItem[] })));
+  // Show controls immediately, then overlay the installed state when the platform query completes.
+  const platform = navigator.platform.toLowerCase();
+  const initialShell: ShellStatus = {
+    supported: !platform.includes("mac"),
+    items: SHELL_IDS.map((id) => ({ id, enabled: false })),
+  };
+  const [shell, setShell] = createSignal(initialShell);
   let shellDirty = false;
+  let shellStatusFailure: unknown;
+  const changedShellItems = new Set<ShellItem["id"]>();
+  const shellStatusPromise = api.shellIntegrationStatus().then((status) => {
+    setShell((current) => ({
+      ...status,
+      items: status.items.map((item) => changedShellItems.has(item.id)
+        ? current.items.find((currentItem) => currentItem.id === item.id) ?? item
+        : item),
+    }));
+  }).catch((e: unknown) => {
+    shellStatusFailure = e;
+    setError(`Could not read file manager integration status: ${errText(e)}`);
+  });
 
   async function apply() {
     setError("");
     replaceSettings(JSON.parse(JSON.stringify(unwrap(draft))));
-    if (shellDirty && shell()) {
+    if (shellDirty) {
       try {
-        await api.setShellIntegration(shell()!.items);
+        await shellStatusPromise;
+        if (shellStatusFailure) {
+          setError(`Could not read file manager integration status: ${errText(shellStatusFailure)}`);
+          return false;
+        }
+        await api.setShellIntegration(shell().items);
         shellDirty = false;
       } catch (e) {
         setError(`File manager integration: ${errText(e)}`);
@@ -140,18 +167,23 @@ export default function OptionsDialog(props: { page?: OptionsPage; onClose: () =
                   </>,
                 )}
                 {group("File manager integration",
-                  <Show when={shell()?.supported} fallback={<p class="muted">Not available on this platform. Use “Open With → CompareCraft” from your file manager.</p>}>
-                    <p class="muted">Adds CompareCraft commands to the Nautilus (Files) scripts menu and the Dolphin context menu.</p>
+                  <Show when={shell()?.supported} fallback={<p class="muted">Automatic setup is unavailable on this platform. On macOS, create Finder Quick Actions using the commands in the README.</p>}>
+                    <p class="muted">Adds per-user actions to Windows Explorer, Nautilus (Files), Dolphin, and Thunar. Select one file as the left side, then compare another file to it; or select two files and choose Compare.</p>
                     <For each={shell()!.items}>
-                      {(it, i) => (
+                      {(it) => (
                         <label class="opt-check">
                           <input
                             type="checkbox"
                             checked={it.enabled}
                             onChange={(e) => {
                               shellDirty = true;
-                              const items = shell()!.items.map((x, j) => (j === i() ? { ...x, enabled: e.currentTarget.checked } : x));
-                              setShell({ supported: true, items });
+                              const selected = it.id;
+                              changedShellItems.add(selected);
+                              const enabled = e.currentTarget.checked;
+                              setShell((current) => ({
+                                ...current,
+                                items: current.items.map((x) => x.id === selected ? { ...x, enabled } : x),
+                              }));
                             }}
                           />{" "}
                           {SHELL_LABELS[it.id] ?? it.id}

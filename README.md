@@ -289,9 +289,42 @@ comparecraft -automerge [-force] [-iu] [-reviewconflicts] mine theirs base -merg
 comparecraft -filters="*.rs;-target/" -expandall dirA dirB
 comparecraft "My saved session"
 comparecraft @nightly.txt dirA dirB -silent   # run a script without the GUI
+comparecraft -cc-select-left a.txt             # stage a file for a later context-menu comparison
+comparecraft -cc-compare-staged b.txt           # compare b.txt to the staged left file
+comparecraft -cc-compare a.txt b.txt            # compare two selected files
 ```
 
 Switches use `-name[=value]`; on Windows `/name[=value]` also works. Run `comparecraft -h` for the full list.
+
+### File-manager context menus
+
+On Windows and Linux, **Tools → Options → Startup → File manager integration** adds or removes CompareCraft
+actions for the current user. This does not require administrator privileges. Windows registrations are stored in
+the current user's Explorer classes; Linux actions are installed for Nautilus (Files), Dolphin and Thunar.
+The actions are registered when enabled in Options, not automatically by the app installer.
+
+Enable **Select Left File for Compare** to stage a file, then choose **Compare to Selected Left File** on the
+other file. For a direct comparison, select two files and choose **Compare**. Menu labels are static because
+file-manager APIs do not provide a shared way to include the staged filename in the action label. The staged
+file is saved in the user configuration directory. If it has been moved or deleted, CompareCraft reports that
+instead of opening an incorrect pair.
+
+macOS Finder Quick Actions are not currently registered by the Options screen. They can be created per-user in
+Automator without administrator privileges:
+
+1. Create a **Quick Action** that receives files in Finder and add **Run Shell Script** with “Pass input: as
+   arguments”.
+2. For a **Select Left File for Compare** action, use
+   `"/Applications/CompareCraft.app/Contents/MacOS/comparecraft" -cc-select-left "$1"`.
+3. For a **Compare to Selected Left File** action, use
+   `"/Applications/CompareCraft.app/Contents/MacOS/comparecraft" -cc-compare-staged "$1"`.
+4. For a **Compare** action that accepts multiple files, use
+   `"/Applications/CompareCraft.app/Contents/MacOS/comparecraft" -cc-compare "$@"`.
+
+Adjust the executable path if CompareCraft is installed outside `/Applications`. The staged-left action is
+shared across platforms and survives separate Finder invocations. To remove a Quick Action, delete its workflow
+from `~/Library/Services`. Quick Action titles are static; macOS does not dynamically include the staged file's
+name in the menu item.
 
 ### Console version
 

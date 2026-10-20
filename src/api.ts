@@ -13,6 +13,7 @@ export interface LaunchSpec {
   saveTarget: string | null;
   noBackups: boolean;
   session: string | null;
+  message: string | null;
 }
 
 export interface PathInfo {
@@ -428,7 +429,7 @@ export interface ImportData {
   sessions: Session[];
 }
 export interface ShellItem {
-  id: "compare" | "sync" | "merge" | "edit";
+  id: "compare" | "selectLeft" | "compareStaged" | "sync" | "merge" | "edit";
   enabled: boolean;
 }
 export interface ShellStatus {

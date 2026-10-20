@@ -25,6 +25,7 @@ pub struct LaunchSpec {
     pub save_target: Option<String>,
     pub no_backups: bool,
     pub session: Option<String>,
+    pub message: Option<String>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -49,6 +50,9 @@ pub struct Args {
     pub save_target: Option<String>,
     pub silent: bool,
     pub solo: bool,
+    pub context_select_left: bool,
+    pub context_compare: bool,
+    pub context_compare_staged: bool,
     pub positional: Vec<String>,
 }
 
@@ -99,6 +103,9 @@ Options (prefix with '-' ; on Windows '/' is also accepted):
   -nobackups                    do not create .bak files when saving
   -solo                         force a new application instance
   -silent                       suppress interaction
+  -cc-select-left <file>        store a file as the left side for a later comparison
+  -cc-compare <left> <right>    compare two files selected in a file manager
+  -cc-compare-staged <right>    compare a file to the staged left file
 
 Console version:
   ccomp [options] [left] [right] [center] [output]
@@ -130,7 +137,10 @@ fn split_switch(arg: &str) -> Option<(String, Option<String>)> {
         return None;
     }
     let (name, val) = match body.find(['=', ':']) {
-        Some(i) => (&body[..i], Some(body[i + 1..].trim_matches('"').to_string())),
+        Some(i) => (
+            &body[..i],
+            Some(body[i + 1..].trim_matches('"').to_string()),
+        ),
         None => (body, None),
     };
     Some((name.to_ascii_lowercase(), val))
@@ -181,6 +191,9 @@ pub fn parse(argv: &[String]) -> Result<Args, String> {
             "savetarget" => a.save_target = val,
             "silent" => a.silent = true,
             "solo" => a.solo = true,
+            "cc-select-left" => a.context_select_left = true,
+            "cc-compare" => a.context_compare = true,
+            "cc-compare-staged" => a.context_compare_staged = true,
             "closescript" | "favorleft" | "favorright" => {}
             n => {
                 if let Some(rest) = n.strip_prefix("title").or_else(|| n.strip_suffix("title")) {
@@ -201,13 +214,18 @@ pub fn parse(argv: &[String]) -> Result<Args, String> {
 fn absolutize(p: &str, cwd: &Path) -> String {
     let pb = PathBuf::from(p);
     let abs = if pb.is_absolute() { pb } else { cwd.join(pb) };
-    std::fs::canonicalize(&abs).unwrap_or(abs).to_string_lossy().into_owned()
+    std::fs::canonicalize(&abs)
+        .unwrap_or(abs)
+        .to_string_lossy()
+        .into_owned()
 }
 
 /// Saves stdin to a temporary file and returns its path.
 pub fn stdin_to_temp() -> Result<String, String> {
     let mut buf = Vec::new();
-    std::io::stdin().read_to_end(&mut buf).map_err(|e| e.to_string())?;
+    std::io::stdin()
+        .read_to_end(&mut buf)
+        .map_err(|e| e.to_string())?;
     let p = std::env::temp_dir().join(format!("comparecraft-stdin-{}.txt", std::process::id()));
     std::fs::write(&p, buf).map_err(|e| e.to_string())?;
     Ok(p.to_string_lossy().into_owned())
@@ -243,7 +261,78 @@ pub fn resolve(a: &Args, cwd: &Path) -> Outcome {
         return Outcome::Exit(0);
     }
     if let Some(script) = a.positional.first().and_then(|p| p.strip_prefix('@')) {
-        return Outcome::Exit(crate::script::run(script, &a.positional[1..], a.silent, cwd));
+        return Outcome::Exit(crate::script::run(
+            script,
+            &a.positional[1..],
+            a.silent,
+            cwd,
+        ));
+    }
+    let context_actions = [
+        a.context_select_left,
+        a.context_compare,
+        a.context_compare_staged,
+    ]
+    .into_iter()
+    .filter(|v| *v)
+    .count();
+    if context_actions > 1 {
+        return Outcome::Gui(context_notice("Context-menu actions cannot be combined."));
+    }
+    if a.context_select_left {
+        if a.positional.len() != 1 {
+            return Outcome::Gui(context_notice(
+                "Select Left File for Compare requires exactly one file.",
+            ));
+        }
+        let path = absolutize(&a.positional[0], cwd);
+        if !Path::new(&path).is_file() {
+            return Outcome::Gui(context_notice(format!("Not a file:\n{path}")));
+        }
+        let result = crate::sessions::write_json_atomic(&context_left_path(), &path);
+        return match result {
+            Ok(()) => Outcome::Exit(0),
+            Err(e) => Outcome::Gui(context_notice(format!(
+                "Could not save the selected left file:\n{e}"
+            ))),
+        };
+    }
+    if a.context_compare || a.context_compare_staged {
+        let expected = if a.context_compare { 2 } else { 1 };
+        if a.positional.len() != expected {
+            let action = if a.context_compare {
+                "Compare"
+            } else {
+                "Compare to Selected Left File"
+            };
+            return Outcome::Gui(context_notice(format!(
+                "{action} requires exactly {expected} file(s)."
+            )));
+        }
+        let mut selected: Vec<String> = a.positional.iter().map(|p| absolutize(p, cwd)).collect();
+        if a.context_compare_staged {
+            let left = std::fs::read(context_left_path())
+                .ok()
+                .and_then(|bytes| serde_json::from_slice::<String>(&bytes).ok());
+            let Some(left) = left else {
+                return Outcome::Gui(context_notice("No left file is selected yet. Choose “Select Left File for Compare” on a file first."));
+            };
+            if !Path::new(&left).is_file() {
+                return Outcome::Gui(context_notice(format!(
+                    "The selected left file is no longer available:\n{left}"
+                )));
+            }
+            selected.insert(0, left);
+        }
+        if selected.iter().any(|p| !Path::new(p).is_file()) {
+            let missing = selected.iter().find(|p| !Path::new(p).is_file()).unwrap();
+            return Outcome::Gui(context_notice(format!(
+                "The selected file is no longer available:\n{missing}"
+            )));
+        }
+        let mut normal_args = a_without_context(a);
+        normal_args.positional = selected;
+        return resolve(&normal_args, cwd);
     }
     let mut paths: Vec<String> = Vec::new();
     for p in &a.positional {
@@ -260,8 +349,15 @@ pub fn resolve(a: &Args, cwd: &Path) -> Outcome {
         }
     }
     // Named session: a single argument that is not an existing path.
-    if paths.len() == 1 && !Path::new(&cwd.join(&paths[0])).exists() && !paths[0].contains(['/', '\\']) {
-        return Outcome::Gui(LaunchSpec { kind: "session".into(), session: Some(paths[0].clone()), ..Default::default() });
+    if paths.len() == 1
+        && !Path::new(&cwd.join(&paths[0])).exists()
+        && !paths[0].contains(['/', '\\'])
+    {
+        return Outcome::Gui(LaunchSpec {
+            kind: "session".into(),
+            session: Some(paths[0].clone()),
+            ..Default::default()
+        });
     }
     let mut paths: Vec<String> = paths.iter().map(|p| absolutize(p, cwd)).collect();
     if let Some(c) = &a.center {
@@ -275,10 +371,18 @@ pub fn resolve(a: &Args, cwd: &Path) -> Outcome {
             eprintln!("comparecraft: -qc requires exactly two files");
             return Outcome::Exit(quick::UNKNOWN_ERROR);
         }
-        return Outcome::Exit(quick::quick_compare(Path::new(&paths[0]), Path::new(&paths[1]), mode));
+        return Outcome::Exit(quick::quick_compare(
+            Path::new(&paths[0]),
+            Path::new(&paths[1]),
+            mode,
+        ));
     }
 
-    let output = a.merge_output.as_ref().map(|o| absolutize(o, cwd)).or_else(|| paths.get(3).cloned());
+    let output = a
+        .merge_output
+        .as_ref()
+        .map(|o| absolutize(o, cwd))
+        .or_else(|| paths.get(3).cloned());
 
     if a.automerge && paths.len() >= 3 {
         match automerge(&paths[0], &paths[1], &paths[2], output.as_deref(), a) {
@@ -305,19 +409,33 @@ pub fn resolve(a: &Args, cwd: &Path) -> Outcome {
             1 if Path::new(&paths[0]).is_dir() => "folder".into(),
             1 => detect_kind(&paths[0]),
             2 if folderish(&paths[0]) || folderish(&paths[1]) => {
-                if a.sync { "sync".into() } else { "folder".into() }
+                if a.sync {
+                    "sync".into()
+                } else {
+                    "folder".into()
+                }
             }
             2 => {
                 let k = detect_kind(&paths[0]);
-                if Path::new(&paths[0]).exists() { k } else { detect_kind(&paths[1]) }
+                if Path::new(&paths[0]).exists() {
+                    k
+                } else {
+                    detect_kind(&paths[1])
+                }
             }
             _ if folderish(&paths[0]) => "fmerge".into(),
             _ => "merge".into(),
         }
     };
-    let kind = if kind == "folder" && a.sync { "sync".into() } else { kind };
+    let kind = if kind == "folder" && a.sync {
+        "sync".into()
+    } else {
+        kind
+    };
 
-    let titles = (0..4).map(|i| a.titles[i].clone().or_else(|| a.vcs[i].clone())).collect();
+    let titles = (0..4)
+        .map(|i| a.titles[i].clone().or_else(|| a.vcs[i].clone()))
+        .collect();
     Outcome::Gui(LaunchSpec {
         kind,
         paths,
@@ -329,16 +447,49 @@ pub fn resolve(a: &Args, cwd: &Path) -> Outcome {
         save_target: a.save_target.as_ref().map(|s| absolutize(s, cwd)),
         no_backups: a.no_backups,
         session: None,
+        message: None,
     })
 }
 
-fn automerge(left: &str, right: &str, center: &str, output: Option<&str>, a: &Args) -> Result<i32, String> {
+fn context_left_path() -> PathBuf {
+    std::env::var_os("COMPARECRAFT_CONTEXT_LEFT_FILE")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| crate::sessions::config_dir().join("context-left.json"))
+}
+
+fn context_notice(message: impl Into<String>) -> LaunchSpec {
+    LaunchSpec {
+        kind: "home".into(),
+        message: Some(message.into()),
+        ..Default::default()
+    }
+}
+
+fn a_without_context(a: &Args) -> Args {
+    let mut copy = a.clone();
+    copy.context_select_left = false;
+    copy.context_compare = false;
+    copy.context_compare_staged = false;
+    copy.positional.clear();
+    copy
+}
+
+fn automerge(
+    left: &str,
+    right: &str,
+    center: &str,
+    output: Option<&str>,
+    a: &Args,
+) -> Result<i32, String> {
     let out = output.ok_or("-automerge requires -mergeoutput=<file> or a 4th path")?;
     let lf = fileio::load_text(left).map_err(|e| format!("{left}: {e}"))?;
     let rf = fileio::load_text(right).map_err(|e| format!("{right}: {e}"))?;
     let cf = fileio::load_text(center).map_err(|e| format!("{center}: {e}"))?;
     let rules = if a.ignore_unimportant {
-        Rules { ignore_blank_lines: false, ..Rules::default() }
+        Rules {
+            ignore_blank_lines: false,
+            ..Rules::default()
+        }
     } else {
         Rules {
             ignore_case: false,
@@ -355,10 +506,16 @@ fn automerge(left: &str, right: &str, center: &str, output: Option<&str>, a: &Ar
         return Ok(quick::CONFLICTS_NOT_WRITTEN);
     }
     // Observed: the reference tool labels conflict markers with file names only, ignoring -titleN.
-    let label = |p: &str| Path::new(p).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| p.to_string());
+    let label = |p: &str| {
+        Path::new(p)
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| p.to_string())
+    };
     let lines = render(&m, &label(left), &label(right));
     let final_nl = lf.final_newline || rf.final_newline || cf.final_newline;
-    fileio::save_text(out, &lines, &cf.encoding, cf.bom, &cf.eol, final_nl, None).map_err(|e| e.to_string())?;
+    fileio::save_text(out, &lines, &cf.encoding, cf.bom, &cf.eol, final_nl, None)
+        .map_err(|e| e.to_string())?;
     Ok(if m.conflicts > 0 { quick::CONFLICTS } else { 0 })
 }
 
@@ -372,7 +529,16 @@ mod tests {
 
     #[test]
     fn parses_switches() {
-        let a = parse(&s(&["-qc=crc", "-title1=Old", "-righttitle=New", "-ro2", "-filters=*.rs", "a", "b"])).unwrap();
+        let a = parse(&s(&[
+            "-qc=crc",
+            "-title1=Old",
+            "-righttitle=New",
+            "-ro2",
+            "-filters=*.rs",
+            "a",
+            "b",
+        ]))
+        .unwrap();
         assert_eq!(a.qc, Some(QcMode::Crc));
         assert_eq!(a.titles[0].as_deref(), Some("Old"));
         assert_eq!(a.titles[1].as_deref(), Some("New"));
@@ -380,7 +546,10 @@ mod tests {
         assert_eq!(a.filters.as_deref(), Some("*.rs"));
         assert_eq!(a.positional, s(&["a", "b"]));
         assert!(parse(&s(&["-bogus"])).is_err());
-        assert_eq!(parse(&s(&["-qc", "a", "b"])).unwrap().qc, Some(QcMode::Rules));
+        assert_eq!(
+            parse(&s(&["-qc", "a", "b"])).unwrap().qc,
+            Some(QcMode::Rules)
+        );
     }
 
     #[test]
@@ -427,7 +596,10 @@ mod tests {
             o => panic!("{o:?}"),
         }
         let merged = std::fs::read_to_string(p("out2")).unwrap();
-        assert!(merged.contains("<<<<<<< left\n") && merged.contains(">>>>>>> right2\n"), "{merged}");
+        assert!(
+            merged.contains("<<<<<<< left\n") && merged.contains(">>>>>>> right2\n"),
+            "{merged}"
+        );
         match go(&["-qc=binary", "left", "left"]) {
             Outcome::Exit(c) => assert_eq!(c, 1),
             o => panic!("{o:?}"),
@@ -459,8 +631,70 @@ mod tests {
         assert!(a.silent);
         assert!(matches!(resolve(&a, d.path()), Outcome::Exit(106)));
         let log = std::fs::read_to_string(d.path().join("out.log")).unwrap();
-        assert!(log.contains(">> bogus x") && log.contains("Unknown command \"bogus\""), "{log}");
+        assert!(
+            log.contains(">> bogus x") && log.contains("Unknown command \"bogus\""),
+            "{log}"
+        );
         let a = parse(&s(&["@missing.txt", "-silent"])).unwrap();
         assert!(matches!(resolve(&a, d.path()), Outcome::Exit(105)));
+    }
+
+    #[test]
+    fn resolves_file_manager_context_actions() {
+        let d = tempfile::tempdir().unwrap();
+        let left = d.path().join("left.txt");
+        let right = d.path().join("right.txt");
+        std::fs::write(&left, "left").unwrap();
+        std::fs::write(&right, "right").unwrap();
+        let staged = d.path().join("staged.json");
+        let previous = std::env::var_os("COMPARECRAFT_CONTEXT_LEFT_FILE");
+        std::env::set_var("COMPARECRAFT_CONTEXT_LEFT_FILE", &staged);
+
+        let go = |args: &[&str]| resolve(&parse(&s(args)).unwrap(), d.path());
+        assert!(matches!(
+            go(&["-cc-select-left", "left.txt"]),
+            Outcome::Exit(0)
+        ));
+        assert_eq!(
+            serde_json::from_slice::<String>(&std::fs::read(&staged).unwrap()).unwrap(),
+            absolutize("left.txt", d.path())
+        );
+
+        match go(&["-cc-compare-staged", "right.txt"]) {
+            Outcome::Gui(spec) => assert_eq!(
+                spec.paths,
+                vec![
+                    absolutize("left.txt", d.path()),
+                    absolutize("right.txt", d.path())
+                ]
+            ),
+            other => panic!("{other:?}"),
+        }
+        match go(&["-cc-compare", "left.txt", "right.txt"]) {
+            Outcome::Gui(spec) => assert_eq!(
+                spec.paths,
+                vec![
+                    absolutize("left.txt", d.path()),
+                    absolutize("right.txt", d.path())
+                ]
+            ),
+            other => panic!("{other:?}"),
+        }
+
+        std::fs::remove_file(&left).unwrap();
+        match go(&["-cc-compare-staged", "right.txt"]) {
+            Outcome::Gui(spec) => assert!(spec
+                .message
+                .as_deref()
+                .unwrap()
+                .contains("no longer available")),
+            other => panic!("{other:?}"),
+        }
+
+        if let Some(value) = previous {
+            std::env::set_var("COMPARECRAFT_CONTEXT_LEFT_FILE", value);
+        } else {
+            std::env::remove_var("COMPARECRAFT_CONTEXT_LEFT_FILE");
+        }
     }
 }
