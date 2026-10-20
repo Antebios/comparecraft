@@ -53,6 +53,10 @@ pub struct Args {
     pub context_select_left: bool,
     pub context_compare: bool,
     pub context_compare_staged: bool,
+    pub context_sync: bool,
+    pub context_merge: bool,
+    pub context_install_shell: bool,
+    pub context_refresh_shell: bool,
     pub positional: Vec<String>,
 }
 
@@ -104,8 +108,12 @@ Options (prefix with '-' ; on Windows '/' is also accepted):
   -solo                         force a new application instance
   -silent                       suppress interaction
   -cc-select-left <file>        store a file as the left side for a later comparison
-  -cc-compare <left> <right>    compare two files selected in a file manager
+  -cc-compare <left> <right>    compare two files or folders selected in a file manager
   -cc-compare-staged <right>    compare a file to the staged left file
+  -cc-sync <left> <right>       sync two selected folders
+  -cc-merge <left> <right>      merge two selected files
+  -cc-install-shell             install file-manager actions (installer)
+  -cc-refresh-shell             refresh registered file-manager actions
 
 Console version:
   ccomp [options] [left] [right] [center] [output]
@@ -194,6 +202,10 @@ pub fn parse(argv: &[String]) -> Result<Args, String> {
             "cc-select-left" => a.context_select_left = true,
             "cc-compare" => a.context_compare = true,
             "cc-compare-staged" => a.context_compare_staged = true,
+            "cc-sync" => a.context_sync = true,
+            "cc-merge" => a.context_merge = true,
+            "cc-install-shell" => a.context_install_shell = true,
+            "cc-refresh-shell" => a.context_refresh_shell = true,
             "closescript" | "favorleft" | "favorright" => {}
             n => {
                 if let Some(rest) = n.strip_prefix("title").or_else(|| n.strip_suffix("title")) {
@@ -256,6 +268,24 @@ fn viewer_kind(fv: &str) -> Option<&'static str> {
 
 /// Resolves arguments into either a headless result or a GUI launch spec.
 pub fn resolve(a: &Args, cwd: &Path) -> Outcome {
+    if a.context_install_shell {
+        return match crate::shell::install() {
+            Ok(()) => Outcome::Exit(0),
+            Err(e) => {
+                eprintln!("comparecraft: could not install file-manager actions: {e}");
+                Outcome::Exit(quick::UNKNOWN_ERROR)
+            }
+        };
+    }
+    if a.context_refresh_shell {
+        return match crate::shell::refresh() {
+            Ok(()) => Outcome::Exit(0),
+            Err(e) => {
+                eprintln!("comparecraft: could not refresh file-manager actions: {e}");
+                Outcome::Exit(quick::UNKNOWN_ERROR)
+            }
+        };
+    }
     if a.help {
         println!("{USAGE}");
         return Outcome::Exit(0);
@@ -272,6 +302,8 @@ pub fn resolve(a: &Args, cwd: &Path) -> Outcome {
         a.context_select_left,
         a.context_compare,
         a.context_compare_staged,
+        a.context_sync,
+        a.context_merge,
     ]
     .into_iter()
     .filter(|v| *v)
@@ -289,25 +321,29 @@ pub fn resolve(a: &Args, cwd: &Path) -> Outcome {
         if !Path::new(&path).is_file() {
             return Outcome::Gui(context_notice(format!("Not a file:\n{path}")));
         }
-        let result = crate::sessions::write_json_atomic(&context_left_path(), &path);
+        let result = crate::sessions::write_json_atomic(&context_left_path(), &path)
+            .map_err(|e| format!("could not save the selected left file: {e}"))
+            .and_then(|()| {
+                crate::shell::refresh().map_err(|e| {
+                    format!(
+                        "the file was selected, but the context menu could not be refreshed: {e}"
+                    )
+                })
+            });
         return match result {
             Ok(()) => Outcome::Exit(0),
-            Err(e) => Outcome::Gui(context_notice(format!(
-                "Could not save the selected left file:\n{e}"
-            ))),
+            Err(e) => Outcome::Gui(context_notice(e)),
         };
     }
     if a.context_compare || a.context_compare_staged {
         let expected = if a.context_compare { 2 } else { 1 };
         if a.positional.len() != expected {
             let action = if a.context_compare {
-                "Compare"
+                "Compare requires exactly two files or two folders."
             } else {
-                "Compare to Selected Left File"
+                "Compare to Selected Left File requires exactly one file."
             };
-            return Outcome::Gui(context_notice(format!(
-                "{action} requires exactly {expected} file(s)."
-            )));
+            return Outcome::Gui(context_notice(action));
         }
         let mut selected: Vec<String> = a.positional.iter().map(|p| absolutize(p, cwd)).collect();
         if a.context_compare_staged {
@@ -324,14 +360,67 @@ pub fn resolve(a: &Args, cwd: &Path) -> Outcome {
             }
             selected.insert(0, left);
         }
-        if selected.iter().any(|p| !Path::new(p).is_file()) {
-            let missing = selected.iter().find(|p| !Path::new(p).is_file()).unwrap();
+        if let Some(missing) = selected.iter().find(|p| !Path::new(p).exists()) {
             return Outcome::Gui(context_notice(format!(
-                "The selected file is no longer available:\n{missing}"
+                "The selected item is no longer available:\n{missing}"
             )));
+        }
+        let both_files = selected.iter().all(|p| Path::new(p).is_file());
+        let both_folders = selected.iter().all(|p| Path::new(p).is_dir());
+        if !both_files && !both_folders {
+            return Outcome::Gui(context_notice(
+                "Compare is available for two files or two folders only.",
+            ));
         }
         let mut normal_args = a_without_context(a);
         normal_args.positional = selected;
+        let mut comparison = match resolve(&normal_args, cwd) {
+            Outcome::Gui(spec) => spec,
+            other => return other,
+        };
+        if a.context_compare_staged {
+            match std::fs::remove_file(context_left_path()) {
+                Ok(()) => {
+                    if let Err(e) = crate::shell::refresh() {
+                        comparison.message = Some(format!(
+                            "The comparison opened, but the context menu could not be refreshed: {e}"
+                        ));
+                    }
+                }
+                Err(e) => {
+                    comparison.message = Some(format!(
+                        "The comparison opened, but the selected left file could not be cleared: {e}"
+                    ));
+                }
+            }
+        }
+        return Outcome::Gui(comparison);
+    }
+    if a.context_sync || a.context_merge {
+        let action = if a.context_sync { "Sync" } else { "Merge" };
+        let selected: Vec<String> = a.positional.iter().map(|p| absolutize(p, cwd)).collect();
+        if selected.len() != 2 {
+            return Outcome::Gui(context_notice(format!(
+                "{action} requires exactly two selected items."
+            )));
+        }
+        if a.context_sync && selected.iter().any(|p| !Path::new(p).is_dir()) {
+            return Outcome::Gui(context_notice(
+                "Sync is available for two selected folders only.",
+            ));
+        }
+        if a.context_merge && selected.iter().any(|p| !Path::new(p).is_file()) {
+            return Outcome::Gui(context_notice(
+                "Merge is available for two selected files only.",
+            ));
+        }
+        let mut normal_args = a_without_context(a);
+        normal_args.positional = selected;
+        if a.context_sync {
+            normal_args.sync = true;
+        } else {
+            normal_args.fv = Some("Text Merge".into());
+        }
         return resolve(&normal_args, cwd);
     }
     let mut paths: Vec<String> = Vec::new();
@@ -470,6 +559,9 @@ fn a_without_context(a: &Args) -> Args {
     copy.context_select_left = false;
     copy.context_compare = false;
     copy.context_compare_staged = false;
+    copy.context_sync = false;
+    copy.context_merge = false;
+    copy.context_refresh_shell = false;
     copy.positional.clear();
     copy
 }
@@ -644,8 +736,12 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         let left = d.path().join("left.txt");
         let right = d.path().join("right.txt");
+        let left_dir = d.path().join("left-dir");
+        let right_dir = d.path().join("right-dir");
         std::fs::write(&left, "left").unwrap();
         std::fs::write(&right, "right").unwrap();
+        std::fs::create_dir(&left_dir).unwrap();
+        std::fs::create_dir(&right_dir).unwrap();
         let staged = d.path().join("staged.json");
         let previous = std::env::var_os("COMPARECRAFT_CONTEXT_LEFT_FILE");
         std::env::set_var("COMPARECRAFT_CONTEXT_LEFT_FILE", &staged);
@@ -660,6 +756,11 @@ mod tests {
             absolutize("left.txt", d.path())
         );
 
+        assert!(matches!(
+            go(&["-cc-compare", "left.txt", "right.txt"]),
+            Outcome::Gui(_)
+        ));
+        assert!(staged.exists());
         match go(&["-cc-compare-staged", "right.txt"]) {
             Outcome::Gui(spec) => assert_eq!(
                 spec.paths,
@@ -670,6 +771,7 @@ mod tests {
             ),
             other => panic!("{other:?}"),
         }
+        assert!(!staged.exists());
         match go(&["-cc-compare", "left.txt", "right.txt"]) {
             Outcome::Gui(spec) => assert_eq!(
                 spec.paths,
@@ -680,7 +782,58 @@ mod tests {
             ),
             other => panic!("{other:?}"),
         }
+        match go(&["-cc-compare", "left-dir", "right-dir"]) {
+            Outcome::Gui(spec) => {
+                assert_eq!(spec.kind, "folder");
+                assert_eq!(
+                    spec.paths,
+                    vec![
+                        absolutize("left-dir", d.path()),
+                        absolutize("right-dir", d.path())
+                    ]
+                );
+            }
+            other => panic!("{other:?}"),
+        }
+        match go(&["-cc-merge", "left.txt", "right.txt"]) {
+            Outcome::Gui(spec) => assert_eq!(spec.kind, "merge"),
+            other => panic!("{other:?}"),
+        }
+        match go(&["-cc-sync", "left-dir", "right-dir"]) {
+            Outcome::Gui(spec) => assert_eq!(spec.kind, "sync"),
+            other => panic!("{other:?}"),
+        }
+        match go(&["-cc-sync", "left.txt", "right.txt"]) {
+            Outcome::Gui(spec) => assert!(spec
+                .message
+                .as_deref()
+                .unwrap()
+                .contains("two selected folders")),
+            other => panic!("{other:?}"),
+        }
+        match go(&["-cc-compare", "left.txt"]) {
+            Outcome::Gui(spec) => {
+                assert!(spec
+                    .message
+                    .as_deref()
+                    .unwrap()
+                    .contains("two files or two folders"))
+            }
+            other => panic!("{other:?}"),
+        }
+        match go(&["-cc-compare", "left.txt", "left-dir"]) {
+            Outcome::Gui(spec) => assert!(spec
+                .message
+                .as_deref()
+                .unwrap()
+                .contains("two files or two folders only")),
+            other => panic!("{other:?}"),
+        }
 
+        assert!(matches!(
+            go(&["-cc-select-left", "left.txt"]),
+            Outcome::Exit(0)
+        ));
         std::fs::remove_file(&left).unwrap();
         match go(&["-cc-compare-staged", "right.txt"]) {
             Outcome::Gui(spec) => assert!(spec

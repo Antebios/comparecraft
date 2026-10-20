@@ -301,13 +301,45 @@ Switches use `-name[=value]`; on Windows `/name[=value]` also works. Run `compar
 On Windows and Linux, **Tools → Options → Startup → File manager integration** adds or removes CompareCraft
 actions for the current user. This does not require administrator privileges. Windows registrations are stored in
 the current user's Explorer classes; Linux actions are installed for Nautilus (Files), Dolphin and Thunar.
-The actions are registered when enabled in Options, not automatically by the app installer.
+The app installer migrates existing registrations to the current command format and removes them when
+uninstalled. A fresh Windows NSIS install enables the actions by default; existing choices are preserved during
+upgrades, and the actions can be enabled or removed in Options. Linux actions remain opt-in.
+On Windows, if the installer cannot refresh the registrations, it writes the failure exit code to
+`shell-integration-install-error.txt` in the installation directory. The Options checkboxes reflect
+registrations actually present in the file manager, not just saved preferences.
 
 Enable **Select Left File for Compare** to stage a file, then choose **Compare to Selected Left File** on the
-other file. For a direct comparison, select two files and choose **Compare**. Menu labels are static because
-file-manager APIs do not provide a shared way to include the staged filename in the action label. The staged
-file is saved in the user configuration directory. If it has been moved or deleted, CompareCraft reports that
-instead of opening an incorrect pair.
+other file. After staging, the menu registration switches from **Select Left File for Compare** to
+**Compare to Selected Left File**. The full path is saved in the user configuration directory. If it has been
+moved or deleted, CompareCraft treats the left side as unset and reports stale paths rather than opening an
+incorrect pair. After the staged comparison launches, the left selection is cleared and the menu switches back
+to **Select Left File for Compare**. Menu labels are static; file managers do not share a way to include the
+staged filename in the action label.
+
+**Compare** accepts exactly two files or two folders; **Merge** accepts exactly two files; **Sync** accepts
+exactly two folders. On Windows, Compare is registered for both file and folder selections, while Merge is
+registered for files and Sync for folders. Windows Explorer passes the selected paths through a per-user COM
+shell extension so multi-selection reaches CompareCraft as one operation. Dolphin can hide
+these commands unless exactly two items are selected. Windows Explorer, Nautilus scripts, and Thunar custom
+actions do not expose an equivalent selection-count filter for these registrations. They may show the commands
+for other counts, but CompareCraft validates the selection before opening a comparison and explains the
+required selection.
+
+If an older installer has already been removed, its uninstaller cannot remove the registry entries because that
+older build did not include a cleanup hook. Installing this build migrates the entries; uninstalling this build
+removes them. To remove them immediately without reinstalling, run this PowerShell command as the same Windows
+user:
+
+```powershell
+$root = 'Registry::HKEY_CURRENT_USER\Software\Classes\*\shell'
+Get-ChildItem -LiteralPath $root -ErrorAction SilentlyContinue |
+  Where-Object { $_.PSChildName -like 'CompareCraft.*' } |
+  Remove-Item -Recurse -Force
+Remove-Item -LiteralPath 'Registry::HKEY_CURRENT_USER\Software\Classes\Directory\shell\CompareCraft.sync' -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath 'Registry::HKEY_CURRENT_USER\Software\Classes\CLSID\{5E8A1F31-92B3-4B16-A421-724E3F8C1001}' -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath 'Registry::HKEY_CURRENT_USER\Software\Classes\CLSID\{5E8A1F32-92B3-4B16-A421-724E3F8C1002}' -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath 'Registry::HKEY_CURRENT_USER\Software\Classes\CLSID\{5E8A1F33-92B3-4B16-A421-724E3F8C1003}' -Recurse -Force -ErrorAction SilentlyContinue
+```
 
 macOS Finder Quick Actions are not currently registered by the Options screen. They can be created per-user in
 Automator without administrator privileges:

@@ -429,7 +429,7 @@ export interface ImportData {
   sessions: Session[];
 }
 export interface ShellItem {
-  id: "compare" | "selectLeft" | "compareStaged" | "sync" | "merge" | "edit";
+  id: "compare" | "selectLeft" | "compareStaged" | "sync" | "merge";
   enabled: boolean;
 }
 export interface ShellStatus {

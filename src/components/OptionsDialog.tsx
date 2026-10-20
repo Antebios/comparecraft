@@ -33,15 +33,14 @@ const BACKUP_KINDS: [BackupKind, string][] = [
 ];
 
 const SHELL_LABELS: Record<ShellItem["id"], string> = {
-  compare: "Compare (two selected items)",
+  compare: "Compare (two selected files)",
   selectLeft: "Select Left File for Compare",
   compareStaged: "Compare to Selected Left File",
   sync: "Sync folders",
-  merge: "Merge (three selected files)",
-  edit: "Edit text file",
+  merge: "Merge (two selected files)",
 };
 
-const SHELL_IDS: ShellItem["id"][] = ["compare", "selectLeft", "compareStaged", "sync", "merge", "edit"];
+const SHELL_IDS: ShellItem["id"][] = ["compare", "selectLeft", "compareStaged", "sync", "merge"];
 
 export default function OptionsDialog(props: { page?: OptionsPage; onClose: () => void }) {
   const [draft, setDraft] = createStore<Settings>(snapshotSettings());
@@ -168,7 +167,7 @@ export default function OptionsDialog(props: { page?: OptionsPage; onClose: () =
                 )}
                 {group("File manager integration",
                   <Show when={shell()?.supported} fallback={<p class="muted">Automatic setup is unavailable on this platform. On macOS, create Finder Quick Actions using the commands in the README.</p>}>
-                    <p class="muted">Adds per-user actions to Windows Explorer, Nautilus (Files), Dolphin, and Thunar. Select one file as the left side, then compare another file to it; or select two files and choose Compare.</p>
+                    <p class="muted">Adds per-user actions to Windows Explorer, Nautilus (Files), Dolphin, and Thunar. Selecting a left file switches the menu from “Select Left” to “Compare to Selected Left.” Windows Explorer passes selected paths to CompareCraft together; Dolphin hides Compare, Merge, and Sync unless exactly two items are selected. Nautilus and Thunar may still show those actions for other selection counts; CompareCraft validates the selection. Edit is omitted because it duplicated the existing file-opening behavior.</p>
                     <For each={shell()!.items}>
                       {(it) => (
                         <label class="opt-check">
