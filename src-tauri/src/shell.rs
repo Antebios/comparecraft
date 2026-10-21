@@ -3,6 +3,15 @@
 use serde::{Deserialize, Serialize};
 use std::io;
 
+#[cfg(any(target_os = "macos", test))]
+mod finder;
+
+pub fn state_changed() -> io::Result<()> {
+    #[cfg(target_os = "macos")]
+    if load_preferences().is_some_and(|items| items.iter().any(|item| item.enabled)) { return finder::publish(); }
+    Ok(())
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ShellItem {
@@ -627,8 +636,21 @@ pub fn install() -> io::Result<()> {
     refresh()
 }
 
-#[cfg(not(target_os = "linux"))]
-#[cfg(not(target_os = "windows"))]
+#[cfg(target_os = "macos")]
+pub fn status() -> ShellStatus { finder::status() }
+
+#[cfg(target_os = "macos")]
+pub fn set(items: &[ShellItem]) -> io::Result<()> { finder::set(items) }
+
+#[cfg(target_os = "macos")]
+pub fn refresh() -> io::Result<()> {
+    finder::set(&load_preferences().unwrap_or_default())
+}
+
+#[cfg(target_os = "macos")]
+pub fn install() -> io::Result<()> { refresh() }
+
+#[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
 pub fn status() -> ShellStatus {
     ShellStatus {
         supported: false,
@@ -643,20 +665,19 @@ pub fn status() -> ShellStatus {
     }
 }
 
-#[cfg(not(target_os = "linux"))]
-#[cfg(not(target_os = "windows"))]
+#[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
 pub fn set(_items: &[ShellItem]) -> io::Result<()> {
     Err(io::Error::other(
         "File manager integration is not supported on this platform",
     ))
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "windows")))]
+#[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
 pub fn refresh() -> io::Result<()> {
     Ok(())
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "windows")))]
+#[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
 pub fn install() -> io::Result<()> {
     Ok(())
 }

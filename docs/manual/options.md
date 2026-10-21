@@ -50,7 +50,16 @@ file operations, run `thunar --quit`, then reopen Thunar with `thunar`; this clo
 restarts the daemon. See [missing context-menu commands](troubleshooting.md#file-manager-context-menu-commands-are-missing).
 Further staging changes are read when each menu opens; they do not require another restart. Icons are provided where
 supported by the host. Windows Explorer uses its native command provider; Windows 11 may put the commands
-under **Show more options**. macOS continues to use manually configured Finder Quick Actions.
+under **Show more options**.
+
+On macOS 12 or later, the complete app bundle includes an **experimental Finder Sync extension**. Move the
+app to Applications, enable the desired actions here, then enable CompareCraft in System Settings under
+**Extensions > Finder Extensions** (on recent versions, **General > Login Items & Extensions**). Applying
+Options registers the extension but cannot enable it for you. Signing and App Group authorization may be
+required, especially for source/ad-hoc builds. The default scope covers your home directory and mounted
+volumes under `/Volumes`. Bare binaries and `tauri dev` do not embed the extension. All actions are opt-in on
+macOS. Unchecking every action hides its menus. See [Finder troubleshooting](troubleshooting.md#finder-extension-is-missing-or-does-not-show-actions).
+Manual Quick Actions remain a separate fallback and may create duplicate entries if left installed.
 
 ## Tabs
 

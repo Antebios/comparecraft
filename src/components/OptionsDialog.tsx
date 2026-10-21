@@ -10,7 +10,7 @@ export type OptionsPage =
   | "startup" | "tabs" | "colors" | "text" | "nextdiff" | "backups" | "fileops" | "archives" | "shortcuts" | "openwith" | "tweaks";
 
 const PAGES: { id: OptionsPage; label: string; keywords: string }[] = [
-  { id: "startup", label: "Startup", keywords: "workspace quick compare file manager integration nautilus dolphin explorer context menu" },
+  { id: "startup", label: "Startup", keywords: "workspace quick compare file manager integration nautilus dolphin thunar explorer finder context menu" },
   { id: "tabs", label: "Tabs", keywords: "tab window close warn hide single" },
   { id: "colors", label: "Colors, Fonts", keywords: "theme dark light color font stripes background text size" },
   { id: "text", label: "Text Editing", keywords: "context lines tab size find word indent" },
@@ -65,9 +65,8 @@ export default function OptionsDialog(props: { page?: OptionsPage; onClose: () =
   });
 
   // Show controls immediately, then overlay the installed state when the platform query completes.
-  const platform = navigator.platform.toLowerCase();
   const initialShell: ShellStatus = {
-    supported: !platform.includes("mac"),
+    supported: true,
     items: SHELL_IDS.map((id) => ({ id, enabled: false })),
   };
   const [shell, setShell] = createSignal(initialShell);
@@ -243,9 +242,7 @@ export default function OptionsDialog(props: { page?: OptionsPage; onClose: () =
                     when={shell()?.supported}
                     fallback={
                       <p class="muted">
-                        Automatic setup is unavailable on this platform. On
-                        macOS, create Finder Quick Actions using the commands in
-                        the README.
+                        Automatic setup is unavailable on this platform.
                       </p>
                     }
                   >
@@ -256,6 +253,8 @@ export default function OptionsDialog(props: { page?: OptionsPage; onClose: () =
                       type. Files requires nautilus-python; Thunar and Dolphin
                       require their packaged native providers. Restart the file
                       manager once after installing its provider.
+                      {" "}On macOS, install the complete app bundle and enable
+                      the experimental CompareCraft Finder extension in System Settings.
                     </p>
                     <For each={shell()?.warnings ?? []}>
                       {(warning) => <p class="error">{warning}</p>}

@@ -62,6 +62,9 @@ jobs:
       - run: npm ci
       - name: Compile Tauri without bundling or publishing
         run: npm run app:build:bin -- ${{ matrix.args }}
+      - name: Test native Finder menu model
+        if: startsWith(matrix.platform, 'macos')
+        run: npm run test:finder
 
   bundle:
     needs: test

@@ -298,7 +298,7 @@ Switches use `-name[=value]`; on Windows `/name[=value]` also works. Run `compar
 
 ### File-manager context menus
 
-On Windows and Linux, **Tools → Options → Startup → File manager integration** adds or removes CompareCraft
+On Windows, Linux and macOS, **Tools → Options → Startup → File manager integration** adds or removes CompareCraft
 actions for the current user. This does not require administrator privileges. Windows registrations are stored in
 the current user's Explorer classes; Linux actions are installed for Nautilus (Files), Dolphin and Thunar.
 The app installer migrates existing registrations to the current command format and removes them when
@@ -338,8 +338,8 @@ Files actions now appear in the normal context menu, not Scripts. Applying Optio
 CompareCraft scripts, service menus and custom-action block without touching unrelated actions.
 Native menus re-evaluate selection and staged state when opened. Action icons are supplied where the host
 supports them; appearance depends on the installed icon theme and file-manager version. On Windows 11,
-Explorer may place the commands under Show more options. Native Finder integration is not included;
-the manual Quick Actions below do not provide this dynamic filtering.
+Explorer may place the commands under Show more options. macOS now includes an **experimental Finder Sync
+extension**; native activation, signing, sandbox access and launch behavior still need testing on real Macs.
 
 Run `npm run test:menus` on Linux to build and test native menu callbacks. The native Windows provider
 also needs validation in Explorer on Windows; a Linux type-check is not a Windows runtime test.
@@ -360,7 +360,31 @@ Remove-Item -LiteralPath 'Registry::HKEY_CURRENT_USER\Software\Classes\CLSID\{5E
 Remove-Item -LiteralPath 'Registry::HKEY_CURRENT_USER\Software\Classes\CLSID\{5E8A1F33-92B3-4B16-A421-724E3F8C1003}' -Recurse -Force -ErrorAction SilentlyContinue
 ```
 
-macOS Finder Quick Actions are not currently registered by the Options screen. They can be created per-user in
+#### macOS Finder Sync (Experimental)
+
+The macOS build embeds `CompareCraftFinder.appex` in the application bundle for both Apple Silicon and Intel.
+Finder Sync requires macOS 12 or later and a complete `.app` installation, not a bare binary or `tauri dev`.
+Move CompareCraft to `/Applications`, open it, enable the desired actions in Options, and enable **CompareCraft**
+in System Settings under **Extensions / Finder Extensions**. On recent versions this is under **General > Login
+Items & Extensions**; the exact location varies. Options registers the extension but does not enable it without
+your consent. The default scope is your home directory and mounted volumes under `/Volumes`, not every system
+directory. Files and folders share the same selection rules as the other native integrations. Menu icons use
+SF Symbols where available. Finder activation does not require restarting after each staged selection.
+
+The sandboxed extension and host share the `group.dev.comparecraft.app` App Group. Local builds are ad-hoc
+signed for compilation checks; this does **not** guarantee macOS will allow extension activation or App Group
+access. Properly authorized signing identities and provisioning profiles may be necessary. Do not disable SIP,
+Gatekeeper, or the sandbox to work around signing errors.
+
+Developers/testers: see [macOS Finder setup and test checklist](packaging/macos/README.md). Run
+`npm run test:finder` on a Mac with Xcode; PR macOS build jobs compile the universal extension and run native
+menu-model tests, but they cannot verify interactive Finder behavior. Linux checks validate the portable Rust
+snapshot and plist contracts only. Build and CI success are not a claim of native runtime verification.
+
+#### macOS Quick Actions (Fallback)
+
+Manual Quick Actions remain available if Finder Sync cannot be activated. They are not registered by Options
+and do not provide dynamic type/count/staged-state filtering. They can be created per-user in
 Automator without administrator privileges:
 
 1. Create a **Quick Action** that receives files in Finder and add **Run Shell Script** with “Pass input: as
@@ -539,7 +563,8 @@ src-tauri/src/
   sessions.rs        session persistence
   settings.rs        options file, settings export/import
   snapshot.rs        folder snapshots (.ccsnap)
-  shell.rs           file-manager integration (Nautilus scripts, Dolphin service menu)
+  shell.rs           native file-manager integration and preferences
+  shell/finder.rs    experimental Finder Sync registration and shared menu state
   cli.rs             argument parsing, automerge
   script.rs          @script runner: commands, selection, file operations, logging
   report.rs          folder, file, text, hex, table and picture reports (text, HTML, XML), used by scripts and the GUI

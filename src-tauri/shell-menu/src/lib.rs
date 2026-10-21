@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::ffi::{c_char, CStr, CString};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -8,6 +8,61 @@ pub struct Action {
     pub label: &'static str,
     pub flag: &'static str,
     pub icon: &'static str,
+}
+
+pub const FINDER_GROUP: &str = "group.dev.comparecraft.app";
+pub const FINDER_EXTENSION: &str = "dev.comparecraft.app.finder";
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FinderAction {
+    pub id: &'static str,
+    pub label: &'static str,
+    pub flag: &'static str,
+    pub enabled: bool,
+    pub count: usize,
+    pub kind: &'static str,
+    pub requires_left: bool,
+    pub clears_left: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FinderSnapshot {
+    pub version: u32,
+    pub executable: PathBuf,
+    pub actions: Vec<FinderAction>,
+    pub left_file: Option<PathBuf>,
+    pub left_folder: Option<PathBuf>,
+    pub roots: Vec<PathBuf>,
+}
+
+pub fn finder_snapshot(config: &Path, executable: PathBuf) -> FinderSnapshot {
+    let preferences: Vec<Preference> = std::fs::read(config.join("shell-integration.json")).ok()
+        .and_then(|bytes| serde_json::from_slice(&bytes).ok()).unwrap_or_default();
+    let actions: Vec<FinderAction> = ACTIONS.iter().map(|action| {
+        let preference = match action.id { "clearLeft" => "selectLeft", "clearLeftFolder" => "selectLeftFolder", other => other };
+        FinderAction {
+            id: action.id,
+            label: action.label,
+            flag: action.flag,
+            enabled: preferences.iter().any(|item| item.id == preference && item.enabled),
+            count: if matches!(action.id, "compare" | "merge" | "sync") { 2 } else { 1 },
+            kind: match action.id {
+                "compare" => "either",
+                "sync" | "selectLeftFolder" | "compareStagedFolder" | "clearLeftFolder" => "folder",
+                _ => "file",
+            },
+            requires_left: matches!(action.id, "compareStaged" | "compareStagedFolder" | "clearLeft" | "clearLeftFolder"),
+            clears_left: matches!(action.id, "clearLeft" | "clearLeftFolder"),
+        }
+    }).collect();
+    let mut roots = Vec::new();
+    if actions.iter().any(|action: &FinderAction| action.enabled) {
+        if let Some(home) = dirs::home_dir() { roots.push(home); }
+        roots.push(PathBuf::from("/Volumes"));
+    }
+    FinderSnapshot { version: 1, executable, actions, left_file: staged_path(config, false), left_folder: staged_path(config, true), roots }
 }
 
 pub const ACTIONS: &[Action] = &[
@@ -163,6 +218,29 @@ pub unsafe extern "C" fn comparecraft_menu_activate(index: usize, count: usize, 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn finder_snapshot_keeps_preferences_and_menu_constraints() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(root.path().join("shell-integration.json"), r#"[{"id":"selectLeftFolder","enabled":true}]"#).unwrap();
+        let snapshot = finder_snapshot(root.path(), PathBuf::from("/Applications/CompareCraft.app/Contents/MacOS/comparecraft"));
+        assert_eq!(snapshot.version, 1);
+        assert_eq!(snapshot.actions.len(), ACTIONS.len());
+        let action = |id: &str| snapshot.actions.iter().find(|action| action.id == id).unwrap();
+        assert!(action("selectLeftFolder").enabled);
+        assert!(action("clearLeftFolder").enabled);
+        assert!(!action("compareStagedFolder").enabled);
+        assert_eq!(action("selectLeftFolder").kind, "folder");
+        assert_eq!(action("selectLeftFolder").count, 1);
+        assert!(!action("selectLeftFolder").requires_left);
+        assert!(action("compareStagedFolder").requires_left);
+        assert_eq!(action("compare").count, 2);
+        assert_eq!(action("compare").kind, "either");
+        assert!(action("clearLeftFolder").clears_left);
+        assert!(snapshot.left_file.is_none() && snapshot.left_folder.is_none());
+        let json = serde_json::to_value(snapshot).unwrap();
+        assert_eq!(json["actions"][0]["requiresLeft"], false);
+    }
 
     #[test]
     fn selection_matrix_preserves_left_actions_and_independent_stages() {

@@ -350,6 +350,9 @@ pub fn resolve(a: &Args, cwd: &Path) -> Outcome {
                 return Outcome::Gui(context_notice(format!("Could not clear selected left: {error}")));
             }
         }
+        if let Err(error) = crate::shell::state_changed() {
+            return Outcome::Gui(context_notice(format!("The selection was cleared, but Finder could not be updated: {error}")));
+        }
         return Outcome::Exit(0);
     }
     if a.context_select_left || a.context_select_left_folder {
@@ -367,7 +370,8 @@ pub fn resolve(a: &Args, cwd: &Path) -> Outcome {
             Err(error) => return Outcome::Gui(context_notice(format!("Could not lock selected left: {error}"))),
         };
         let result = crate::sessions::write_json_atomic(&context_stage_path(folder), &path)
-            .map_err(|e| format!("could not save the selected left {kind}: {e}"));
+            .map_err(|e| format!("could not save the selected left {kind}: {e}"))
+            .and_then(|()| crate::shell::state_changed().map_err(|error| format!("The {kind} was selected, but Finder could not be updated: {error}")));
         return match result {
             Ok(()) => Outcome::Exit(0),
             Err(e) => Outcome::Gui(context_notice(e)),
@@ -439,7 +443,11 @@ pub fn resolve(a: &Args, cwd: &Path) -> Outcome {
         if staged && std::fs::read(context_stage_path(folder)).ok()
             .and_then(|bytes| serde_json::from_slice::<String>(&bytes).ok()) == consumed_left {
             match std::fs::remove_file(context_stage_path(folder)) {
-                Ok(()) => {}
+                Ok(()) => {
+                    if let Err(error) = crate::shell::state_changed() {
+                        comparison.message = Some(format!("The comparison opened, but Finder could not be updated: {error}"));
+                    }
+                }
                 Err(e) => {
                     comparison.message = Some(format!(
                         "The comparison opened, but the selected left {kind} could not be cleared: {e}"

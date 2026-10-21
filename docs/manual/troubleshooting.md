@@ -75,6 +75,27 @@ The menu also depends on the selection: one file or folder offers the matching S
 offer Compare and Merge; two folders offer Compare and Sync. Only enabled actions appear. A mixed selection
 or more than two items offers no CompareCraft actions.
 
+## Finder extension is missing or does not show actions
+
+The native Finder integration is experimental and requires macOS 12 or later. Install the complete
+`CompareCraft.app` in Applications, not just its command-line executable. Open the app and apply the desired
+actions under **Tools > Options > Startup > File manager integration**, then enable CompareCraft in System
+Settings's **Finder Extensions** section. Its location varies by macOS version; search Settings for Extensions.
+
+Options reports missing bundles or shared App Group access failures. Source builds are ad-hoc signed by default;
+a successful compile is not proof that macOS authorizes extension loading. Use matching, authorized signing
+and App Group entitlements for the host and extension. Do not disable Gatekeeper, SIP, or sandboxing.
+
+Check registration with `pluginkit -m -A -D -i dev.comparecraft.app.finder`. If needed, register the installed
+extension with `pluginkit -a /Applications/CompareCraft.app/Contents/PlugIns/CompareCraftFinder.appex` and then
+enable it in Settings. If an older build is cached, toggle the extension off/on; do not restart Finder during
+file operations. Remove duplicate app copies from test locations.
+
+Test inside your home directory or a mounted volume under `/Volumes`, using a selection supported by the
+menu rules above. An inaccessible/deleted staged item is hidden. If a right-item action never appears, check
+Console for **CompareCraft Finder** or **sandbox** messages, particularly App Group or bookmark failures.
+Native signing, sandbox access, host launching and interactive Finder behavior still need community testing.
+
 ## Reset the settings
 
 - Choose **Tools > Restore Factory Defaults…** to reset all options, colors, shortcuts and presets. Your sessions are kept.

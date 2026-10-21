@@ -61,6 +61,13 @@ directories. They offer no actions unless enabled for the current user. Disablin
 per-user Files provider and hides actions from the other providers. Old CompareCraft scripts, service menus
 and Thunar custom actions are removed when integration is reapplied. XDG data/configuration overrides apply.
 
+On macOS, the normal configuration files remain in the application's configuration directory. The experimental
+Finder extension reads a separate `finder-menu.json` snapshot in the `group.dev.comparecraft.app` App Group
+container obtained from macOS. The extension stores `left-file.bookmark` and `left-folder.bookmark` there for
+sandbox access to staged items. The snapshot contains menu preferences, staged paths and monitored folders,
+not sessions or general settings. Group-container data may remain after uninstall; disable the extension in
+System Settings before removing the app. See [Finder troubleshooting](troubleshooting.md#finder-extension-is-missing-or-does-not-show-actions).
+
 ## Reset CompareCraft
 
 - To reset all options, colors, shortcuts and presets but keep your sessions, choose **Tools > Restore Factory Defaults…**. See [Restore Factory Defaults](options.md#restore-factory-defaults).

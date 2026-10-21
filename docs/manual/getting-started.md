@@ -16,6 +16,12 @@ Installers are published on the [CompareCraft releases page](https://github.com/
 
 Download the package for your system and install it the usual way.
 
+On macOS 12 or later, the full app bundle also contains an experimental Finder context-menu extension.
+Move the app to Applications, choose the desired [File manager integration](options.md#file-manager-integration)
+actions, and enable CompareCraft in System Settings's Finder Extensions section. Source/ad-hoc builds may
+require properly authorized signatures and App Group entitlements before the extension can run. The app
+itself can still be used without Finder integration.
+
 !!! note "Unsigned downloads"
     The downloads are not code-signed yet. On Windows, if SmartScreen warns you, choose **More info**, then **Run anyway**. On macOS, the first time you start CompareCraft, right-click it in Applications and choose **Open**.
 

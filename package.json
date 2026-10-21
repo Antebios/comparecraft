@@ -17,6 +17,7 @@
     "ccomp": "cargo run --quiet --manifest-path src-tauri/Cargo.toml --bin ccomp --",
     "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
     "test:menus": "node scripts/build-linux-shell-extensions.mjs --test",
+    "test:finder": "node scripts/build-macos-finder-extension.mjs --test",
     "test": "npm run typecheck && npm run test:rust",
     "parity": "bash scripts/parity.sh",
     "docs:install": "node scripts/docs.mjs install",
