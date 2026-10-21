@@ -38,7 +38,7 @@ fn load_preferences() -> Option<Vec<ShellItem>> {
         .and_then(|bytes| serde_json::from_slice(&bytes).ok())
 }
 
-#[cfg(any(target_os = "windows", test))]
+#[cfg(test)]
 fn reg_file_key(key: &str) -> String {
     key.replacen("HKCU\\", "HKEY_CURRENT_USER\\", 1)
 }
@@ -477,6 +477,7 @@ mod imp {
         }
     }
 
+    #[cfg(test)]
     pub(super) fn key(root: &str, id: &str) -> String {
         format!("{root}\\CompareCraft.{id}")
     }
