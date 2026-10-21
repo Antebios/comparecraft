@@ -22,6 +22,8 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with: { workspaces: "src-tauri -> target" }
       - run: npm ci
+      - name: Test macOS helper signing hook
+        run: node --test tests/macos-signing.test.mjs
       - run: npm run build
       - run: cargo test -- --test-threads=1
         working-directory: src-tauri
@@ -76,7 +78,7 @@ jobs:
       matrix:
         include:
           - platform: ubuntu-22.04
-            args: ""
+            args: "--config src-tauri/tauri.ubuntu-22.04.conf.json"
           - platform: windows-latest
             args: ""
           - platform: macos-latest
@@ -90,7 +92,7 @@ jobs:
         if: startsWith(matrix.platform, 'ubuntu')
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf rpm
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf rpm build-essential pkg-config libthunarx-3-dev
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
       - uses: dtolnay/rust-toolchain@stable

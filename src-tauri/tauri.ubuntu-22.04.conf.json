@@ -1,0 +1,17 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "linux": {
+      "deb": {
+        "files": {
+          "/usr/lib/qt6/plugins/kf6/kfileitemaction/comparecraft-dolphin.so": null
+        }
+      },
+      "rpm": {
+        "files": {
+          "/usr/lib64/qt6/plugins/kf6/kfileitemaction/comparecraft-dolphin.so": null
+        }
+      }
+    }
+  }
+}

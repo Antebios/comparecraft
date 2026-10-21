@@ -76,7 +76,13 @@ access, app-scope bookmark, and the matching App Group entitlements after final 
 and Gatekeeper acceptance are separate checks and are not established by the commands above.
 
 The extension is signed before Tauri embeds it as a custom macOS bundle file, and Tauri signs the containing
-app afterward. If a distribution workflow imports a certificate only during Tauri's later bundling phase,
+app afterward. The macOS `beforeBundleCommand` signs and verifies the built `ccomp` console helper before
+Tauri copies it into `Contents/MacOS`; otherwise an unsigned helper can make app signing fail. This hook
+uses `APPLE_SIGNING_IDENTITY`, or ad-hoc signing when no identity is configured, and handles native and
+explicit-target release/debug output. Run `node --test tests/macos-signing.test.mjs` to check the hook's
+command selection on any platform; actual signature verification requires macOS.
+
+If a distribution workflow imports a certificate only during Tauri's later bundling phase,
 make that signing identity available in the keychain before running the extension build hook as well. Do not
 use `codesign --deep --force` to re-sign everything with the host entitlements; the extension has its own
 sandbox entitlements and must keep them.

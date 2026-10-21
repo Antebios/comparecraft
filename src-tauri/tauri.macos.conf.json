@@ -1,6 +1,7 @@
 {
   "build": {
-    "beforeBuildCommand": "npm run build && node scripts/build-macos-finder-extension.mjs"
+    "beforeBuildCommand": "npm run build && node scripts/build-macos-finder-extension.mjs",
+    "beforeBundleCommand": "node scripts/sign-macos-binaries.mjs"
   },
   "bundle": {
     "macOS": {
