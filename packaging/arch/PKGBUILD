@@ -28,7 +28,7 @@ build() {
 
 check() {
   cd "$_srcroot/src-tauri"
-  cargo test --release --lib
+  cargo test --release --lib -- --test-threads=1
 }
 
 package() {

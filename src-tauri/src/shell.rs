@@ -377,6 +377,7 @@ mod imp {
             };
             set(&[
                 item("compare", true),
+                item("selectLeft", true),
                 item("sync", true),
                 item("merge", false),
             ])
@@ -389,7 +390,7 @@ mod imp {
                 .filter(|i| i.enabled)
                 .map(|i| i.id.as_str())
                 .collect();
-            assert_eq!(on, vec!["compare", "sync"]);
+            assert_eq!(on, vec!["compare", "selectLeft", "sync"]);
             let sync =
                 fs::read_to_string(d.path().join("nautilus/scripts/CompareCraft/Sync")).unwrap();
             assert!(
@@ -408,7 +409,7 @@ mod imp {
             .unwrap();
             assert!(
                 menu.contains("X-KDE-RequiredNumberOfArguments=2\nName=Compare\n")
-                    && menu.contains("\"-cc-compare\" %F"),
+                    && menu.ends_with(" -cc-compare %F\n"),
                 "{menu}"
             );
             let left_menu = fs::read_to_string(
