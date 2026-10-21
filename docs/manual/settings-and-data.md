@@ -51,10 +51,22 @@ Profiles (Tools > Profiles) are not stored in the settings folder, and they are 
 
 On Linux, when you turn on the commands under **File manager integration** on the [Startup page of the Options](options.md#startup), CompareCraft creates:
 
-- the folder `~/.local/share/nautilus/scripts/CompareCraft/` with scripts for Nautilus (Files), and
-- the file `~/.local/share/kio/servicemenus/comparecraft.desktop` for the Dolphin context menu.
+- `~/.local/share/nautilus-python/extensions/comparecraft.py`, the native Files menu provider.
+- `shell-integration.json` in the CompareCraft configuration directory, holding enabled action preferences.
+- `shell-executable.json`, recording the installed application path used by native providers.
+- `context-left.json` and `context-left-folder.json`, independent staged selections, plus per-kind lock files.
 
-Turning the commands off removes them again.
+The package installs the shared policy library and the Thunar/Dolphin native providers in system library/plugin
+directories. They offer no actions unless enabled for the current user. Disabling every command removes the
+per-user Files provider and hides actions from the other providers. Old CompareCraft scripts, service menus
+and Thunar custom actions are removed when integration is reapplied. XDG data/configuration overrides apply.
+
+On macOS, the normal configuration files remain in the application's configuration directory. The experimental
+Finder extension reads a separate `finder-menu.json` snapshot in the `group.dev.comparecraft.app` App Group
+container obtained from macOS. The extension stores `left-file.bookmark` and `left-folder.bookmark` there for
+sandbox access to staged items. The snapshot contains menu preferences, staged paths and monitored folders,
+not sessions or general settings. Group-container data may remain after uninstall; disable the extension in
+System Settings before removing the app. See [Finder troubleshooting](troubleshooting.md#finder-extension-is-missing-or-does-not-show-actions).
 
 ## Reset CompareCraft
 

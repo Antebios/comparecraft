@@ -1,0 +1,16 @@
+{
+  "KPlugin": {
+    "Id": "comparecraft",
+    "Name": "CompareCraft",
+    "Description": "Compare, merge and synchronize selected files and folders",
+    "Icon": "comparecraft"
+  },
+  "MimeType": [
+    "application/octet-stream",
+    "inode/directory"
+  ],
+  "X-KDE-Protocols": [
+    "file"
+  ],
+  "X-KDE-Show-In-Submenu": false
+}

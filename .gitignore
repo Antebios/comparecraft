@@ -1,6 +1,8 @@
 node_modules
 dist
 src-tauri/target
+src-tauri/shell-menu/target
+src-tauri/windows-shell-extension/target
 src-tauri/gen
 
 # makepkg build outputs

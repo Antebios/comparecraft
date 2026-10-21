@@ -1,0 +1,7 @@
+{
+  "bundle": {
+    "resources": {
+      "target/release/comparecraft_shell_extension.dll": "comparecraft_shell_extension.dll"
+    }
+  }
+}

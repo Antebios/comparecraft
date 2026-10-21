@@ -34,16 +34,32 @@ The binary and rules choices and **Open view automatically if files are differen
 
 ### File manager integration
 
-On Linux, CompareCraft can add commands to the file manager. The page says "Adds CompareCraft commands to the Nautilus (Files) scripts menu and the Dolphin context menu." Check the commands you want:
+Enable the desired file and folder commands independently. A single file offers **Select Left File for Compare**;
+a single folder offers **Select Left Folder for Compare**. The matching **Compare to Selected Left** action
+appears only after staging that kind of item. Select Left remains available for replacing it, and **Clear Selected
+Left** removes it. File and folder selections do not overwrite each other.
 
-- **Compare (two selected items)**
-- **Sync folders**
-- **Merge (three selected files)**
-- **Edit text file**
+Exactly two files offer **Compare** and **Merge**; exactly two folders offer **Compare** and **Sync**.
+Mixed selections, more than two items and background clicks offer no selection actions. Only checked actions
+are shown. A successful staged comparison clears its own left selection; direct pair actions preserve staging.
 
-In Nautilus (Files), the commands appear in the **Scripts** menu, in a **CompareCraft** submenu. In Dolphin, they appear in the context menu, in a **CompareCraft** submenu.
+GNOME Files requires `nautilus-python` and uses the normal context menu, not Scripts. Thunar and Dolphin
+require the packaged native providers. Install the updated package and restart the file manager after installing
+or updating a native provider. In Thunar, closing a window may leave its background daemon running. Finish
+file operations, run `thunar --quit`, then reopen Thunar with `thunar`; this closes all Thunar windows and
+restarts the daemon. See [missing context-menu commands](troubleshooting.md#file-manager-context-menu-commands-are-missing).
+Further staging changes are read when each menu opens; they do not require another restart. Icons are provided where
+supported by the host. Windows Explorer uses its native command provider; Windows 11 may put the commands
+under **Show more options**.
 
-On other systems the page says "Not available on this platform. Use “Open With → CompareCraft” from your file manager."
+On macOS 12 or later, the complete app bundle includes an **experimental Finder Sync extension**. Move the
+app to Applications, enable the desired actions here, then enable CompareCraft in System Settings under
+**Extensions > Finder Extensions** (on recent versions, **General > Login Items & Extensions**). Applying
+Options registers the extension but cannot enable it for you. Signing and App Group authorization may be
+required, especially for source/ad-hoc builds. The default scope covers your home directory and mounted
+volumes under `/Volumes`. Bare binaries and `tauri dev` do not embed the extension. All actions are opt-in on
+macOS. Unchecking every action hides its menus. See [Finder troubleshooting](troubleshooting.md#finder-extension-is-missing-or-does-not-show-actions).
+Manual Quick Actions remain a separate fallback and may create duplicate entries if left installed.
 
 ## Tabs
 

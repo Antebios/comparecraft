@@ -1,0 +1,30 @@
+{
+  "bundle": {
+    "linux": {
+      "appimage": {
+        "files": {
+          "/usr/lib/comparecraft/libcomparecraft_menu.so": "target/release/libcomparecraft_menu.so"
+        }
+      },
+      "deb": {
+        "recommends": [
+          "python3-nautilus",
+          "thunar",
+          "dolphin"
+        ],
+        "files": {
+          "/usr/lib/comparecraft/libcomparecraft_menu.so": "target/release/libcomparecraft_menu.so",
+          "/usr/lib/thunarx-3/libcomparecraft-thunar.so": "target/release/libcomparecraft-thunar.so",
+          "/usr/lib/qt6/plugins/kf6/kfileitemaction/comparecraft-dolphin.so": "target/dolphin-release/comparecraft-dolphin.so"
+        }
+      },
+      "rpm": {
+        "files": {
+          "/usr/lib64/comparecraft/libcomparecraft_menu.so": "target/release/libcomparecraft_menu.so",
+          "/usr/lib64/thunarx-3/libcomparecraft-thunar.so": "target/release/libcomparecraft-thunar.so",
+          "/usr/lib64/qt6/plugins/kf6/kfileitemaction/comparecraft-dolphin.so": "target/dolphin-release/comparecraft-dolphin.so"
+        }
+      }
+    }
+  }
+}

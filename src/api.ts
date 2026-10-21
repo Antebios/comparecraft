@@ -13,6 +13,7 @@ export interface LaunchSpec {
   saveTarget: string | null;
   noBackups: boolean;
   session: string | null;
+  message: string | null;
 }
 
 export interface PathInfo {
@@ -428,12 +429,20 @@ export interface ImportData {
   sessions: Session[];
 }
 export interface ShellItem {
-  id: "compare" | "sync" | "merge" | "edit";
+  id:
+    | "compare"
+    | "selectLeft"
+    | "compareStaged"
+    | "selectLeftFolder"
+    | "compareStagedFolder"
+    | "sync"
+    | "merge";
   enabled: boolean;
 }
 export interface ShellStatus {
   supported: boolean;
   items: ShellItem[];
+  warnings?: string[];
 }
 
 export function basename(p: string): string {

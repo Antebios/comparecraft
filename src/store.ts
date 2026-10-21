@@ -210,6 +210,10 @@ export async function openAuto(paths: string[], forceKind?: ViewKind) {
 }
 
 export async function openSpec(spec: LaunchSpec) {
+  if (spec.message) {
+    alert(spec.message);
+    if (spec.kind === "home" && !spec.paths.length) return;
+  }
   if (spec.kind === "home") {
     activate("home");
     return;

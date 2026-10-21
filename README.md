@@ -289,9 +289,117 @@ comparecraft -automerge [-force] [-iu] [-reviewconflicts] mine theirs base -merg
 comparecraft -filters="*.rs;-target/" -expandall dirA dirB
 comparecraft "My saved session"
 comparecraft @nightly.txt dirA dirB -silent   # run a script without the GUI
+comparecraft -cc-select-left a.txt             # stage a file for a later context-menu comparison
+comparecraft -cc-compare-staged b.txt           # compare b.txt to the staged left file
+comparecraft -cc-compare a.txt b.txt            # compare two selected files
 ```
 
 Switches use `-name[=value]`; on Windows `/name[=value]` also works. Run `comparecraft -h` for the full list.
+
+### File-manager context menus
+
+On Windows, Linux and macOS, **Tools → Options → Startup → File manager integration** adds or removes CompareCraft
+actions for the current user. This does not require administrator privileges. Windows registrations are stored in
+the current user's Explorer classes; Linux actions are installed for Nautilus (Files), Dolphin and Thunar.
+The app installer migrates existing registrations to the current command format and removes them when
+uninstalled. A fresh Windows NSIS install enables the actions by default; existing choices are preserved during
+upgrades, and the actions can be enabled or removed in Options. Linux actions remain opt-in.
+On Windows, if the installer cannot refresh the registrations, it writes the failure exit code to
+`shell-integration-install-error.txt` in the installation directory. The Options checkboxes reflect
+enabled preferences, even when an action is temporarily hidden for the current selection.
+
+Enable the file and folder actions separately. **Select Left File for Compare** remembers a file;
+**Select Left Folder for Compare** remembers a folder independently. Selecting Left again replaces only
+that kind of selection. **Compare to Selected Left File/Folder** appears only for one matching right item
+and a valid, different left path. Select Left stays available after staging. **Clear Selected Left File/Folder**
+clears only that kind of selection. A successful staged comparison consumes its own selection; direct
+two-item actions leave both selections intact. Deleted or invalid left paths are treated as unstaged.
+
+| Selection | Enabled actions offered |
+| --- | --- |
+| One file | Select Left File; matching Compare to Selected Left and Clear when staged |
+| One folder | Select Left Folder; matching Compare to Selected Left and Clear when staged |
+| Two files | Compare, Merge |
+| Two folders | Compare, Sync |
+| Nothing, mixed types, or more than two items | None |
+
+Sync opens the existing synchronization interface, not an immediate copy operation. Folder Merge requires
+a base folder and is not offered for two folders. Direct comparisons preserve the file manager's supplied
+order; use Swap Sides when necessary. Staged comparisons explicitly preserve left/right order.
+
+Linux uses native providers: GNOME Files needs `nautilus-python`; Thunar and Dolphin need their packaged
+Thunarx/KIO providers. The Arch package builds and installs all three. Rebuild/reinstall the package, enable
+the desired actions in Options, and restart each file manager after installing or updating its native provider.
+For Thunar, finish any file operations, run `thunar --quit`, then reopen it with `thunar`.
+This closes all Thunar windows and its background daemon; closing a window alone may leave the old daemon
+running without the new provider. No rebuild is needed if the updated package is already installed.
+See [missing context-menu commands](docs/manual/troubleshooting.md#file-manager-context-menu-commands-are-missing).
+Files actions now appear in the normal context menu, not Scripts. Applying Options removes the old
+CompareCraft scripts, service menus and custom-action block without touching unrelated actions.
+Native menus re-evaluate selection and staged state when opened. Action icons are supplied where the host
+supports them; appearance depends on the installed icon theme and file-manager version. On Windows 11,
+Explorer may place the commands under Show more options. macOS now includes an **experimental Finder Sync
+extension**; native activation, signing, sandbox access and launch behavior still need testing on real Macs.
+
+Run `npm run test:menus` on Linux to build and test native menu callbacks. The native Windows provider
+also needs validation in Explorer on Windows; a Linux type-check is not a Windows runtime test.
+
+If an older installer has already been removed, its uninstaller cannot remove the registry entries because that
+older build did not include a cleanup hook. Installing this build migrates the entries; uninstalling this build
+removes them. To remove them immediately without reinstalling, run this PowerShell command as the same Windows
+user:
+
+```powershell
+$root = 'Registry::HKEY_CURRENT_USER\Software\Classes\*\shell'
+Get-ChildItem -LiteralPath $root -ErrorAction SilentlyContinue |
+  Where-Object { $_.PSChildName -like 'CompareCraft.*' } |
+  Remove-Item -Recurse -Force
+Remove-Item -LiteralPath 'Registry::HKEY_CURRENT_USER\Software\Classes\Directory\shell\CompareCraft.sync' -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath 'Registry::HKEY_CURRENT_USER\Software\Classes\CLSID\{5E8A1F31-92B3-4B16-A421-724E3F8C1001}' -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath 'Registry::HKEY_CURRENT_USER\Software\Classes\CLSID\{5E8A1F32-92B3-4B16-A421-724E3F8C1002}' -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath 'Registry::HKEY_CURRENT_USER\Software\Classes\CLSID\{5E8A1F33-92B3-4B16-A421-724E3F8C1003}' -Recurse -Force -ErrorAction SilentlyContinue
+```
+
+#### macOS Finder Sync (Experimental)
+
+The macOS build embeds `CompareCraftFinder.appex` in the application bundle for both Apple Silicon and Intel.
+Finder Sync requires macOS 12 or later and a complete `.app` installation, not a bare binary or `tauri dev`.
+Move CompareCraft to `/Applications`, open it, enable the desired actions in Options, and enable **CompareCraft**
+in System Settings under **Extensions / Finder Extensions**. On recent versions this is under **General > Login
+Items & Extensions**; the exact location varies. Options registers the extension but does not enable it without
+your consent. The default scope is your home directory and mounted volumes under `/Volumes`, not every system
+directory. Files and folders share the same selection rules as the other native integrations. Menu icons use
+SF Symbols where available. Finder activation does not require restarting after each staged selection.
+
+The sandboxed extension and host share the `group.dev.comparecraft.app` App Group. Local builds are ad-hoc
+signed for compilation checks; this does **not** guarantee macOS will allow extension activation or App Group
+access. Properly authorized signing identities and provisioning profiles may be necessary. Do not disable SIP,
+Gatekeeper, or the sandbox to work around signing errors.
+
+Developers/testers: see [macOS Finder setup and test checklist](packaging/macos/README.md). Run
+`npm run test:finder` on a Mac with Xcode; PR macOS build jobs compile the universal extension and run native
+menu-model tests, but they cannot verify interactive Finder behavior. Linux checks validate the portable Rust
+snapshot and plist contracts only. Build and CI success are not a claim of native runtime verification.
+
+#### macOS Quick Actions (Fallback)
+
+Manual Quick Actions remain available if Finder Sync cannot be activated. They are not registered by Options
+and do not provide dynamic type/count/staged-state filtering. They can be created per-user in
+Automator without administrator privileges:
+
+1. Create a **Quick Action** that receives files in Finder and add **Run Shell Script** with “Pass input: as
+   arguments”.
+2. For a **Select Left File for Compare** action, use
+   `"/Applications/CompareCraft.app/Contents/MacOS/comparecraft" -cc-select-left "$1"`.
+3. For a **Compare to Selected Left File** action, use
+   `"/Applications/CompareCraft.app/Contents/MacOS/comparecraft" -cc-compare-staged "$1"`.
+4. For a **Compare** action that accepts multiple files, use
+   `"/Applications/CompareCraft.app/Contents/MacOS/comparecraft" -cc-compare "$@"`.
+
+Adjust the executable path if CompareCraft is installed outside `/Applications`. The staged-left action is
+shared across platforms and survives separate Finder invocations. To remove a Quick Action, delete its workflow
+from `~/Library/Services`. Quick Action titles are static; macOS does not dynamically include the staged file's
+name in the menu item.
 
 ### Console version
 
@@ -455,7 +563,8 @@ src-tauri/src/
   sessions.rs        session persistence
   settings.rs        options file, settings export/import
   snapshot.rs        folder snapshots (.ccsnap)
-  shell.rs           file-manager integration (Nautilus scripts, Dolphin service menu)
+  shell.rs           native file-manager integration and preferences
+  shell/finder.rs    experimental Finder Sync registration and shared menu state
   cli.rs             argument parsing, automerge
   script.rs          @script runner: commands, selection, file operations, logging
   report.rs          folder, file, text, hex, table and picture reports (text, HTML, XML), used by scripts and the GUI

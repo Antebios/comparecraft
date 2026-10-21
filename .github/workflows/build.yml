@@ -23,8 +23,48 @@ jobs:
         with: { workspaces: "src-tauri -> target" }
       - run: npm ci
       - run: npm run build
-      - run: cargo test
+      - run: cargo test -- --test-threads=1
         working-directory: src-tauri
+
+  build-check:
+    name: Compile (${{ matrix.platform }} ${{ matrix.args }})
+    needs: test
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04
+            args: ""
+          - platform: windows-latest
+            args: ""
+          - platform: macos-latest
+            args: "--target aarch64-apple-darwin"
+          - platform: macos-latest
+            args: "--target x86_64-apple-darwin"
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Linux deps
+        if: startsWith(matrix.platform, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ startsWith(matrix.platform, 'macos') && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - uses: swatinem/rust-cache@v2
+        with: { workspaces: "src-tauri -> target" }
+      - run: npm ci
+      - name: Compile Tauri without bundling or publishing
+        run: npm run app:build:bin -- ${{ matrix.args }}
+      - name: Test native Finder menu model
+        if: startsWith(matrix.platform, 'macos')
+        run: npm run test:finder
 
   bundle:
     needs: test

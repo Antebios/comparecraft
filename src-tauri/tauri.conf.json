@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "identifier": "dev.comparecraft.app",
   "build": {
-    "beforeDevCommand": "npm run dev",
+    "beforeDevCommand": "node scripts/build-windows-shell-extension.mjs && node scripts/build-linux-shell-extensions.mjs && npm run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "npm run build && node scripts/build-windows-shell-extension.mjs && node scripts/build-linux-shell-extensions.mjs --release",
     "frontendDist": "../dist"
   },
   "app": {
@@ -38,6 +38,11 @@
     "linux": {
       "deb": { "depends": [] },
       "appimage": { "bundleMediaFramework": false }
+    },
+    "windows": {
+      "nsis": {
+        "installerHooks": "windows/installer-hooks.nsh"
+      }
     }
   }
 }

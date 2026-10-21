@@ -1,0 +1,14 @@
+{
+  "build": {
+    "beforeBuildCommand": "npm run build && node scripts/build-macos-finder-extension.mjs"
+  },
+  "bundle": {
+    "macOS": {
+      "signingIdentity": "-",
+      "entitlements": "macos/CompareCraft.entitlements",
+      "files": {
+        "PlugIns/CompareCraftFinder.appex": "target/finder-extension/CompareCraftFinder.appex"
+      }
+    }
+  }
+}
