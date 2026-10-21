@@ -54,10 +54,12 @@ fn effective_items_for_state(items: &[ShellItem], has_staged_left: bool) -> Vec<
         .collect()
 }
 
+#[cfg(any(target_os = "windows", test))]
 fn reg_file_key(key: &str) -> String {
     key.replacen("HKCU\\", "HKEY_CURRENT_USER\\", 1)
 }
 
+#[cfg(any(target_os = "windows", test))]
 fn drop_target_clsid(id: &str) -> Option<&'static str> {
     match id {
         "compare" => Some("{5E8A1F31-92B3-4B16-A421-724E3F8C1001}"),
@@ -83,6 +85,7 @@ fn refresh_preferences(
     apply_preferences(&current, apply)
 }
 
+#[cfg(target_os = "windows")]
 fn install_preferences(
     status: impl FnOnce() -> ShellStatus,
     apply: impl FnOnce(&[ShellItem]) -> io::Result<()>,
@@ -90,6 +93,7 @@ fn install_preferences(
     install_preferences_with_preferences(load_preferences(), status, apply)
 }
 
+#[cfg(target_os = "windows")]
 fn install_preferences_with_preferences(
     preferences: Option<Vec<ShellItem>>,
     status: impl FnOnce() -> ShellStatus,
@@ -99,6 +103,7 @@ fn install_preferences_with_preferences(
     apply_preferences(&current, apply)
 }
 
+#[cfg(any(target_os = "windows", test))]
 fn initial_preferences(
     preferences: Option<Vec<ShellItem>>,
     detected: ShellStatus,

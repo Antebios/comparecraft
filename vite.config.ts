@@ -13,5 +13,15 @@ export default defineConfig({
     hmr: host ? { protocol: "ws", host, port: 1421 } : undefined,
     watch: { ignored: ["**/src-tauri/**"] },
   },
-  build: { target: "es2022", outDir: "dist" },
+  build: {
+    target: "es2022",
+    outDir: "dist",
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [{ name: "help", test: /\/src\/help\/|\/node_modules\/marked\// }],
+        },
+      },
+    },
+  },
 });
