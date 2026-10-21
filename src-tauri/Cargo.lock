@@ -532,6 +532,7 @@ version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",
+ "comparecraft-menu",
  "crc32fast",
  "dirs 6.0.0",
  "encoding_rs",
@@ -550,6 +551,15 @@ dependencies = [
  "tempfile",
  "trash",
  "unicode-normalization",
+]
+
+[[package]]
+name = "comparecraft-menu"
+version = "0.1.0"
+dependencies = [
+ "dirs 6.0.0",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

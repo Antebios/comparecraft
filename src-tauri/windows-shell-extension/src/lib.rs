@@ -1,10 +1,12 @@
-#![cfg(target_os = "windows")]
+#![cfg(any(target_os = "windows", test))]
 
 use std::ffi::c_void;
 use std::mem::{size_of, zeroed};
 use std::path::PathBuf;
 use std::ptr::{null, null_mut};
 use std::sync::atomic::{AtomicU32, Ordering};
+
+mod command;
 
 type HResult = i32;
 type Hwnd = *mut c_void;
@@ -252,6 +254,7 @@ pub unsafe extern "system" fn DllGetClassObject(
 }
 
 unsafe fn action_for_class(class_id: Guid) -> Option<u32> {
+    if let Some(index) = command::action_for_class(class_id) { return Some(100 + index); }
     if class_id == CLSID_COMPARE {
         Some(0)
     } else if class_id == CLSID_SYNC {
@@ -306,6 +309,9 @@ unsafe extern "system" fn class_factory_create_instance(
     *out = null_mut();
     if !outer.is_null() {
         return CLASS_E_NOAGGREGATION;
+    }
+    if (*this).action >= 100 {
+        return command::create((*this).action - 100, iid, out);
     }
     if *iid != IID_IUNKNOWN && *iid != IID_IDROPTARGET {
         return E_NOINTERFACE;

@@ -33,14 +33,24 @@ const BACKUP_KINDS: [BackupKind, string][] = [
 ];
 
 const SHELL_LABELS: Record<ShellItem["id"], string> = {
-  compare: "Compare (two selected files)",
+  compare: "Compare (two selected files or folders)",
   selectLeft: "Select Left File for Compare",
   compareStaged: "Compare to Selected Left File",
+  selectLeftFolder: "Select Left Folder for Compare",
+  compareStagedFolder: "Compare to Selected Left Folder",
   sync: "Sync folders",
   merge: "Merge (two selected files)",
 };
 
-const SHELL_IDS: ShellItem["id"][] = ["compare", "selectLeft", "compareStaged", "sync", "merge"];
+const SHELL_IDS: ShellItem["id"][] = [
+  "compare",
+  "selectLeft",
+  "compareStaged",
+  "sync",
+  "merge",
+  "selectLeftFolder",
+  "compareStagedFolder",
+];
 
 export default function OptionsDialog(props: { page?: OptionsPage; onClose: () => void }) {
   const [draft, setDraft] = createStore<Settings>(snapshotSettings());
@@ -116,18 +126,39 @@ export default function OptionsDialog(props: { page?: OptionsPage; onClose: () =
   );
 
   return (
-    <div class="modal-backdrop" onClick={(e) => e.target === e.currentTarget && props.onClose()} onKeyDown={(e) => e.key === "Escape" && props.onClose()}>
-      <div class="modal options-dialog" role="dialog" aria-label="Options" tabIndex={-1} ref={(el) => onMount(() => trapFocus(el))}>
+    <div
+      class="modal-backdrop"
+      onClick={(e) => e.target === e.currentTarget && props.onClose()}
+      onKeyDown={(e) => e.key === "Escape" && props.onClose()}
+    >
+      <div
+        class="modal options-dialog"
+        role="dialog"
+        aria-label="Options"
+        tabIndex={-1}
+        ref={(el) => onMount(() => trapFocus(el))}
+      >
         <div class="modal-head">
           <span>Options</span>
-          <button class="icon-btn" onClick={props.onClose}>✕</button>
+          <button class="icon-btn" onClick={props.onClose}>
+            ✕
+          </button>
         </div>
         <div class="options-body">
           <div class="options-nav">
-            <input class="options-search" placeholder="Search options" value={search()} onInput={(e) => setSearch(e.currentTarget.value)} />
+            <input
+              class="options-search"
+              placeholder="Search options"
+              value={search()}
+              onInput={(e) => setSearch(e.currentTarget.value)}
+            />
             <For each={pages()}>
               {(p) => (
-                <button class="options-cat" classList={{ active: page() === p.id }} onClick={() => setPage(p.id)}>
+                <button
+                  class="options-cat"
+                  classList={{ active: page() === p.id }}
+                  onClick={() => setPage(p.id)}
+                >
                   {p.label}
                 </button>
               )}
@@ -137,37 +168,98 @@ export default function OptionsDialog(props: { page?: OptionsPage; onClose: () =
             <h3>{PAGES.find((p) => p.id === page())?.label}</h3>
             <Switch>
               <Match when={page() === "startup"}>
-                {group("Workspace",
+                {group(
+                  "Workspace",
                   <>
                     <label class="opt-row">
                       When starting, load workspace:{" "}
-                      <select value={draft.workspaceLoad} onChange={(e) => set("workspaceLoad")(e.currentTarget.value)}>
+                      <select
+                        value={draft.workspaceLoad}
+                        onChange={(e) =>
+                          set("workspaceLoad")(e.currentTarget.value)
+                        }
+                      >
                         <option value="none">(none)</option>
                         <option value="last">Last used tabs</option>
-                        <For each={Object.keys(draft.workspaces ?? {}).sort()}>{(n) => <option value={n}>{n}</option>}</For>
+                        <For each={Object.keys(draft.workspaces ?? {}).sort()}>
+                          {(n) => <option value={n}>{n}</option>}
+                        </For>
                       </select>
                     </label>
                     <label class="opt-row">
                       On exit, save workspace as:{" "}
-                      <select value={draft.workspaceSave} onChange={(e) => set("workspaceSave")(e.currentTarget.value)}>
+                      <select
+                        value={draft.workspaceSave}
+                        onChange={(e) =>
+                          set("workspaceSave")(e.currentTarget.value)
+                        }
+                      >
                         <option value="none">(none)</option>
                         <option value="last">Last used tabs</option>
-                        <For each={Object.keys(draft.workspaces ?? {}).sort()}>{(n) => <option value={n}>{n}</option>}</For>
+                        <For each={Object.keys(draft.workspaces ?? {}).sort()}>
+                          {(n) => <option value={n}>{n}</option>}
+                        </For>
                       </select>
                     </label>
                   </>,
                 )}
-                {group("Quick compare (Home view)",
+                {group(
+                  "Quick compare (Home view)",
                   <>
-                    {check("quickCompareShow", "Show quick compare results for two files before opening a view")}
-                    <label class="opt-check indent"><input type="radio" name="qc" checked={!draft.quickCompareRules} disabled={!draft.quickCompareShow} onChange={() => set("quickCompareRules")(false)} /> Binary comparison</label>
-                    <label class="opt-check indent"><input type="radio" name="qc" checked={draft.quickCompareRules} disabled={!draft.quickCompareShow} onChange={() => set("quickCompareRules")(true)} /> Rules-based comparison</label>
-                    {check("quickCompareOpenIfDiff", "Open view automatically if files are different", { disabled: !draft.quickCompareShow })}
+                    {check(
+                      "quickCompareShow",
+                      "Show quick compare results for two files before opening a view",
+                    )}
+                    <label class="opt-check indent">
+                      <input
+                        type="radio"
+                        name="qc"
+                        checked={!draft.quickCompareRules}
+                        disabled={!draft.quickCompareShow}
+                        onChange={() => set("quickCompareRules")(false)}
+                      />{" "}
+                      Binary comparison
+                    </label>
+                    <label class="opt-check indent">
+                      <input
+                        type="radio"
+                        name="qc"
+                        checked={draft.quickCompareRules}
+                        disabled={!draft.quickCompareShow}
+                        onChange={() => set("quickCompareRules")(true)}
+                      />{" "}
+                      Rules-based comparison
+                    </label>
+                    {check(
+                      "quickCompareOpenIfDiff",
+                      "Open view automatically if files are different",
+                      { disabled: !draft.quickCompareShow },
+                    )}
                   </>,
                 )}
-                {group("File manager integration",
-                  <Show when={shell()?.supported} fallback={<p class="muted">Automatic setup is unavailable on this platform. On macOS, create Finder Quick Actions using the commands in the README.</p>}>
-                    <p class="muted">Adds per-user actions to Windows Explorer, Nautilus (Files), Dolphin, and Thunar. Selecting a left file switches the menu from “Select Left” to “Compare to Selected Left.” Windows Explorer passes selected paths to CompareCraft together; Dolphin hides Compare, Merge, and Sync unless exactly two items are selected. Nautilus and Thunar may still show those actions for other selection counts; CompareCraft validates the selection. Edit is omitted because it duplicated the existing file-opening behavior.</p>
+                {group(
+                  "File manager integration",
+                  <Show
+                    when={shell()?.supported}
+                    fallback={
+                      <p class="muted">
+                        Automatic setup is unavailable on this platform. On
+                        macOS, create Finder Quick Actions using the commands in
+                        the README.
+                      </p>
+                    }
+                  >
+                    <p class="muted">
+                      File and folder selections are remembered independently.
+                      Select Left remains available to replace a selection.
+                      Compare to Selected Left appears only for the matching
+                      type. Files requires nautilus-python; Thunar and Dolphin
+                      require their packaged native providers. Restart the file
+                      manager once after installing its provider.
+                    </p>
+                    <For each={shell()?.warnings ?? []}>
+                      {(warning) => <p class="error">{warning}</p>}
+                    </For>
                     <For each={shell()!.items}>
                       {(it) => (
                         <label class="opt-check">
@@ -181,7 +273,9 @@ export default function OptionsDialog(props: { page?: OptionsPage; onClose: () =
                               const enabled = e.currentTarget.checked;
                               setShell((current) => ({
                                 ...current,
-                                items: current.items.map((x) => x.id === selected ? { ...x, enabled } : x),
+                                items: current.items.map((x) =>
+                                  x.id === selected ? { ...x, enabled } : x,
+                                ),
                               }));
                             }}
                           />{" "}
@@ -194,58 +288,112 @@ export default function OptionsDialog(props: { page?: OptionsPage; onClose: () =
               </Match>
 
               <Match when={page() === "tabs"}>
-                {group("Tabs",
+                {group(
+                  "Tabs",
                   <>
                     {check("tabNewNext", "Open new tab next to active tab")}
-                    {check("tabSingleCloseWindow", "Closing last tab closes the window")}
-                    {check("tabsConfirmClose", "Warn when closing a tab with unsaved changes")}
-                    {check("tabSingleHide", "Hide tab bar when no comparison tabs are open")}
+                    {check(
+                      "tabSingleCloseWindow",
+                      "Closing last tab closes the window",
+                    )}
+                    {check(
+                      "tabsConfirmClose",
+                      "Warn when closing a tab with unsaved changes",
+                    )}
+                    {check(
+                      "tabSingleHide",
+                      "Hide tab bar when no comparison tabs are open",
+                    )}
                   </>,
                 )}
               </Match>
 
               <Match when={page() === "colors"}>
-                {group("Theme",
+                {group(
+                  "Theme",
                   <label class="opt-row">
                     Theme:{" "}
-                    <select value={draft.theme} onChange={(e) => set("theme")(e.currentTarget.value as "auto")}>
+                    <select
+                      value={draft.theme}
+                      onChange={(e) =>
+                        set("theme")(e.currentTarget.value as "auto")
+                      }
+                    >
                       <option value="auto">Follow system</option>
                       <option value="light">Light</option>
                       <option value="dark">Dark</option>
                     </select>
                   </label>,
                 )}
-                {group("Colors",
+                {group(
+                  "Colors",
                   <div class="opt-colors">
                     <For each={COLOR_VARS}>
                       {([v, label]) => (
                         <label class="opt-color">
                           <input
                             type="color"
-                            value={draft.colors[v] || getComputedStyle(document.documentElement).getPropertyValue(v).trim() || "#000000"}
-                            onInput={(e) => setDraft("colors", { ...draft.colors, [v]: e.currentTarget.value })}
+                            value={
+                              draft.colors[v] ||
+                              getComputedStyle(document.documentElement)
+                                .getPropertyValue(v)
+                                .trim() ||
+                              "#000000"
+                            }
+                            onInput={(e) =>
+                              setDraft("colors", {
+                                ...draft.colors,
+                                [v]: e.currentTarget.value,
+                              })
+                            }
                           />
-                          <span classList={{ muted: !draft.colors[v] }}>{label}</span>
+                          <span classList={{ muted: !draft.colors[v] }}>
+                            {label}
+                          </span>
                           <Show when={draft.colors[v]}>
-                            <button class="link-btn" onClick={() => { const c = { ...draft.colors }; delete c[v]; setDraft("colors", c); }}>Default</button>
+                            <button
+                              class="link-btn"
+                              onClick={() => {
+                                const c = { ...draft.colors };
+                                delete c[v];
+                                setDraft("colors", c);
+                              }}
+                            >
+                              Default
+                            </button>
                           </Show>
                         </label>
                       )}
                     </For>
                   </div>,
                 )}
-                {group("Folder views",
+                {group(
+                  "Folder views",
                   <>
-                    {check("folderStripes", "Alternate row background (stripes)")}
-                    {check("folderColorFolders", "Color folders to reflect content")}
+                    {check(
+                      "folderStripes",
+                      "Alternate row background (stripes)",
+                    )}
+                    {check(
+                      "folderColorFolders",
+                      "Color folders to reflect content",
+                    )}
                   </>,
                 )}
-                {group("Fonts",
+                {group(
+                  "Fonts",
                   <>
                     {num("uiFontSize", "Interface font size:", 9, 24, "px")}
                     <label class="opt-row">
                       Editor font:{" "}
-                      <input type="text" placeholder="(default monospace)" value={draft.editorFont} onChange={(e) => set("editorFont")(e.currentTarget.value)} />
+                      <input
+                        type="text"
+                        placeholder="(default monospace)"
+                        value={draft.editorFont}
+                        onChange={(e) =>
+                          set("editorFont")(e.currentTarget.value)
+                        }
+                      />
                     </label>
                     {num("editorFontSize", "Editor font size:", 8, 28, "px")}
                   </>,
@@ -253,23 +401,40 @@ export default function OptionsDialog(props: { page?: OptionsPage; onClose: () =
               </Match>
 
               <Match when={page() === "text"}>
-                {group("Text views",
+                {group(
+                  "Text views",
                   <>
-                    {num("contextLines", "Context lines (Show Context):", 0, 50)}
+                    {num(
+                      "contextLines",
+                      "Context lines (Show Context):",
+                      0,
+                      50,
+                    )}
                     {num("tabSize", "Tab size:", 1, 16)}
-                    {check("findCurrentWord", "Initialize Find to current word")}
+                    {check(
+                      "findCurrentWord",
+                      "Initialize Find to current word",
+                    )}
                   </>,
                 )}
               </Match>
 
               <Match when={page() === "nextdiff"}>
-                {group("Next Difference",
+                {group(
+                  "Next Difference",
                   <>
-                    {check("nextDiffLoadFirst", "Go to first difference when loading")}
-                    {check("nextDiffAfterCopy", "Go to next difference after copy")}
+                    {check(
+                      "nextDiffLoadFirst",
+                      "Go to first difference when loading",
+                    )}
+                    {check(
+                      "nextDiffAfterCopy",
+                      "Go to next difference after copy",
+                    )}
                   </>,
                 )}
-                {group("When there are no more differences",
+                {group(
+                  "When there are no more differences",
                   <>
                     {check("nextDiffWrap", "Wrap around")}
                     {check("nextDiffShowMessage", "Show a message")}
@@ -278,26 +443,51 @@ export default function OptionsDialog(props: { page?: OptionsPage; onClose: () =
               </Match>
 
               <Match when={page() === "backups"}>
-                {group("Back up files",
+                {group(
+                  "Back up files",
                   <>
-                    {check("backupOnCopy", "Before replacing files with copy or move")}
+                    {check(
+                      "backupOnCopy",
+                      "Before replacing files with copy or move",
+                    )}
                     {check("backupOnSave", "Before saving in file views")}
                   </>,
                 )}
-                {group("Backup name",
+                {group(
+                  "Backup name",
                   <>
                     <For each={BACKUP_KINDS}>
                       {([k, label]) => (
                         <label class="opt-check">
-                          <input type="radio" name="bk" checked={draft.backupKind === k} onChange={() => set("backupKind")(k)} /> <code>{label}</code> (same folder)
+                          <input
+                            type="radio"
+                            name="bk"
+                            checked={draft.backupKind === k}
+                            onChange={() => set("backupKind")(k)}
+                          />{" "}
+                          <code>{label}</code> (same folder)
                         </label>
                       )}
                     </For>
                     <label class="opt-check">
-                      <input type="radio" name="bk" checked={draft.backupKind === "folder"} onChange={() => set("backupKind")("folder")} /> In this folder:
+                      <input
+                        type="radio"
+                        name="bk"
+                        checked={draft.backupKind === "folder"}
+                        onChange={() => set("backupKind")("folder")}
+                      />{" "}
+                      In this folder:
                     </label>
                     <div class="opt-row indent">
-                      <input type="text" value={draft.backupDir} disabled={draft.backupKind !== "folder"} onChange={(e) => set("backupDir")(e.currentTarget.value)} style={{ flex: 1 }} />
+                      <input
+                        type="text"
+                        value={draft.backupDir}
+                        disabled={draft.backupKind !== "folder"}
+                        onChange={(e) =>
+                          set("backupDir")(e.currentTarget.value)
+                        }
+                        style={{ flex: 1 }}
+                      />
                       <button
                         disabled={draft.backupKind !== "folder"}
                         onClick={async () => {
@@ -313,59 +503,127 @@ export default function OptionsDialog(props: { page?: OptionsPage; onClose: () =
               </Match>
 
               <Match when={page() === "fileops"}>
-                {group("Confirmations",
+                {group(
+                  "Confirmations",
                   <>
                     {check("confirmCopy", "Confirm copy")}
                     {check("confirmMove", "Confirm move")}
                     {check("confirmDelete", "Confirm delete")}
-                    {check("confirmOverwriteNewer", "Confirm overwriting newer files")}
+                    {check(
+                      "confirmOverwriteNewer",
+                      "Confirm overwriting newer files",
+                    )}
                     {check("confirmCompare", "Confirm content compare")}
                   </>,
                 )}
-                {group("Delete", check("useTrash", "Use recycle bin (trash) by default"))}
+                {group(
+                  "Delete",
+                  check("useTrash", "Use recycle bin (trash) by default"),
+                )}
               </Match>
 
               <Match when={page() === "archives"}>
-                <p class="muted">Archives are compared as files. Browsing archive contents as folders is not supported yet.</p>
+                <p class="muted">
+                  Archives are compared as files. Browsing archive contents as
+                  folders is not supported yet.
+                </p>
                 <table class="opt-table">
-                  <thead><tr><th>Type</th><th>Masks</th><th>Status</th></tr></thead>
+                  <thead>
+                    <tr>
+                      <th>Type</th>
+                      <th>Masks</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
                   <tbody>
-                    <For each={[["Zip", "*.zip;*.jar;*.war"], ["Tar", "*.tar"], ["Gzip", "*.gz;*.tgz"], ["7-Zip", "*.7z"]]}>
-                      {([t, m]) => <tr class="muted"><td>{t}</td><td>{m}</td><td>As files</td></tr>}
+                    <For
+                      each={[
+                        ["Zip", "*.zip;*.jar;*.war"],
+                        ["Tar", "*.tar"],
+                        ["Gzip", "*.gz;*.tgz"],
+                        ["7-Zip", "*.7z"],
+                      ]}
+                    >
+                      {([t, m]) => (
+                        <tr class="muted">
+                          <td>{t}</td>
+                          <td>{m}</td>
+                          <td>As files</td>
+                        </tr>
+                      )}
                     </For>
                   </tbody>
                 </table>
               </Match>
 
               <Match when={page() === "shortcuts"}>
-                {group("Toolbar", check("showToolbar", "Show toolbar in views"))}
-                <ShortcutsEditor keymap={draft.keymap} onChange={(km) => setDraft("keymap", km)} />
+                {group(
+                  "Toolbar",
+                  check("showToolbar", "Show toolbar in views"),
+                )}
+                <ShortcutsEditor
+                  keymap={draft.keymap}
+                  onChange={(km) => setDraft("keymap", km)}
+                />
               </Match>
 
               <Match when={page() === "openwith"}>
-                <OpenWithEditor apps={draft.openWith} onChange={(a) => setDraft("openWith", a)} />
+                <OpenWithEditor
+                  apps={draft.openWith}
+                  onChange={(a) => setDraft("openWith", a)}
+                />
               </Match>
 
               <Match when={page() === "tweaks"}>
-                {group("Interface",
+                {group(
+                  "Interface",
                   <>
                     {check("showHints", "Show hints (tooltips)")}
                     {check("escClosesFileViews", "ESC closes file views")}
                   </>,
                 )}
-                {group("Editor display",
+                {group(
+                  "Editor display",
                   <>
-                    {num("columnLine", "Show column line at (0 = off):", 0, 400)}
-                    {num("extraLineSpacing", "Extra line spacing:", 0, 10, "px")}
+                    {num(
+                      "columnLine",
+                      "Show column line at (0 = off):",
+                      0,
+                      400,
+                    )}
+                    {num(
+                      "extraLineSpacing",
+                      "Extra line spacing:",
+                      0,
+                      10,
+                      "px",
+                    )}
                   </>,
                 )}
-                {group("Metrics",
+                {group(
+                  "Metrics",
                   <>
-                    {num("logMaxMessages", "Log panel maximum messages:", 50, 100000)}
-                    {num("mruCapacity", "Most recently used list size:", 1, 100)}
+                    {num(
+                      "logMaxMessages",
+                      "Log panel maximum messages:",
+                      50,
+                      100000,
+                    )}
+                    {num(
+                      "mruCapacity",
+                      "Most recently used list size:",
+                      1,
+                      100,
+                    )}
                   </>,
                 )}
-                {group("Name filter presets", <PresetEditor presets={draft.filterPresets} onChange={(p) => setDraft("filterPresets", p)} />)}
+                {group(
+                  "Name filter presets",
+                  <PresetEditor
+                    presets={draft.filterPresets}
+                    onChange={(p) => setDraft("filterPresets", p)}
+                  />,
+                )}
               </Match>
             </Switch>
           </div>
@@ -373,7 +631,12 @@ export default function OptionsDialog(props: { page?: OptionsPage; onClose: () =
         <div class="modal-foot">
           <span class="err">{error()}</span>
           <span class="spacer" />
-          <button class="primary" onClick={async () => (await apply()) && props.onClose()}>OK</button>
+          <button
+            class="primary"
+            onClick={async () => (await apply()) && props.onClose()}
+          >
+            OK
+          </button>
           <button onClick={props.onClose}>Cancel</button>
           <button onClick={() => void apply()}>Apply</button>
         </div>

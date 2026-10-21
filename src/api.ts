@@ -429,12 +429,20 @@ export interface ImportData {
   sessions: Session[];
 }
 export interface ShellItem {
-  id: "compare" | "selectLeft" | "compareStaged" | "sync" | "merge";
+  id:
+    | "compare"
+    | "selectLeft"
+    | "compareStaged"
+    | "selectLeftFolder"
+    | "compareStagedFolder"
+    | "sync"
+    | "merge";
   enabled: boolean;
 }
 export interface ShellStatus {
   supported: boolean;
   items: ShellItem[];
+  warnings?: string[];
 }
 
 export function basename(p: string): string {

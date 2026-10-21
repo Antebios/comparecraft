@@ -6,7 +6,7 @@ use std::io;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ShellItem {
-    /// "compare" | "selectLeft" | "compareStaged" | "sync" | "merge"
+    /// Action ID from the shared menu catalog.
     pub id: String,
     pub enabled: bool,
 }
@@ -16,6 +16,7 @@ pub struct ShellItem {
 pub struct ShellStatus {
     pub supported: bool,
     pub items: Vec<ShellItem>,
+    pub warnings: Vec<String>,
 }
 
 fn preferences_path() -> std::path::PathBuf {
@@ -26,32 +27,6 @@ fn load_preferences() -> Option<Vec<ShellItem>> {
     std::fs::read(preferences_path())
         .ok()
         .and_then(|bytes| serde_json::from_slice(&bytes).ok())
-}
-
-fn effective_items(items: &[ShellItem]) -> Vec<ShellItem> {
-    let staged_path = std::env::var_os("COMPARECRAFT_CONTEXT_LEFT_FILE")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| crate::sessions::config_dir().join("context-left.json"));
-    let has_staged_left = std::fs::read(staged_path)
-        .ok()
-        .and_then(|bytes| serde_json::from_slice::<String>(&bytes).ok())
-        .is_some_and(|path| std::path::Path::new(&path).is_file());
-    effective_items_for_state(items, has_staged_left)
-}
-
-fn effective_items_for_state(items: &[ShellItem], has_staged_left: bool) -> Vec<ShellItem> {
-    items
-        .iter()
-        .map(|item| {
-            let mut item = item.clone();
-            match item.id.as_str() {
-                "selectLeft" => item.enabled &= !has_staged_left,
-                "compareStaged" => item.enabled &= has_staged_left,
-                _ => {}
-            }
-            item
-        })
-        .collect()
 }
 
 #[cfg(any(target_os = "windows", test))]
@@ -73,8 +48,52 @@ fn apply_preferences(
     items: &[ShellItem],
     apply: impl FnOnce(&[ShellItem]) -> io::Result<()>,
 ) -> io::Result<()> {
-    crate::sessions::write_json_atomic(&preferences_path(), &items).map_err(io::Error::other)?;
-    apply(&effective_items(items))
+    let items = normalized_items(items);
+    let executable = std::env::var_os("APPIMAGE").map(std::path::PathBuf::from)
+        .filter(|path| path.is_file()).unwrap_or(std::env::current_exe()?).to_string_lossy().into_owned();
+    crate::sessions::write_json_atomic(&crate::sessions::config_dir().join("shell-executable.json"), &executable).map_err(io::Error::other)?;
+    apply(&items)?;
+    crate::sessions::write_json_atomic(&preferences_path(), &items).map_err(io::Error::other)
+}
+
+fn normalized_items(items: &[ShellItem]) -> Vec<ShellItem> {
+    ITEMS.iter().map(|(id, _, _)| ShellItem {
+        id: (*id).into(),
+        enabled: items.iter().any(|item| item.id == *id && item.enabled),
+    }).collect()
+}
+
+#[cfg(any(target_os = "windows", test))]
+fn windows_registration(items: &[ShellItem], extension: Option<&str>) -> String {
+    let mut registration = String::from("Windows Registry Editor Version 5.00\n\n");
+    for (index, action) in comparecraft_menu::ACTIONS.iter().enumerate() {
+        let preference = match action.id { "clearLeft" => "selectLeft", "clearLeftFolder" => "selectLeftFolder", other => other };
+        let enabled = items.iter().any(|item| item.id == preference && item.enabled);
+        let class = format!("{{{:08X}-92B3-4B16-A421-724E3F8C2001}}", 0x5e8a1f40 + index);
+        let class_key = format!("HKEY_CURRENT_USER\\Software\\Classes\\CLSID\\{class}");
+        registration.push_str(&format!("[-{class_key}]\n\n"));
+        for root in ["*", "Directory"] {
+            let key = format!("HKEY_CURRENT_USER\\Software\\Classes\\{root}\\shell\\CompareCraft.{}", action.id);
+            registration.push_str(&format!("[-{key}]\n\n"));
+            let folder_action = matches!(action.id, "selectLeftFolder" | "compareStagedFolder" | "clearLeftFolder" | "sync");
+            let applies = action.id == "compare" || (root == "Directory") == folder_action;
+            if enabled && applies && extension.is_some() {
+                registration.push_str(&format!("[{key}]\n\"MUIVerb\"=\"{}\"\n\"ExplorerCommandHandler\"=\"{class}\"\n\"MultiSelectModel\"=\"Player\"\n\n", action.label));
+            }
+        }
+        if enabled {
+            if let Some(extension) = extension {
+                let extension = extension.replace('\\', "\\\\").replace('"', "\\\"");
+                registration.push_str(&format!("[{class_key}\\InprocServer32]\n@=\"{extension}\"\n\"ThreadingModel\"=\"Apartment\"\n\n"));
+            }
+        }
+    }
+    for id in ["compare", "sync", "merge"] {
+        let class = drop_target_clsid(id).unwrap();
+        registration.push_str(&format!("[-HKEY_CURRENT_USER\\Software\\Classes\\CLSID\\{class}]\n\n"));
+    }
+    registration.push_str("[-HKEY_CURRENT_USER\\Software\\Classes\\*\\shell\\CompareCraft.edit]\n\n");
+    registration
 }
 
 fn refresh_preferences(
@@ -138,13 +157,14 @@ const ITEMS: &[(&str, &str, &[&str])] = &[
     ),
     ("sync", "Sync", &["-cc-sync"]),
     ("merge", "Merge", &["-cc-merge"]),
+    ("selectLeftFolder", "Select Left Folder for Compare", &["-cc-select-left-folder"]),
+    ("compareStagedFolder", "Compare to Selected Left Folder", &["-cc-compare-staged-folder"]),
 ];
 
 #[cfg(target_os = "linux")]
 mod imp {
     use super::*;
     use std::fs;
-    use std::os::unix::fs::PermissionsExt;
     use std::path::{Path, PathBuf};
 
     fn data_dir() -> io::Result<PathBuf> {
@@ -175,34 +195,6 @@ mod imp {
     /// Single-quotes a word for sh.
     fn sh_quote(s: &str) -> String {
         format!("'{}'", s.replace('\'', r"'\''"))
-    }
-
-    /// Quotes an argument for a desktop entry Exec key (including the string-value escaping of backslashes).
-    fn exec_quote(s: &str) -> String {
-        if !s.is_empty() && !s.chars().any(|c| " \t\n\"'\\><~|&;$*?#()`".contains(c)) {
-            return s.to_string();
-        }
-        let mut out = String::from("\"");
-        for c in s.chars() {
-            match c {
-                '"' | '`' | '$' => {
-                    out.push('\\');
-                    out.push(c);
-                }
-                '\\' => out.push_str(r"\\\\"),
-                _ => out.push(c),
-            }
-        }
-        out.push('"');
-        out
-    }
-
-    fn write_exec(p: &Path, content: &str) -> io::Result<()> {
-        if let Some(dir) = p.parent() {
-            fs::create_dir_all(dir)?;
-        }
-        fs::write(p, content)?;
-        fs::set_permissions(p, fs::Permissions::from_mode(0o755))
     }
 
     fn remove_if_exists(p: &Path) -> io::Result<()> {
@@ -255,6 +247,7 @@ mod imp {
         let path = thunar_config(config);
         let enabled = items.iter().any(|item| item.enabled);
         let previous = fs::read_to_string(&path).ok();
+        if previous.is_none() && !enabled { return Ok(()); }
         let mut content = previous.clone().unwrap_or_else(|| {
             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<actions>\n</actions>\n".into()
         });
@@ -311,6 +304,7 @@ mod imp {
         ShellStatus {
             supported: true,
             items,
+            warnings: Vec::new(),
         }
     }
 
@@ -318,43 +312,47 @@ mod imp {
         let data = data_dir()?;
         let exe = std::env::current_exe()?.to_string_lossy().into_owned();
         let config = config_dir().ok_or_else(|| io::Error::other("no user config directory"))?;
-        let enabled = |id: &str| items.iter().any(|i| i.id == id && i.enabled);
         let scripts = scripts_dir(&data);
         remove_if_exists(&scripts.join("Edit"))?;
         remove_if_exists(&data.join("kio/servicemenus/comparecraft.desktop"))?;
-        for (id, label, args) in ITEMS {
+        for (id, label, _) in ITEMS {
             let script = scripts.join(label);
-            if !enabled(id) {
-                remove_if_exists(&script)?;
-                remove_if_exists(&service_menu(&data, id))?;
-                continue;
-            }
-            let sh_args: String = args.iter().map(|a| format!(" {}", sh_quote(a))).collect();
-            write_exec(
-                &script,
-                &format!("#!/bin/sh\nexec {}{sh_args} \"$@\"\n", sh_quote(&exe)),
-            )?;
-            let exec_args: String = args.iter().map(|a| format!(" {}", exec_quote(a))).collect();
-            let selection = if *id == "selectLeft" || *id == "compareStaged" {
-                "%f"
-            } else {
-                "%F"
-            };
-            let required_args = if matches!(*id, "selectLeft" | "compareStaged") {
-                1
-            } else {
-                2
-            };
-            let menu = format!(
-                "[Desktop Entry]\nType=Service\nServiceTypes=KonqPopupMenu/Plugin\nMimeType=all/all;\nX-KDE-RequiredNumberOfArguments={required_args}\nName={label}\nExec={}{exec_args} {selection}\n",
-                exec_quote(&exe)
-            );
-            write_exec(&service_menu(&data, id), &menu)?;
+            remove_if_exists(&script)?;
+            remove_if_exists(&service_menu(&data, id))?;
         }
         if scripts.is_dir() && fs::read_dir(&scripts)?.next().is_none() {
             fs::remove_dir(&scripts)?;
         }
-        set_thunar(&config, &exe, items)?;
+        let provider = data.join("nautilus-python/extensions/comparecraft.py");
+        if items.iter().any(|item| item.enabled) {
+            let executable = std::env::current_exe()?;
+            let parent = executable.parent().ok_or_else(|| io::Error::other("Missing executable directory"))?;
+            let library = [
+                parent.join("libcomparecraft_menu.so"),
+                parent.join("../libcomparecraft_menu.so"),
+                parent.join("resources/libcomparecraft_menu.so"),
+                parent.join("../lib/comparecraft/libcomparecraft_menu.so"),
+                PathBuf::from("/usr/lib/comparecraft/libcomparecraft_menu.so"),
+                PathBuf::from("/usr/lib64/comparecraft/libcomparecraft_menu.so"),
+            ].into_iter().find(|path| path.is_file())
+                .ok_or_else(|| io::Error::other("Native menu library missing; rebuild or reinstall CompareCraft"))?;
+            let native = data.join("comparecraft/native");
+            fs::create_dir_all(&native)?;
+            let installed_library = native.join("libcomparecraft_menu.so");
+            let temporary = native.join(format!("menu-{}.tmp", std::process::id()));
+            fs::copy(&library, &temporary)?;
+            fs::rename(&temporary, &installed_library)?;
+            let source = include_str!("../../packaging/linux/nautilus/comparecraft.py").replace(
+                "\"@COMPARECRAFT_MENU_LIBRARY@\"",
+                &serde_json::to_string(&installed_library.to_string_lossy()).map_err(io::Error::other)?,
+            );
+            if let Some(parent) = provider.parent() { fs::create_dir_all(parent)?; }
+            fs::write(provider, source)?;
+        } else {
+            remove_if_exists(&provider)?;
+            remove_if_exists(&data.join("comparecraft/native/libcomparecraft_menu.so"))?;
+        }
+        set_thunar(&config, &exe, &[])?;
         Ok(())
     }
 
@@ -384,48 +382,11 @@ mod imp {
             .unwrap();
             let st = status();
             assert!(st.supported);
-            let on: Vec<&str> = st
-                .items
-                .iter()
-                .filter(|i| i.enabled)
-                .map(|i| i.id.as_str())
-                .collect();
-            assert_eq!(on, vec!["compare", "selectLeft", "sync"]);
-            let sync =
-                fs::read_to_string(d.path().join("nautilus/scripts/CompareCraft/Sync")).unwrap();
-            assert!(
-                sync.starts_with("#!/bin/sh\nexec '") && sync.ends_with(" '-cc-sync' \"$@\"\n"),
-                "{sync}"
-            );
-            let mode = fs::metadata(d.path().join("nautilus/scripts/CompareCraft/Sync"))
-                .unwrap()
-                .permissions()
-                .mode();
-            assert_eq!(mode & 0o777, 0o755);
-            let menu = fs::read_to_string(
-                d.path()
-                    .join("kio/servicemenus/comparecraft-compare.desktop"),
-            )
-            .unwrap();
-            assert!(
-                menu.contains("X-KDE-RequiredNumberOfArguments=2\nName=Compare\n")
-                    && menu.ends_with(" -cc-compare %F\n"),
-                "{menu}"
-            );
-            let left_menu = fs::read_to_string(
-                d.path()
-                    .join("kio/servicemenus/comparecraft-selectLeft.desktop"),
-            )
-            .unwrap();
-            assert!(
-                left_menu.contains("X-KDE-RequiredNumberOfArguments=1"),
-                "{left_menu}"
-            );
-            let thunar = fs::read_to_string(d.path().join("Thunar/uca.xml")).unwrap();
-            assert!(
-                thunar.contains("<name>Compare</name>") && thunar.contains("'-cc-compare' %F"),
-                "{thunar}"
-            );
+            assert!(st.supported);
+            let provider = fs::read_to_string(d.path().join("nautilus-python/extensions/comparecraft.py")).unwrap();
+            assert!(!provider.contains("@COMPARECRAFT_MENU_LIBRARY@"));
+            assert!(!d.path().join("kio/servicemenus/comparecraft-compare.desktop").exists());
+            assert!(!d.path().join("Thunar/uca.xml").exists());
             set(&[]).unwrap();
             assert!(status().items.iter().all(|i| !i.enabled));
             assert!(!d.path().join("nautilus/scripts/CompareCraft").exists());
@@ -437,9 +398,7 @@ mod imp {
                 .path()
                 .join("kio/servicemenus/comparecraft-sync.desktop")
                 .exists());
-            assert!(!fs::read_to_string(d.path().join("Thunar/uca.xml"))
-                .unwrap()
-                .contains("CompareCraft context menu"));
+            assert!(!d.path().join("nautilus-python/extensions/comparecraft.py").exists());
             if let Some(value) = old_data_dir {
                 std::env::set_var("COMPARECRAFT_DATA_DIR", value);
             } else {
@@ -457,55 +416,27 @@ mod imp {
             }
         }
 
-        #[test]
-        fn staged_file_switches_left_context_action() {
-            let items = vec![
-                ShellItem {
-                    id: "selectLeft".into(),
-                    enabled: true,
-                },
-                ShellItem {
-                    id: "compareStaged".into(),
-                    enabled: true,
-                },
-            ];
-            let staged = effective_items_for_state(&items, true);
-            assert!(
-                !staged
-                    .iter()
-                    .find(|item| item.id == "selectLeft")
-                    .unwrap()
-                    .enabled
-            );
-            assert!(
-                staged
-                    .iter()
-                    .find(|item| item.id == "compareStaged")
-                    .unwrap()
-                    .enabled
-            );
-            let stale = effective_items_for_state(&items, false);
-            assert!(
-                stale
-                    .iter()
-                    .find(|item| item.id == "selectLeft")
-                    .unwrap()
-                    .enabled
-            );
-            assert!(
-                !stale
-                    .iter()
-                    .find(|item| item.id == "compareStaged")
-                    .unwrap()
-                    .enabled
-            );
-        }
     }
 }
 
 #[cfg(target_os = "linux")]
 pub fn status() -> ShellStatus {
-    imp::status()
+    let detected = imp::status();
+    let items = normalized_items(&load_preferences().unwrap_or(detected.items));
+    let mut warnings = Vec::new();
+    if items.iter().any(|item| item.enabled) {
+        let available = |paths: &[&str]| paths.iter().any(|path| std::path::Path::new(path).is_file());
+        if !available(&["/usr/lib/nautilus/extensions-4/libnautilus-python.so", "/usr/lib64/nautilus/extensions-4/libnautilus-python.so", "/usr/lib/x86_64-linux-gnu/nautilus/extensions-4/libnautilus-python.so"]) {
+            warnings.push("GNOME Files provider unavailable: install nautilus-python (python3-nautilus on Debian), then restart Files.".into());
+        }
+        if !available(&["/usr/lib/thunarx-3/libcomparecraft-thunar.so", "/usr/lib64/thunarx-3/libcomparecraft-thunar.so", "/usr/lib/x86_64-linux-gnu/thunarx-3/libcomparecraft-thunar.so"]) {
+            warnings.push("Thunar provider unavailable: install the updated CompareCraft package, then restart Thunar.".into());
+        }
+        if !available(&["/usr/lib/qt6/plugins/kf6/kfileitemaction/comparecraft-dolphin.so", "/usr/lib64/qt6/plugins/kf6/kfileitemaction/comparecraft-dolphin.so", "/usr/lib/x86_64-linux-gnu/qt6/plugins/kf6/kfileitemaction/comparecraft-dolphin.so"]) {
+            warnings.push("Dolphin provider unavailable: install the updated CompareCraft package, then restart Dolphin.".into());
+        }
+    }
+    ShellStatus { supported: detected.supported, items, warnings }
 }
 
 #[cfg(target_os = "linux")]
@@ -532,7 +463,7 @@ mod imp {
     pub(super) fn roots(id: &str) -> &'static [&'static str] {
         match id {
             "compare" => &[FILE_ROOT, DIRECTORY_ROOT],
-            "sync" => &[DIRECTORY_ROOT],
+            "sync" | "selectLeftFolder" | "compareStagedFolder" => &[DIRECTORY_ROOT],
             _ => &[FILE_ROOT],
         }
     }
@@ -588,14 +519,11 @@ mod imp {
             .collect()
     }
 
-    fn reg_escape(value: &str) -> String {
-        value.replace('\\', "\\\\").replace('"', "\\\"")
-    }
-
     pub fn status() -> ShellStatus {
         let installed = installed();
         ShellStatus {
             supported: true,
+            warnings: Vec::new(),
             items: ITEMS
                 .iter()
                 .map(|(id, _, _)| ShellItem {
@@ -607,10 +535,9 @@ mod imp {
     }
 
     pub fn set(items: &[ShellItem]) -> io::Result<()> {
-        let exe = std::env::current_exe()?.to_string_lossy().into_owned();
         let extension = if items
             .iter()
-            .any(|item| item.enabled && matches!(item.id.as_str(), "compare" | "sync" | "merge"))
+            .any(|item| item.enabled)
         {
             let exe_dir = std::env::current_exe()?
                 .parent()
@@ -637,64 +564,7 @@ mod imp {
         } else {
             None
         };
-        let mut registration = String::from("Windows Registry Editor Version 5.00\n\n");
-        for (id, label, args) in ITEMS {
-            let selected = items.iter().any(|item| item.id == *id && item.enabled);
-            for context_root in roots(id) {
-                let file_root = reg_file_key(&key(context_root, id));
-                if !selected {
-                    registration.push_str(&format!("[-{file_root}]\n\n"));
-                    continue;
-                }
-                if let Some(class_id) = drop_target_clsid(id) {
-                    registration.push_str(&format!(
-                        "[{file_root}]\n\"MUIVerb\"=\"{}\"\n\"MultiSelectModel\"=-\n\n[{file_root}\\DropTarget]\n@=\"{class_id}\"\n\n[-{file_root}\\command]\n\n",
-                        reg_escape(label)
-                    ));
-                    continue;
-                }
-                let flags = args
-                    .iter()
-                    .map(|arg| {
-                        if arg.chars().any(char::is_whitespace) {
-                            format!("\"{arg}\"")
-                        } else {
-                            (*arg).to_string()
-                        }
-                    })
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                let command = format!("\"{exe}\" {flags} \"%1\"");
-                registration.push_str(&format!(
-                    "[{file_root}]\n\"MUIVerb\"=\"{}\"\n",
-                    reg_escape(label)
-                ));
-                registration.push_str(&format!(
-                    "\n[{file_root}\\command]\n@=\"{}\"\n\n",
-                    reg_escape(&command)
-                ));
-            }
-        }
-        for id in ["compare", "sync", "merge"] {
-            let class_id = drop_target_clsid(id).expect("multi-select verbs have a CLSID");
-            let class_key = reg_file_key(&format!(r"HKCU\Software\Classes\CLSID\{class_id}"));
-            registration.push_str(&format!("[-{class_key}]\n\n"));
-            if items.iter().any(|item| item.id == id && item.enabled) {
-                let extension = extension.as_deref().ok_or_else(|| {
-                    io::Error::other("the Windows shell extension path was not resolved")
-                })?;
-                registration.push_str(&format!(
-                    "[{class_key}]\n@=\"CompareCraft Shell Extension\"\n\n[{class_key}\\InprocServer32]\n@=\"{}\"\n\"ThreadingModel\"=\"Apartment\"\n\n",
-                    reg_escape(extension)
-                ));
-            }
-        }
-        registration.push_str(
-            r"[-HKEY_CURRENT_USER\Software\Classes\*\shell\CompareCraft.edit]
-[-HKEY_CURRENT_USER\Software\Classes\*\shell\CompareCraft.sync]
-
-",
-        );
+        let registration = windows_registration(items, extension.as_deref());
         let nonce = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_err(io::Error::other)?
@@ -733,7 +603,8 @@ mod imp {
 
 #[cfg(target_os = "windows")]
 pub fn status() -> ShellStatus {
-    imp::status()
+    let detected = imp::status();
+    ShellStatus { supported: detected.supported, items: normalized_items(&load_preferences().unwrap_or(detected.items)), warnings: Vec::new() }
 }
 
 #[cfg(target_os = "windows")]
@@ -761,6 +632,7 @@ pub fn install() -> io::Result<()> {
 pub fn status() -> ShellStatus {
     ShellStatus {
         supported: false,
+        warnings: Vec::new(),
         items: ITEMS
             .iter()
             .map(|(id, _, _)| ShellItem {
@@ -797,6 +669,18 @@ mod tests {
     use super::{drop_target_clsid, initial_preferences, ShellItem, ShellStatus};
 
     #[test]
+    fn dynamic_windows_verbs_include_folder_and_clear_actions() {
+        let items = super::ITEMS.iter().map(|(id, _, _)| ShellItem { id: (*id).into(), enabled: true }).collect::<Vec<_>>();
+        let registration = super::windows_registration(&items, Some(r"C:\CompareCraft\menu.dll"));
+        assert!(registration.contains("ExplorerCommandHandler"));
+        assert!(!registration.contains("\\DropTarget]"));
+        assert!(registration.contains("[HKEY_CURRENT_USER\\Software\\Classes\\Directory\\shell\\CompareCraft.selectLeftFolder]"));
+        assert!(!registration.contains("\n[HKEY_CURRENT_USER\\Software\\Classes\\*\\shell\\CompareCraft.selectLeftFolder]"));
+        assert!(registration.contains("CompareCraft.clearLeftFolder]"));
+        assert!(super::windows_registration(&[], None).lines().filter(|line| line.starts_with('[')).all(|line| line.starts_with("[-")));
+    }
+
+    #[test]
     fn registry_import_uses_full_current_user_hive_name() {
         assert_eq!(
             reg_file_key(r"HKCU\Software\Classes\*\shell\CompareCraft.compare"),
@@ -812,6 +696,7 @@ mod tests {
     fn fresh_install_enables_verbs_but_existing_preferences_are_preserved() {
         let status = || ShellStatus {
             supported: true,
+            warnings: Vec::new(),
             items: vec![ShellItem {
                 id: "compare".into(),
                 enabled: false,
@@ -827,12 +712,14 @@ mod tests {
         }];
         let no_verbs = ShellStatus {
             supported: true,
+            warnings: Vec::new(),
             items: Vec::new(),
         };
         assert_eq!(initial_preferences(Some(saved.clone()), no_verbs), saved);
 
         let existing = ShellStatus {
             supported: true,
+            warnings: Vec::new(),
             items: vec![ShellItem {
                 id: "compare".into(),
                 enabled: true,

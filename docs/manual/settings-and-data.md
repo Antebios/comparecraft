@@ -51,10 +51,15 @@ Profiles (Tools > Profiles) are not stored in the settings folder, and they are 
 
 On Linux, when you turn on the commands under **File manager integration** on the [Startup page of the Options](options.md#startup), CompareCraft creates:
 
-- the folder `~/.local/share/nautilus/scripts/CompareCraft/` with scripts for Nautilus (Files), and
-- the file `~/.local/share/kio/servicemenus/comparecraft.desktop` for the Dolphin context menu.
+- `~/.local/share/nautilus-python/extensions/comparecraft.py`, the native Files menu provider.
+- `shell-integration.json` in the CompareCraft configuration directory, holding enabled action preferences.
+- `shell-executable.json`, recording the installed application path used by native providers.
+- `context-left.json` and `context-left-folder.json`, independent staged selections, plus per-kind lock files.
 
-Turning the commands off removes them again.
+The package installs the shared policy library and the Thunar/Dolphin native providers in system library/plugin
+directories. They offer no actions unless enabled for the current user. Disabling every command removes the
+per-user Files provider and hides actions from the other providers. Old CompareCraft scripts, service menus
+and Thunar custom actions are removed when integration is reapplied. XDG data/configuration overrides apply.
 
 ## Reset CompareCraft
 

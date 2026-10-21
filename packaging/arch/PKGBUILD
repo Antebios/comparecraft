@@ -8,7 +8,8 @@ arch=('x86_64' 'aarch64')
 url="https://github.com/Antebios/comparecraft"
 license=('MIT')
 depends=('webkit2gtk-4.1' 'gtk3' 'cairo' 'pango' 'gdk-pixbuf2' 'glib2' 'openssl' 'libsoup3' 'hicolor-icon-theme')
-makedepends=('rust' 'cargo' 'nodejs' 'npm')
+makedepends=('rust' 'cargo' 'nodejs' 'npm' 'gcc' 'pkgconf' 'thunar' 'cmake' 'kio')
+optdepends=('nautilus-python: selection-aware GNOME Files context menus' 'thunar: selection-aware Thunar context menus' 'dolphin: selection-aware Dolphin context menus')
 options=('!lto' '!debug')
 source=()
 sha256sums=()
@@ -35,6 +36,9 @@ package() {
   cd "$_srcroot"
   install -Dm755 src-tauri/target/release/comparecraft "$pkgdir/usr/bin/comparecraft"
   install -Dm755 src-tauri/target/release/ccomp "$pkgdir/usr/bin/ccomp"
+  install -Dm755 src-tauri/target/release/libcomparecraft_menu.so "$pkgdir/usr/lib/comparecraft/libcomparecraft_menu.so"
+  install -Dm755 src-tauri/target/release/libcomparecraft-thunar.so "$pkgdir/usr/lib/thunarx-3/libcomparecraft-thunar.so"
+  DESTDIR="$pkgdir" cmake --install src-tauri/target/dolphin-release --prefix /usr
   install -Dm644 packaging/linux/comparecraft.desktop "$pkgdir/usr/share/applications/comparecraft.desktop"
   install -Dm644 src-tauri/icons/32x32.png "$pkgdir/usr/share/icons/hicolor/32x32/apps/comparecraft.png"
   install -Dm644 src-tauri/icons/128x128.png "$pkgdir/usr/share/icons/hicolor/128x128/apps/comparecraft.png"

@@ -24,6 +24,7 @@ path = "src/console.rs"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+comparecraft-menu = { path = "shell-menu" }
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 tauri-plugin-single-instance = "2"

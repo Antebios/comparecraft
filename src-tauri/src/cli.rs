@@ -51,6 +51,10 @@ pub struct Args {
     pub silent: bool,
     pub solo: bool,
     pub context_select_left: bool,
+    pub context_select_left_folder: bool,
+    pub context_compare_staged_folder: bool,
+    pub context_clear_left: bool,
+    pub context_clear_left_folder: bool,
     pub context_compare: bool,
     pub context_compare_staged: bool,
     pub context_sync: bool,
@@ -108,6 +112,10 @@ Options (prefix with '-' ; on Windows '/' is also accepted):
   -solo                         force a new application instance
   -silent                       suppress interaction
   -cc-select-left <file>        store a file as the left side for a later comparison
+    -cc-select-left-folder <dir>  store a folder independently of the selected file
+    -cc-compare-staged-folder <dir> compare a folder to the staged left folder
+    -cc-clear-left               clear the selected left file
+    -cc-clear-left-folder        clear the selected left folder
   -cc-compare <left> <right>    compare two files or folders selected in a file manager
   -cc-compare-staged <right>    compare a file to the staged left file
   -cc-sync <left> <right>       sync two selected folders
@@ -156,7 +164,16 @@ fn split_switch(arg: &str) -> Option<(String, Option<String>)> {
 
 pub fn parse(argv: &[String]) -> Result<Args, String> {
     let mut a = Args::default();
+    let mut positional_only = false;
     for arg in argv {
+        if positional_only {
+            a.positional.push(arg.clone());
+            continue;
+        }
+        if arg == "--" {
+            positional_only = true;
+            continue;
+        }
         if arg == "-" {
             a.positional.push(arg.clone());
             continue;
@@ -200,6 +217,10 @@ pub fn parse(argv: &[String]) -> Result<Args, String> {
             "silent" => a.silent = true,
             "solo" => a.solo = true,
             "cc-select-left" => a.context_select_left = true,
+            "cc-select-left-folder" => a.context_select_left_folder = true,
+            "cc-compare-staged-folder" => a.context_compare_staged_folder = true,
+            "cc-clear-left" => a.context_clear_left = true,
+            "cc-clear-left-folder" => a.context_clear_left_folder = true,
             "cc-compare" => a.context_compare = true,
             "cc-compare-staged" => a.context_compare_staged = true,
             "cc-sync" => a.context_sync = true,
@@ -300,6 +321,10 @@ pub fn resolve(a: &Args, cwd: &Path) -> Outcome {
     }
     let context_actions = [
         a.context_select_left,
+        a.context_select_left_folder,
+        a.context_compare_staged_folder,
+        a.context_clear_left,
+        a.context_clear_left_folder,
         a.context_compare,
         a.context_compare_staged,
         a.context_sync,
@@ -311,53 +336,77 @@ pub fn resolve(a: &Args, cwd: &Path) -> Outcome {
     if context_actions > 1 {
         return Outcome::Gui(context_notice("Context-menu actions cannot be combined."));
     }
-    if a.context_select_left {
+    if a.context_clear_left || a.context_clear_left_folder {
+        if !a.positional.is_empty() {
+            return Outcome::Gui(context_notice("Clear Selected Left does not accept paths."));
+        }
+        let state = context_stage_path(a.context_clear_left_folder);
+        let _guard = match stage_lock(a.context_clear_left_folder) {
+            Ok(guard) => guard,
+            Err(error) => return Outcome::Gui(context_notice(format!("Could not lock selected left: {error}"))),
+        };
+        if let Err(error) = std::fs::remove_file(state) {
+            if error.kind() != std::io::ErrorKind::NotFound {
+                return Outcome::Gui(context_notice(format!("Could not clear selected left: {error}")));
+            }
+        }
+        return Outcome::Exit(0);
+    }
+    if a.context_select_left || a.context_select_left_folder {
+        let folder = a.context_select_left_folder;
+        let kind = if folder { "folder" } else { "file" };
         if a.positional.len() != 1 {
-            return Outcome::Gui(context_notice(
-                "Select Left File for Compare requires exactly one file.",
-            ));
+            return Outcome::Gui(context_notice(format!("Select Left requires exactly one {kind}.")));
         }
         let path = absolutize(&a.positional[0], cwd);
-        if !Path::new(&path).is_file() {
-            return Outcome::Gui(context_notice(format!("Not a file:\n{path}")));
+        if !stage_kind_matches(Path::new(&path), folder) {
+            return Outcome::Gui(context_notice(format!("Not a {kind}:\n{path}")));
         }
-        let result = crate::sessions::write_json_atomic(&context_left_path(), &path)
-            .map_err(|e| format!("could not save the selected left file: {e}"))
-            .and_then(|()| {
-                crate::shell::refresh().map_err(|e| {
-                    format!(
-                        "the file was selected, but the context menu could not be refreshed: {e}"
-                    )
-                })
-            });
+        let _guard = match stage_lock(folder) {
+            Ok(guard) => guard,
+            Err(error) => return Outcome::Gui(context_notice(format!("Could not lock selected left: {error}"))),
+        };
+        let result = crate::sessions::write_json_atomic(&context_stage_path(folder), &path)
+            .map_err(|e| format!("could not save the selected left {kind}: {e}"));
         return match result {
             Ok(()) => Outcome::Exit(0),
             Err(e) => Outcome::Gui(context_notice(e)),
         };
     }
-    if a.context_compare || a.context_compare_staged {
+    if a.context_compare || a.context_compare_staged || a.context_compare_staged_folder {
+        let staged = a.context_compare_staged || a.context_compare_staged_folder;
+        let folder = a.context_compare_staged_folder;
+        let kind = if folder { "folder" } else { "file" };
         let expected = if a.context_compare { 2 } else { 1 };
         if a.positional.len() != expected {
             let action = if a.context_compare {
                 "Compare requires exactly two files or two folders."
             } else {
-                "Compare to Selected Left File requires exactly one file."
+                if folder { "Compare to Selected Left Folder requires exactly one folder." } else { "Compare to Selected Left File requires exactly one file." }
             };
             return Outcome::Gui(context_notice(action));
         }
         let mut selected: Vec<String> = a.positional.iter().map(|p| absolutize(p, cwd)).collect();
-        if a.context_compare_staged {
-            let left = std::fs::read(context_left_path())
+        let mut consumed_left = None;
+        if staged {
+            let left = std::fs::read(context_stage_path(folder))
                 .ok()
                 .and_then(|bytes| serde_json::from_slice::<String>(&bytes).ok());
             let Some(left) = left else {
-                return Outcome::Gui(context_notice("No left file is selected yet. Choose “Select Left File for Compare” on a file first."));
+                return Outcome::Gui(context_notice(format!("No left {kind} is selected yet. Select a left {kind} first.")));
             };
-            if !Path::new(&left).is_file() {
+            if !stage_kind_matches(Path::new(&left), folder) {
                 return Outcome::Gui(context_notice(format!(
-                    "The selected left file is no longer available:\n{left}"
+                    "The selected left {kind} is no longer available:\n{left}"
                 )));
             }
+            if !stage_kind_matches(Path::new(&selected[0]), folder) {
+                return Outcome::Gui(context_notice(format!("Select a right {kind}, not another item type.")));
+            }
+            if std::fs::canonicalize(&left).ok() == std::fs::canonicalize(&selected[0]).ok() {
+                return Outcome::Gui(context_notice("Select a different right item from the selected left."));
+            }
+            consumed_left = Some(left.clone());
             selected.insert(0, left);
         }
         if let Some(missing) = selected.iter().find(|p| !Path::new(p).exists()) {
@@ -378,18 +427,22 @@ pub fn resolve(a: &Args, cwd: &Path) -> Outcome {
             Outcome::Gui(spec) => spec,
             other => return other,
         };
-        if a.context_compare_staged {
-            match std::fs::remove_file(context_left_path()) {
-                Ok(()) => {
-                    if let Err(e) = crate::shell::refresh() {
-                        comparison.message = Some(format!(
-                            "The comparison opened, but the context menu could not be refreshed: {e}"
-                        ));
-                    }
+        let _guard = if staged {
+            match stage_lock(folder) {
+                Ok(guard) => Some(guard),
+                Err(error) => {
+                    comparison.message = Some(format!("The comparison opened, but the selection could not be locked for clearing: {error}"));
+                    return Outcome::Gui(comparison);
                 }
+            }
+        } else { None };
+        if staged && std::fs::read(context_stage_path(folder)).ok()
+            .and_then(|bytes| serde_json::from_slice::<String>(&bytes).ok()) == consumed_left {
+            match std::fs::remove_file(context_stage_path(folder)) {
+                Ok(()) => {}
                 Err(e) => {
                     comparison.message = Some(format!(
-                        "The comparison opened, but the selected left file could not be cleared: {e}"
+                        "The comparison opened, but the selected left {kind} could not be cleared: {e}"
                     ));
                 }
             }
@@ -546,6 +599,28 @@ fn context_left_path() -> PathBuf {
         .unwrap_or_else(|| crate::sessions::config_dir().join("context-left.json"))
 }
 
+pub(crate) fn context_stage_path(folder: bool) -> PathBuf {
+    if folder {
+        std::env::var_os("COMPARECRAFT_CONTEXT_LEFT_FOLDER")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| crate::sessions::config_dir().join("context-left-folder.json"))
+    } else {
+        context_left_path()
+    }
+}
+
+fn stage_kind_matches(path: &Path, folder: bool) -> bool {
+    if folder { path.is_dir() } else { path.is_file() }
+}
+
+fn stage_lock(folder: bool) -> std::io::Result<std::fs::File> {
+    let state = context_stage_path(folder).with_extension("lock");
+    if let Some(parent) = state.parent() { std::fs::create_dir_all(parent)?; }
+    let lock = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(false).open(state)?;
+    lock.lock()?;
+    Ok(lock)
+}
+
 fn context_notice(message: impl Into<String>) -> LaunchSpec {
     LaunchSpec {
         kind: "home".into(),
@@ -557,6 +632,10 @@ fn context_notice(message: impl Into<String>) -> LaunchSpec {
 fn a_without_context(a: &Args) -> Args {
     let mut copy = a.clone();
     copy.context_select_left = false;
+    copy.context_select_left_folder = false;
+    copy.context_compare_staged_folder = false;
+    copy.context_clear_left = false;
+    copy.context_clear_left_folder = false;
     copy.context_compare = false;
     copy.context_compare_staged = false;
     copy.context_sync = false;
@@ -743,6 +822,12 @@ mod tests {
         std::fs::create_dir(&left_dir).unwrap();
         std::fs::create_dir(&right_dir).unwrap();
         let staged = d.path().join("staged.json");
+        let isolated_variables = ["COMPARECRAFT_CONFIG_DIR", "COMPARECRAFT_DATA_DIR", "COMPARECRAFT_CONTEXT_LEFT_FOLDER"];
+        let previous_variables: Vec<_> = isolated_variables.iter().map(std::env::var_os).collect();
+        std::env::set_var("COMPARECRAFT_CONFIG_DIR", d.path());
+        std::env::set_var("COMPARECRAFT_DATA_DIR", d.path());
+        let staged_folder = d.path().join("staged-folder.json");
+        std::env::set_var("COMPARECRAFT_CONTEXT_LEFT_FOLDER", &staged_folder);
         let previous = std::env::var_os("COMPARECRAFT_CONTEXT_LEFT_FILE");
         std::env::set_var("COMPARECRAFT_CONTEXT_LEFT_FILE", &staged);
 
@@ -755,6 +840,31 @@ mod tests {
             serde_json::from_slice::<String>(&std::fs::read(&staged).unwrap()).unwrap(),
             absolutize("left.txt", d.path())
         );
+
+        assert!(matches!(go(&["-cc-select-left-folder", "left-dir"]), Outcome::Exit(0)));
+        assert!(staged.exists() && staged_folder.exists());
+        match go(&["-cc-compare-staged-folder", "right.txt"]) {
+            Outcome::Gui(spec) => assert!(spec.message.unwrap().contains("right folder")),
+            other => panic!("{other:?}"),
+        }
+        assert!(staged_folder.exists());
+        match go(&["-cc-compare-staged-folder", "left-dir"]) {
+            Outcome::Gui(spec) => assert!(spec.message.unwrap().contains("different right")),
+            other => panic!("{other:?}"),
+        }
+        match go(&["-cc-compare-staged-folder", "right-dir"]) {
+            Outcome::Gui(spec) => {
+                assert_eq!(spec.kind, "folder");
+                assert_eq!(spec.paths, [absolutize("left-dir", d.path()), absolutize("right-dir", d.path())]);
+            }
+            other => panic!("{other:?}"),
+        }
+        assert!(staged.exists() && !staged_folder.exists());
+        assert!(matches!(go(&["-cc-select-left-folder", "right-dir"]), Outcome::Exit(0)));
+        assert!(matches!(go(&["-cc-clear-left-folder"]), Outcome::Exit(0)));
+        assert!(staged.exists() && !staged_folder.exists());
+        let literal = parse(&s(&["-cc-select-left", "--", "-literal.txt"])).unwrap();
+        assert_eq!(literal.positional, ["-literal.txt"]);
 
         assert!(matches!(
             go(&["-cc-compare", "left.txt", "right.txt"]),
@@ -848,6 +958,10 @@ mod tests {
             std::env::set_var("COMPARECRAFT_CONTEXT_LEFT_FILE", value);
         } else {
             std::env::remove_var("COMPARECRAFT_CONTEXT_LEFT_FILE");
+        }
+        for (variable, previous) in isolated_variables.iter().zip(previous_variables) {
+            if let Some(previous) = previous { std::env::set_var(variable, previous); }
+            else { std::env::remove_var(variable); }
         }
     }
 }

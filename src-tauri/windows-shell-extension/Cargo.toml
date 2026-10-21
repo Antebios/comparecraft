@@ -6,3 +6,6 @@ edition = "2021"
 [lib]
 name = "comparecraft_shell_extension"
 crate-type = ["cdylib"]
+
+[dependencies]
+comparecraft-menu = { path = "../shell-menu" }

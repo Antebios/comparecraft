@@ -306,24 +306,39 @@ uninstalled. A fresh Windows NSIS install enables the actions by default; existi
 upgrades, and the actions can be enabled or removed in Options. Linux actions remain opt-in.
 On Windows, if the installer cannot refresh the registrations, it writes the failure exit code to
 `shell-integration-install-error.txt` in the installation directory. The Options checkboxes reflect
-registrations actually present in the file manager, not just saved preferences.
+enabled preferences, even when an action is temporarily hidden for the current selection.
 
-Enable **Select Left File for Compare** to stage a file, then choose **Compare to Selected Left File** on the
-other file. After staging, the menu registration switches from **Select Left File for Compare** to
-**Compare to Selected Left File**. The full path is saved in the user configuration directory. If it has been
-moved or deleted, CompareCraft treats the left side as unset and reports stale paths rather than opening an
-incorrect pair. After the staged comparison launches, the left selection is cleared and the menu switches back
-to **Select Left File for Compare**. Menu labels are static; file managers do not share a way to include the
-staged filename in the action label.
+Enable the file and folder actions separately. **Select Left File for Compare** remembers a file;
+**Select Left Folder for Compare** remembers a folder independently. Selecting Left again replaces only
+that kind of selection. **Compare to Selected Left File/Folder** appears only for one matching right item
+and a valid, different left path. Select Left stays available after staging. **Clear Selected Left File/Folder**
+clears only that kind of selection. A successful staged comparison consumes its own selection; direct
+two-item actions leave both selections intact. Deleted or invalid left paths are treated as unstaged.
 
-**Compare** accepts exactly two files or two folders; **Merge** accepts exactly two files; **Sync** accepts
-exactly two folders. On Windows, Compare is registered for both file and folder selections, while Merge is
-registered for files and Sync for folders. Windows Explorer passes the selected paths through a per-user COM
-shell extension so multi-selection reaches CompareCraft as one operation. Dolphin can hide
-these commands unless exactly two items are selected. Windows Explorer, Nautilus scripts, and Thunar custom
-actions do not expose an equivalent selection-count filter for these registrations. They may show the commands
-for other counts, but CompareCraft validates the selection before opening a comparison and explains the
-required selection.
+| Selection | Enabled actions offered |
+| --- | --- |
+| One file | Select Left File; matching Compare to Selected Left and Clear when staged |
+| One folder | Select Left Folder; matching Compare to Selected Left and Clear when staged |
+| Two files | Compare, Merge |
+| Two folders | Compare, Sync |
+| Nothing, mixed types, or more than two items | None |
+
+Sync opens the existing synchronization interface, not an immediate copy operation. Folder Merge requires
+a base folder and is not offered for two folders. Direct comparisons preserve the file manager's supplied
+order; use Swap Sides when necessary. Staged comparisons explicitly preserve left/right order.
+
+Linux uses native providers: GNOME Files needs `nautilus-python`; Thunar and Dolphin need their packaged
+Thunarx/KIO providers. The Arch package builds and installs all three. Rebuild/reinstall the package, enable
+the desired actions in Options, and restart each file manager once after initial provider installation.
+Files actions now appear in the normal context menu, not Scripts. Applying Options removes the old
+CompareCraft scripts, service menus and custom-action block without touching unrelated actions.
+Native menus re-evaluate selection and staged state when opened. Action icons are supplied where the host
+supports them; appearance depends on the installed icon theme and file-manager version. On Windows 11,
+Explorer may place the commands under Show more options. Native Finder integration is not included;
+the manual Quick Actions below do not provide this dynamic filtering.
+
+Run `npm run test:menus` on Linux to build and test native menu callbacks. The native Windows provider
+also needs validation in Explorer on Windows; a Linux type-check is not a Windows runtime test.
 
 If an older installer has already been removed, its uninstaller cannot remove the registry entries because that
 older build did not include a cleanup hook. Installing this build migrates the entries; uninstalling this build

@@ -68,6 +68,23 @@ Some notes on how arguments are read:
 | `-nobackups` | Saves without creating `.bak` backup files. |
 | `-savetarget=<file>` | Saves the right-hand side to `<file>` instead of overwriting the right file. |
 
+### File-manager actions
+
+| Switch | Description |
+| --- | --- |
+| `-cc-select-left <file>` | Remember exactly one left file. |
+| `-cc-select-left-folder <folder>` | Remember exactly one left folder independently. |
+| `-cc-compare-staged <right-file>` | Compare to the staged file, then clear only that selection. |
+| `-cc-compare-staged-folder <right-folder>` | Compare to the staged folder, then clear only that selection. |
+| `-cc-clear-left` | Clear the staged file without changing the staged folder. |
+| `-cc-clear-left-folder` | Clear the staged folder without changing the staged file. |
+| `-cc-compare <left> <right>` | Compare exactly two files or two folders; retain staged selections. |
+| `-cc-merge <left-file> <right-file>` | Open the existing two-file merge workflow. |
+| `-cc-sync <left-folder> <right-folder>` | Open Folder Sync; do not perform immediate synchronization. |
+
+Only one context action can be supplied at a time. Place `--` before literal paths beginning with a dash.
+Paths and staged item types are revalidated before launch. A failed comparison leaves staging intact.
+
 ### Viewer types
 
 `-fv` accepts these viewer names. Case, spaces, hyphens and underscores are ignored, so `-fv="Hex Compare"`, `-fv=hexcompare` and `-fv=hex` all work.
