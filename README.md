@@ -328,7 +328,15 @@ a base folder and is not offered for two folders. Direct comparisons preserve th
 order; use Swap Sides when necessary. Staged comparisons explicitly preserve left/right order.
 
 Linux uses native providers: GNOME Files needs `nautilus-python`; Thunar and Dolphin need their packaged
-Thunarx/KIO providers. The Arch package builds and installs all three. Rebuild/reinstall the package, enable
+Thunarx/KIO providers. The Arch package builds and installs all three. Ubuntu 22.04 CI bundles include
+Thunar (built with `libthunarx-3-dev` and `pkg-config`), but omit the Dolphin plugin because that runner
+does not provide KDE Frameworks 6. The CI job applies
+[the Ubuntu bundle override](src-tauri/tauri.ubuntu-22.04.conf.json); use
+`npm run app:build:linux -- --config src-tauri/tauri.ubuntu-22.04.conf.json` for the same bundle configuration
+on Ubuntu 22.04 after installing those development packages. The default Linux configuration still bundles
+the Dolphin plugin and requires Qt 6/KDE Frameworks 6 development packages to build it.
+
+Rebuild/reinstall the package, enable
 the desired actions in Options, and restart each file manager after installing or updating its native provider.
 For Thunar, finish any file operations, run `thunar --quit`, then reopen it with `thunar`.
 This closes all Thunar windows and its background daemon; closing a window alone may leave the old daemon
