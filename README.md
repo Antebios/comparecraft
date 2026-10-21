@@ -329,7 +329,11 @@ order; use Swap Sides when necessary. Staged comparisons explicitly preserve lef
 
 Linux uses native providers: GNOME Files needs `nautilus-python`; Thunar and Dolphin need their packaged
 Thunarx/KIO providers. The Arch package builds and installs all three. Rebuild/reinstall the package, enable
-the desired actions in Options, and restart each file manager once after initial provider installation.
+the desired actions in Options, and restart each file manager after installing or updating its native provider.
+For Thunar, finish any file operations, run `thunar --quit`, then reopen it with `thunar`.
+This closes all Thunar windows and its background daemon; closing a window alone may leave the old daemon
+running without the new provider. No rebuild is needed if the updated package is already installed.
+See [missing context-menu commands](docs/manual/troubleshooting.md#file-manager-context-menu-commands-are-missing).
 Files actions now appear in the normal context menu, not Scripts. Applying Options removes the old
 CompareCraft scripts, service menus and custom-action block without touching unrelated actions.
 Native menus re-evaluate selection and staged state when opened. Action icons are supplied where the host

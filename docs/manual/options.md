@@ -44,8 +44,11 @@ Mixed selections, more than two items and background clicks offer no selection a
 are shown. A successful staged comparison clears its own left selection; direct pair actions preserve staging.
 
 GNOME Files requires `nautilus-python` and uses the normal context menu, not Scripts. Thunar and Dolphin
-require the packaged native providers. Install the updated package and restart the file manager once to load
-a newly installed provider. Further staging changes are read when each menu opens. Icons are provided where
+require the packaged native providers. Install the updated package and restart the file manager after installing
+or updating a native provider. In Thunar, closing a window may leave its background daemon running. Finish
+file operations, run `thunar --quit`, then reopen Thunar with `thunar`; this closes all Thunar windows and
+restarts the daemon. See [missing context-menu commands](troubleshooting.md#file-manager-context-menu-commands-are-missing).
+Further staging changes are read when each menu opens; they do not require another restart. Icons are provided where
 supported by the host. Windows Explorer uses its native command provider; Windows 11 may put the commands
 under **Show more options**. macOS continues to use manually configured Finder Quick Actions.
 

@@ -51,6 +51,30 @@ On Windows, the `comparecraft` program has no console, so the output of scripts 
 
 CompareCraft runs as a single instance. When it is already running, a comparison started from the command line or a file manager opens as a new tab in the existing window, and the command returns immediately. To wait until the comparison window is closed, for example in a build script or a version control tool, use `ccomp`.
 
+## File-manager context menu commands are missing
+
+First enable the desired commands under **Tools > Options > Startup > File manager integration**.
+File and folder actions have separate checkboxes. Check any provider-availability warnings on that page;
+the file manager needs the native provider from the updated CompareCraft package. GNOME Files also needs
+`nautilus-python` (`python3-nautilus` on Debian). See [File manager integration](options.md#file-manager-integration).
+
+Restart the file manager after installing or updating a native provider. **Thunar can keep its background
+daemon running after all windows are closed**, so opening another window may still use the old process.
+Finish any file operations, then run:
+
+```sh
+thunar --quit
+thunar
+```
+
+This closes all Thunar windows, exits the daemon, and opens a fresh process that discovers the installed
+provider. If the updated package is already installed, no rebuild or reinstall is needed. Later changes to
+the selected left file or folder are read when the context menu opens and do not require restarting Thunar.
+
+The menu also depends on the selection: one file or folder offers the matching Select Left action; two files
+offer Compare and Merge; two folders offer Compare and Sync. Only enabled actions appear. A mixed selection
+or more than two items offers no CompareCraft actions.
+
 ## Reset the settings
 
 - Choose **Tools > Restore Factory Defaults…** to reset all options, colors, shortcuts and presets. Your sessions are kept.
