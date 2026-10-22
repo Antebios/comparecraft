@@ -1,12 +1,12 @@
 metadata:
   source_tasks: "../plan.md"
   execution_ledger: "../handoff.md"
-  scope: "Phase 1 implementation; later phases are pending"
+  scope: "Phases 1-2 implementation; later phases are pending"
 summary:
   total_tasks: 14
-  completed_tasks: 3
+  completed_tasks: 6
   in_progress_tasks: 0
-  pending_tasks: 11
+  pending_tasks: 8
 tasks:
   - task_id: T001
     status: completed
@@ -54,12 +54,59 @@ tasks:
     verification:
       build_passed: true
       evidence: "Controller and dirty-resource tests plus actual host command dispatch passed; owner confirmed Extension Development Host startup and context-menu testing on Windows on 2026-10-21"
-pending_tasks: [T004, T005, T006, T007, T008, T009, T010, T011, T012, T013, T014]
+  - task_id: T004
+    status: completed
+    implementation:
+      files:
+        - extensions/vscode/src/snapshots.ts
+        - extensions/vscode/src/contracts.ts
+        - extensions/vscode/src/process.ts
+        - extensions/vscode/src/controller.ts
+        - extensions/vscode/src/resources.ts
+        - extensions/vscode/src/extension.ts
+        - extensions/vscode/test/core.test.ts
+    upstream_trace:
+      plan_item: "2.1"
+      requirements: [REQ-003, REQ-006, REQ-009]
+    verification:
+      build_passed: true
+      evidence: "Snapshot and dirty-file routing unit tests; host registers text commands"
+  - task_id: T005
+    status: completed
+    implementation:
+      files:
+        - extensions/vscode/src/git.ts
+        - extensions/vscode/src/conflicts.ts
+        - extensions/vscode/src/gitWorkflows.ts
+        - extensions/vscode/package.json
+        - extensions/vscode/test/git.test.ts
+        - extensions/vscode/test/manifest.test.ts
+        - extensions/vscode/test/host.ts
+    upstream_trace:
+      plan_item: "2.2"
+      requirements: [REQ-003, REQ-004, REQ-009]
+    verification:
+      build_passed: true
+      evidence: "Real disposable Git repositories for merge, rebase, add/add, modify/delete, cherry-pick stale-state refusal and revision content"
+  - task_id: T006
+    status: completed
+    implementation:
+      files:
+        - extensions/vscode/src/gitTools.ts
+        - extensions/vscode/README.md
+    upstream_trace:
+      plan_item: "2.3"
+      requirements: [REQ-005, REQ-009, REQ-010]
+    verification:
+      build_passed: true
+      evidence: "Local/temp-global apply and remove tests, real git mergetool run with fake tool, installed ccomp -solo wait smoke"
+pending_tasks: [T007, T008, T009, T010, T011, T012, T013, T014]
 untracked_changes: []
 validation:
   passed: true
   errors: []
   warnings:
     - "Native Linux/macOS, exhaustive menu-location checks, and picker checks remain unexecuted; owner confirmed Windows host startup and context-menu testing."
-    - "This checkpoint completes Phase 1, not all feature requirements."
+    - "Phase 2 manual desktop-GUI journeys (conflict save/stage, Compare with Saved, real mergetool) remain unexecuted."
+    - "This checkpoint completes Phases 1-2, not all feature requirements."
   blocking_issues: []

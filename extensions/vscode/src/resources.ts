@@ -20,7 +20,7 @@ export async function assertSavedResources(
       const within = relative === "" || (resource.kind === "folder" &&
         relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
       if (within) {
-        throw new Error(`Unsaved changes in ${dirtyPath}. Phase 1 compares saved files only; save intentionally before retrying. Buffer snapshots arrive in Phase 2.`);
+        throw new Error(`Unsaved changes in ${dirtyPath}. Folder comparisons read files from disk; save or revert that file intentionally before retrying.`);
       }
     }
   }

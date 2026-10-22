@@ -4,10 +4,11 @@ import { mkdtemp, writeFile, rm, chmod } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { desktopCandidates, discoverDesktop, InstallationError } from "../src/discovery";
-import { ComparisonController, type ComparisonHost } from "../src/controller";
+import { ComparisonController, type ComparisonHost, type LaunchTracking } from "../src/controller";
 import { comparisonArguments, launchDesktop } from "../src/process";
 import type { LaunchMode, LocalResource, ResourceKind } from "../src/contracts";
 import { assertSavedResources } from "../src/resources";
+import { SnapshotStore, type SnapshotSession } from "../src/snapshots";
 
 const file = (name: string): LocalResource => ({ path: path.resolve(name), kind: "file" });
 const folder = (name: string): LocalResource => ({ path: path.resolve(name), kind: "folder" });
@@ -23,6 +24,11 @@ class FakeHost implements ComparisonHost {
   trusted = true;
   leftContext = false;
   notices: string[] = [];
+  buffers = new Map<string, string>();
+  tracking: (LaunchTracking | undefined)[] = [];
+  snapshotRoot = path.join(tmpdir(), `comparecraft-core-${process.pid}`);
+  async bufferText(filePath: string) { return this.buffers.get(filePath); }
+  async createSnapshots(): Promise<SnapshotSession> { return new SnapshotStore(this.snapshotRoot).create(); }
   assertSupported() { if (!this.trusted) throw new Error("Trust required"); }
   async resource(value: string) {
     const resource = this.resources.get(value);
@@ -33,7 +39,7 @@ class FakeHost implements ComparisonHost {
   defaultMode() { return this.mode; }
   async confirmDesktop() { this.embeddedNotices++; return this.embeddedAccepted; }
   assertSaved(_resources: readonly LocalResource[]) { if (this.dirty) throw new Error("Unsaved changes"); }
-  async launch(args: readonly string[]) { this.launches.push([...args]); }
+  async launch(args: readonly string[], tracking?: LaunchTracking) { this.launches.push([...args]); this.tracking.push(tracking); }
   async setHasLeft(value: boolean) { this.leftContext = value; }
   notify(message: string) { this.notices.push(message); }
   add(...resources: LocalResource[]) { for (const resource of resources) this.resources.set(resource.path, resource); }
@@ -95,7 +101,14 @@ test("filesystem discovery rejects directories and accepts an executable file", 
 
 test("CLI arguments preserve side order and separate spaces and option-like names from switches", () => {
   const left = file("left with spaces.txt"), right = file("-right.txt");
-  assert.deepEqual(comparisonArguments({ left, right }), ["--", left.path, right.path]);
+  assert.deepEqual(comparisonArguments({ sides: [left, right] }), ["--", left.path, right.path]);
+});
+
+test("CLI arguments carry titles, read-only flags, and -solo before the separator", () => {
+  assert.deepEqual(comparisonArguments({
+    sides: [{ path: "a.txt", title: "Current:\nHEAD", readOnly: true }, { path: "b.txt" }, { path: "c.txt", readOnly: true }, { path: "-out.txt", title: "Result" }],
+    solo: true
+  }), ["-solo", "-title1=Current: HEAD", "-ro1", "-ro3", "-title4=Result", "--", "a.txt", "b.txt", "c.txt", "-out.txt"]);
 });
 
 test("two selected files launch the desktop without an embedded notice", async () => {
@@ -161,16 +174,37 @@ test("picker workflows enforce kinds and compare a file's parent folder", async 
   await assert.rejects(controller.compareWithPicker([other.path], "file"), /Choose a file/);
 });
 
-test("untrusted environments and unsaved content never launch", async () => {
-  const host = new FakeHost(), l = file("left.txt"), r = file("right.txt");
-  host.add(l, r);
+test("untrusted environments and folders with unsaved content never launch", async () => {
+  const host = new FakeHost(), l = file("left.txt"), r = file("right.txt"), lf = folder("lf"), rf = folder("rf");
+  host.add(l, r, lf, rf);
   const controller = new ComparisonController(host);
   host.trusted = false;
   await assert.rejects(controller.compare([l.path, r.path]), /Trust required/);
   host.trusted = true;
   host.dirty = true;
-  await assert.rejects(controller.compare([l.path, r.path]), /Unsaved/);
+  await assert.rejects(controller.compare([lf.path, rf.path]), /Unsaved/);
   assert.equal(host.launches.length, 0);
+});
+
+test("a dirty file is compared through a read-only snapshot that is released when the desktop closes", async () => {
+  const host = new FakeHost(), l = file("left.txt"), r = file("right.txt");
+  host.add(l, r);
+  host.buffers.set(l.path, "unsaved text");
+  try {
+    await new ComparisonController(host).compare([l.path, r.path]);
+    const args = host.launches[0]!;
+    const snapshot = args[args.indexOf("--") + 1]!;
+    assert.deepEqual(args.slice(0, 3), ["-solo", "-title1=left.txt (unsaved buffer)", "-ro1"]);
+    assert.equal(args.at(-1), r.path);
+    assert.equal(path.basename(snapshot), "left.txt");
+    const { readFile, access } = await import("node:fs/promises");
+    assert.equal(await readFile(snapshot, "utf8"), "unsaved text");
+    if (process.getuid?.() !== 0) await assert.rejects(writeFile(snapshot, "changed"));
+    await host.tracking[0]!.session!.release();
+    await assert.rejects(access(snapshot));
+  } finally {
+    await rm(host.snapshotRoot, { recursive: true, force: true });
+  }
 });
 
 test("dirty-buffer guard protects files and folder descendants without rejecting siblings or unrelated deleted files", async () => {

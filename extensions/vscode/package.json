@@ -1,7 +1,7 @@
 {
   "name": "comparecraft",
   "displayName": "CompareCraft",
-  "description": "Compare files and folders with your installed CompareCraft desktop app. Embedded integration is planned.",
+  "description": "Compare files, folders, editor text, and Git revisions and resolve Git conflicts with your installed CompareCraft desktop app. Embedded integration is planned.",
   "version": "0.1.0",
   "publisher": "antebios",
   "license": "MIT",
@@ -33,30 +33,76 @@
       { "command": "comparecraft.compareFolderWith", "title": "Compare Folder With...", "category": "CompareCraft" },
       { "command": "comparecraft.compareParentFolderWith", "title": "Compare Parent Folder With...", "category": "CompareCraft" },
       { "command": "comparecraft.openDesktop", "title": "Open Desktop App", "category": "CompareCraft" },
-      { "command": "comparecraft.locateDesktop", "title": "Locate Desktop Executable...", "category": "CompareCraft" }
+      { "command": "comparecraft.locateDesktop", "title": "Locate Desktop Executable...", "category": "CompareCraft" },
+      { "command": "comparecraft.compareWithSaved", "title": "Compare with Saved", "category": "CompareCraft" },
+      { "command": "comparecraft.compareWithClipboard", "title": "Compare Selection with Clipboard", "category": "CompareCraft" },
+      { "command": "comparecraft.selectLeftText", "title": "Select Text as Left", "category": "CompareCraft" },
+      { "command": "comparecraft.compareTextWithLeft", "title": "Compare Text with Left", "category": "CompareCraft" },
+      { "command": "comparecraft.compareActiveDiff", "title": "Open Active Diff in Desktop App", "category": "CompareCraft" },
+      { "command": "comparecraft.gitCompareHead", "title": "Compare with HEAD", "category": "CompareCraft" },
+      { "command": "comparecraft.gitCompareIndex", "title": "Compare Index with Working Tree", "category": "CompareCraft" },
+      { "command": "comparecraft.gitCompareHeadIndex", "title": "Compare HEAD with Index", "category": "CompareCraft" },
+      { "command": "comparecraft.gitCompareRevision", "title": "Compare with Revision...", "category": "CompareCraft" },
+      { "command": "comparecraft.gitResolveConflict", "title": "Resolve Conflict in Desktop App", "category": "CompareCraft" },
+      { "command": "comparecraft.gitStageResolved", "title": "Stage Resolved Conflict...", "category": "CompareCraft" },
+      { "command": "comparecraft.configureGitTools", "title": "Configure as Git Merge/Diff Tool...", "category": "CompareCraft" },
+      { "command": "comparecraft.removeGitTools", "title": "Remove Git Tool Configuration...", "category": "CompareCraft" }
     ],
-    "submenus": [{ "id": "comparecraft.comparisons", "label": "CompareCraft" }],
+    "submenus": [
+      { "id": "comparecraft.comparisons", "label": "CompareCraft" },
+      { "id": "comparecraft.git", "label": "Git" }
+    ],
     "menus": {
       "explorer/context": [
         { "submenu": "comparecraft.comparisons", "when": "resourceScheme == file", "group": "navigation@90" }
       ],
       "editor/context": [
-        { "submenu": "comparecraft.comparisons", "when": "resourceScheme == file", "group": "navigation@90" }
+        { "submenu": "comparecraft.comparisons", "when": "resourceScheme == file || resourceScheme == untitled", "group": "navigation@90" }
       ],
       "editor/title/context": [
         { "submenu": "comparecraft.comparisons", "when": "resourceScheme == file", "group": "navigation@90" }
       ],
+      "editor/title": [
+        { "command": "comparecraft.compareActiveDiff", "when": "isInDiffEditor", "group": "1_comparecraft@1" }
+      ],
+      "scm/resourceState/context": [
+        { "command": "comparecraft.gitResolveConflict", "when": "scmProvider == git && scmResourceGroup == merge", "group": "comparecraft@1" },
+        { "command": "comparecraft.gitStageResolved", "when": "scmProvider == git && scmResourceGroup == merge", "group": "comparecraft@2" },
+        { "command": "comparecraft.gitCompareHead", "when": "scmProvider == git && scmResourceGroup != merge", "group": "comparecraft@3" },
+        { "command": "comparecraft.gitCompareIndex", "when": "scmProvider == git && scmResourceGroup == workingTree", "group": "comparecraft@4" },
+        { "command": "comparecraft.gitCompareHeadIndex", "when": "scmProvider == git && scmResourceGroup == index", "group": "comparecraft@5" },
+        { "command": "comparecraft.gitCompareRevision", "when": "scmProvider == git && scmResourceGroup != merge && scmResourceGroup != untracked", "group": "comparecraft@6" }
+      ],
+      "commandPalette": [
+        { "command": "comparecraft.compareTextWithLeft", "when": "comparecraft.hasLeftText" },
+        { "command": "comparecraft.compareActiveDiff", "when": "isInDiffEditor" }
+      ],
       "comparecraft.comparisons": [
-        { "command": "comparecraft.compareSelected", "group": "1_compare@1" },
-        { "command": "comparecraft.compareSelectedDesktop", "group": "1_compare@2" },
-        { "command": "comparecraft.compareSelectedEmbedded", "group": "1_compare@3" },
-        { "command": "comparecraft.selectLeft", "group": "2_left@1" },
-        { "command": "comparecraft.compareWithLeft", "when": "comparecraft.hasLeft", "group": "2_left@2" },
-        { "command": "comparecraft.clearLeft", "when": "comparecraft.hasLeft", "group": "2_left@3" },
-        { "command": "comparecraft.compareFileWith", "when": "!explorerResourceIsFolder", "group": "3_picker@1" },
-        { "command": "comparecraft.compareFolderWith", "when": "explorerResourceIsFolder", "group": "3_picker@2" },
-        { "command": "comparecraft.compareParentFolderWith", "when": "!explorerResourceIsFolder", "group": "3_picker@3" },
-        { "command": "comparecraft.openDesktop", "group": "4_app@1" }
+        { "command": "comparecraft.compareSelected", "when": "resourceScheme == file", "group": "1_compare@1" },
+        { "command": "comparecraft.compareSelectedDesktop", "when": "resourceScheme == file", "group": "1_compare@2" },
+        { "command": "comparecraft.compareSelectedEmbedded", "when": "resourceScheme == file", "group": "1_compare@3" },
+        { "command": "comparecraft.compareWithSaved", "when": "editorTextFocus && activeEditorIsDirty && resourceScheme == file", "group": "1_compare@4" },
+        { "command": "comparecraft.selectLeft", "when": "resourceScheme == file", "group": "2_left@1" },
+        { "command": "comparecraft.compareWithLeft", "when": "comparecraft.hasLeft && resourceScheme == file", "group": "2_left@2" },
+        { "command": "comparecraft.clearLeft", "when": "comparecraft.hasLeft || comparecraft.hasLeftText", "group": "2_left@9" },
+        { "command": "comparecraft.selectLeftText", "when": "editorTextFocus", "group": "3_text@1" },
+        { "command": "comparecraft.compareTextWithLeft", "when": "editorTextFocus && comparecraft.hasLeftText", "group": "3_text@2" },
+        { "command": "comparecraft.compareWithClipboard", "when": "editorTextFocus", "group": "3_text@3" },
+        { "command": "comparecraft.compareFileWith", "when": "resourceScheme == file && !explorerResourceIsFolder", "group": "4_picker@1" },
+        { "command": "comparecraft.compareFolderWith", "when": "resourceScheme == file && explorerResourceIsFolder", "group": "4_picker@2" },
+        { "command": "comparecraft.compareParentFolderWith", "when": "resourceScheme == file && !explorerResourceIsFolder", "group": "4_picker@3" },
+        { "submenu": "comparecraft.git", "when": "resourceScheme == file && !explorerResourceIsFolder", "group": "5_git@1" },
+        { "command": "comparecraft.openDesktop", "group": "6_app@1" }
+      ],
+      "comparecraft.git": [
+        { "command": "comparecraft.gitCompareHead", "group": "1_compare@1" },
+        { "command": "comparecraft.gitCompareIndex", "group": "1_compare@2" },
+        { "command": "comparecraft.gitCompareHeadIndex", "group": "1_compare@3" },
+        { "command": "comparecraft.gitCompareRevision", "group": "1_compare@4" },
+        { "command": "comparecraft.gitResolveConflict", "group": "2_conflict@1" },
+        { "command": "comparecraft.gitStageResolved", "group": "2_conflict@2" },
+        { "command": "comparecraft.configureGitTools", "group": "3_tools@1" },
+        { "command": "comparecraft.removeGitTools", "group": "3_tools@2" }
       ]
     },
     "configuration": {
@@ -66,7 +112,7 @@
           "type": "string",
           "enum": ["embedded", "desktop"],
           "default": "embedded",
-          "description": "Default destination. Embedded mode is not available in Phase 1 and offers an explicit desktop-launch action instead.",
+          "description": "Default destination for Compare Selected. Embedded mode is not available yet and offers an explicit desktop-launch action instead. Text, Git, and conflict commands always use the desktop app.",
           "scope": "window"
         },
         "comparecraft.desktopPath": {
@@ -78,7 +124,7 @@
         "comparecraft.backendPath": {
           "type": "string",
           "default": "",
-          "description": "Reserved absolute path to the future headless backend. Not used by Phase 1 desktop commands.",
+          "description": "Reserved absolute path to the future headless backend. Not used by the current desktop commands.",
           "scope": "machine"
         }
       }

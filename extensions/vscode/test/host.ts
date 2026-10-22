@@ -14,7 +14,10 @@ export async function run(): Promise<void> {
   for (const id of [
     "compareSelected", "compareSelectedDesktop", "compareSelectedEmbedded",
     "selectLeft", "compareWithLeft", "clearLeft", "compareFileWith", "compareFolderWith",
-    "compareParentFolderWith", "openDesktop", "locateDesktop"
+    "compareParentFolderWith", "openDesktop", "locateDesktop",
+    "compareWithSaved", "compareWithClipboard", "selectLeftText", "compareTextWithLeft", "compareActiveDiff",
+    "gitCompareHead", "gitCompareIndex", "gitCompareHeadIndex", "gitCompareRevision",
+    "gitResolveConflict", "gitStageResolved", "configureGitTools", "removeGitTools"
   ]) assert.ok(commands.includes(`comparecraft.${id}`), `Registered command: ${id}`);
   assert.equal(vscode.workspace.isTrusted, true);
   const config = vscode.workspace.getConfiguration("comparecraft");
@@ -60,7 +63,7 @@ export async function run(): Promise<void> {
     await verifyLaunch("comparecraft.compareWithLeft", [r], right);
     await verifyLaunch("comparecraft.compareSelected", [lf, [lf, rf]], rightFolder);
     await vscode.commands.executeCommand("comparecraft.clearLeft");
-    console.log("PASS: actual VS Code activation, 11 registered commands, Explorer multi-selection, file/folder launches, independent left selections, default desktop dispatch and clear.");
+    console.log("PASS: actual VS Code activation, 24 registered commands, Explorer multi-selection, file/folder launches, independent left selections, default desktop dispatch and clear.");
   } finally {
     await config.update("desktopPath", undefined, vscode.ConfigurationTarget.Global);
     await config.update("defaultMode", undefined, vscode.ConfigurationTarget.Global);

@@ -2,11 +2,13 @@
 
 ## Current state
 
-**Phase 1 is complete** (accepted by the owner). Implemented on Windows;
-T001-T003 are done. Phases 2-6 have not been started or authorized by the Phase 1 request.
-No backend/installer changes, Git configuration changes, commits, pushes, or
-Marketplace publication have been performed. Extension-only development
-dependencies were installed; the existing desktop installation was not changed.
+**Phases 1 and 2 are complete.** Phase 1 (T001-T003) was accepted by the owner and
+committed/pushed on `feature/vscode-ui` (`f595f27`, `be98a7c`). Phase 2 (T004-T006)
+is implemented and verified on Windows but **not yet committed**. Phases 3-6 have
+not been started. No backend/installer/desktop source changes, commits of Phase 2,
+or Marketplace publication have been performed. Git configuration is changed
+only by the user-invoked, confirmed setup command; tests use disposable
+repositories and a temporary `GIT_CONFIG_GLOBAL`.
 
 - Planning branch: `feature/vscode-ui`; inspect actual branch/status when resuming.
 - An unrelated untracked `.vscode/` directory existed during planning. Preserve it.
@@ -45,9 +47,9 @@ Planning coverage is not evidence of implementation completion.
 | T001 | 1 | done | Phase 1 approval received | Isolated manifest/build/dev workspace; activation and contribution tests pass |
 | T002 | 1 | done | T001 | Discovery/process tests, installed Windows discovery, CLI/GUI smoke pass |
 | T003 | 1 | done | T002 | Controller tests and real VS Code host command/file/folder dispatch pass |
-| T004 | 2 | pending | T003 | |
-| T005 | 2 | pending | T004 | |
-| T006 | 2 | pending | T005 | |
+| T004 | 2 | done | T003 | Snapshot store/session, buffer/selection/clipboard/saved/diff commands; unit + host tests pass |
+| T005 | 2 | done | T004 | Git HEAD/index/working/revision and conflict resolve/stage; real merge/rebase/cherry-pick fixtures pass |
+| T006 | 2 | done | T005 | Reversible mergetool/difftool setup; real `git mergetool` run and installed `ccomp` wait smoke pass |
 | T007 | 3 | pending | T001 | |
 | T008 | 3 | pending | T002, T007 | |
 | T009 | 4 | pending | T007 | |
@@ -66,12 +68,12 @@ VS Code version, app/helper/protocol versions, and installer type.
 |---|---|---|---|
 | Installed discovery, custom paths, spaces | automated pass; default per-user install and override tested | candidate unit tests only; native not run | candidate unit tests only; native not run |
 | Files/folders, Select Left, pickers | host/unit pass; native picker/menu visual checks not run | not run | not run |
-| Dirty/untitled, selections, clipboard, saved version | not run | not run | not run |
-| Snapshot survival after GUI handoff | not run | not run | not run |
-| HEAD/index/working/revisions and existing diff | not run | not run | not run |
-| Merge/rebase/cherry-pick/stash resolution | not run | not run | not run |
-| Missing stages, renames, binary conflicts | not run | not run | not run |
-| Opt-in Git setup, wait/cancel, reversal | not run | not run | not run |
+| Dirty/untitled, selections, clipboard, saved version | unit pass (snapshot content, read-only, release); commands registered in host; manual GUI not run | not run | not run |
+| Snapshot survival after GUI handoff | design: `-solo` dedicated process + PID marker sweep; unit pass; manual GUI not run | not run | not run |
+| HEAD/index/working/revisions and existing diff | real Git fixture pass (content/labels); diff forwarding manual not run | not run | not run |
+| Merge/rebase/cherry-pick/stash resolution | real Git fixture pass for merge, rebase, cherry-pick stage/labels; stash label generic; manual GUI not run | not run | not run |
+| Missing stages, renames, binary conflicts | add/add empty base and modify/delete refusal pass; binary/link/submodule unit pass | not run | not run |
+| Opt-in Git setup, wait/cancel, reversal | local+global (temp) apply/remove pass; real `git mergetool` with fake tool pass; installed `ccomp -solo` waits for GUI | not run | not run |
 | Installed helper, incompatibility, crash | not run | not run | not run |
 | Embedded text, edits, undo/save/close/reload | not run | not run | not run |
 | Embedded merge and remaining views | not run | not run | not run |
@@ -122,6 +124,22 @@ Phase 1 checks (from `extensions/vscode` unless stated otherwise):
 Choose focused checks when implementing; prerequisites differ by platform.
 Missing GUI, platform, or signing validation remains a gap, not a pass.
 
+Phase 2 checks (Windows, from `extensions/vscode` unless stated otherwise):
+
+- `npm test`: 30 tests passed, zero failures/skips (about 65 s; Git on Windows
+  is slow). Adds snapshot write/read-only/release/sweep, CLI titles/read-only/
+  `-solo`, dirty-file snapshot routing, conflict helpers, real disposable Git
+  repositories for merge, rebase, add/add, modify/delete, cherry-pick stale-state
+  refusal, HEAD/index/working/revision content, tool quoting, local and
+  temp-global apply/remove, and an actual `git mergetool` invoking a fake tool
+  in a path with spaces and an apostrophe.
+- `npm run test:integration` (installed VS Code 1.143.0): exit code 0; all 24
+  commands registered; Phase 1 file/folder dispatch still passes.
+- Root `npm run typecheck`: passed. `git diff --check`: passed.
+- Installed `ccomp.exe -solo -- "a b.txt" "c d.txt"` kept running while its
+  `comparecraft.exe -solo -- ...` child ran and exited after that owned child was
+  stopped; arguments were forwarded intact. Fixtures removed.
+
 ## Phase 1 implementation handoff
 
 - Branch: `feature/vscode-ui`. Transfer state: local only, not committed/pushed.
@@ -150,6 +168,46 @@ Missing GUI, platform, or signing validation remains a gap, not a pass.
   independently ready after T001, but also outside Phase 1 approval.
 - Detailed trace: [tasks-to-impl.yaml](checkpoints/tasks-to-impl.yaml).
 - Batch evidence: [phase-1-report.yaml](phase-1-report.yaml).
+
+## Phase 2 implementation handoff
+
+- Task IDs / status: T004, T005, T006 done (automated gate). Branch
+  `feature/vscode-ui`; transfer state: local only, not committed.
+- Environment: Windows x64, Node 24.14.1, npm 11.11.0, VS Code 1.143.0,
+  Git 2.53.0.windows.2, installed CompareCraft per-user build.
+- New modules in `extensions/vscode/src/`: `snapshots.ts` (owned read-only
+  snapshot sessions, marker + PID sweep), `git.ts` (shell-free Git runner, stages,
+  operation labels, config), `conflicts.ts` (stage validation, binary/marker
+  checks), `gitWorkflows.ts` (comparisons, resolve, revalidated staging),
+  `gitTools.ts` (reversible mergetool/difftool settings). Modified: `contracts.ts`,
+  `process.ts` (titles, `-roN`, `-solo`), `controller.ts` (`compareInputs`, dirty
+  files become snapshots), `extension.ts` (13 new commands, SCM/diff adapters),
+  `package.json` (24 commands, `comparecraft.git` submenu, SCM and diff menus).
+- Behavior: every content-backed or tracked launch uses `-solo` so the extension
+  owns the desktop process; snapshots are released on exit, and later activations
+  sweep only marked sessions whose PID ended (24 h unattached grace, 7 day cap).
+  Conflict sides come from index stages (never markers in the working file); the
+  working file is the 4th (output) side. Staging is explicit, confirmed, refuses
+  stale stage signatures, and never continues/aborts operations.
+- Desktop finding: `src-tauri/src/console.rs` `launch_and_wait` appends `-solo`
+  after the user's arguments when absent. If those arguments contain `--`, the
+  appended `-solo` becomes an extra positional path. Git tool commands avoid this
+  by passing `-solo` before `--` (verified with the installed `ccomp`). Desktop
+  code was not changed; fixing it (insert `-solo` first) is a small follow-up.
+- Git exit-code semantics: the GUI exit code does not distinguish save from
+  cancel, so `trustExitCode=false`; Git judges success by whether MERGED changed.
+- Integration-runner note: on this machine the test VS Code starts `wsl.exe -l -q`,
+  which can hang and keep the runner's output pipe open after VS Code exits with
+  code 0. Stop only those test-spawned `wsl.exe` PIDs; the result is unaffected.
+  VS Code 1.143 does not forward the host test's `console.log` PASS line.
+- Remaining manual checks (desktop GUI, not automatable here): Compare with
+  Saved / clipboard / text-left / active Git diff open correctly labeled sides;
+  snapshot sides are read-only; Resolve Conflict writes the result and the
+  "Stage Resolved File" prompt appears after closing; Source Control context menu
+  items appear in the right groups; `git mergetool`/`git difftool` with the
+  installed app after Configure, then Remove restores settings.
+- Next sequential task: T007 (Phase 3 backend), requiring user authorization.
+- Batch evidence: [phase-2-report.yaml](phase-2-report.yaml).
 
 ## Per-increment handoff entry
 

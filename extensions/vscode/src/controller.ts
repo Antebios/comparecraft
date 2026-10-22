@@ -1,6 +1,13 @@
 import path from "node:path";
-import type { LaunchMode, LocalResource, ResourceKind } from "./contracts";
+import type { ComparisonSide, LaunchMode, LocalResource, ResourceKind, SideInput } from "./contracts";
 import { comparisonArguments } from "./process";
+import type { SnapshotSession } from "./snapshots";
+
+export interface LaunchTracking {
+  readonly session?: SnapshotSession;
+  /** Runs after the dedicated desktop process exits (only while this extension host is alive). */
+  readonly onClosed?: () => Promise<void>;
+}
 
 export interface ComparisonHost {
   assertSupported(): void;
@@ -8,16 +15,70 @@ export interface ComparisonHost {
   pick(kind: ResourceKind, title: string): Promise<string | undefined>;
   defaultMode(): LaunchMode;
   confirmDesktop(): Promise<boolean>;
+  /** Rejects folders that contain unsaved VS Code documents, which cannot be snapshotted. */
   assertSaved(resources: readonly LocalResource[]): void | Promise<void>;
-  launch(args: readonly string[]): Promise<void>;
+  /** Current text of an open document with unsaved changes, if any. */
+  bufferText(filePath: string): Promise<string | undefined>;
+  createSnapshots(): Promise<SnapshotSession>;
+  launch(args: readonly string[], tracking?: LaunchTracking): Promise<void>;
   setHasLeft(value: boolean): Promise<void>;
   notify(message: string): void;
 }
+
+export interface CompareOptions {
+  readonly mode?: LaunchMode;
+  readonly onClosed?: () => Promise<void>;
+}
+
+const SIDE_DIRECTORIES = ["left", "right", "center", "output"];
 
 export class ComparisonController {
   private readonly left: Partial<Record<ResourceKind, string>> = {};
 
   constructor(private readonly host: ComparisonHost) {}
+
+  /**
+   * Launches the desktop app for two (compare) or four (merge) sides. Content inputs become owned
+   * read-only snapshots that are released when the dedicated desktop process exits.
+   * Returns false when the user declines the explicit embedded-mode notice.
+   */
+  async compareInputs(inputs: readonly SideInput[], options: CompareOptions = {}): Promise<boolean> {
+    if ((options.mode ?? this.host.defaultMode()) === "embedded" && !(await this.host.confirmDesktop())) return false;
+    this.host.assertSupported();
+    let session: SnapshotSession | undefined;
+    try {
+      const sides: ComparisonSide[] = [];
+      for (const [index, input] of inputs.entries()) {
+        if (input.kind === "path") {
+          sides.push({ path: input.path, title: input.title, readOnly: input.readOnly });
+        } else {
+          session ??= await this.host.createSnapshots();
+          const file = await session.write(SIDE_DIRECTORIES[index] ?? `side${index + 1}`, input.name, input.content);
+          sides.push({ path: file, title: input.title, readOnly: true });
+        }
+      }
+      const tracked = Boolean(session || options.onClosed);
+      await this.host.launch(
+        comparisonArguments({ sides, solo: tracked }),
+        tracked ? { session, onClosed: options.onClosed } : undefined
+      );
+      return true;
+    } catch (error) {
+      await session?.release();
+      throw error;
+    }
+  }
+
+  private async fileInput(resource: LocalResource): Promise<SideInput> {
+    if (resource.kind === "file") {
+      const text = await this.host.bufferText(resource.path);
+      if (text !== undefined) {
+        const name = path.basename(resource.path);
+        return { kind: "content", name, title: `${name} (unsaved buffer)`, content: text };
+      }
+    }
+    return { kind: "path", path: resource.path };
+  }
 
   private async single(paths: readonly string[], kind?: ResourceKind, title = "Select left file"): Promise<LocalResource | undefined> {
     if (paths.length > 1) throw new Error("Select exactly one file or folder for this command.");
@@ -34,8 +95,8 @@ export class ComparisonController {
     if (key(left.path) === key(right.path)) throw new Error("Choose two different files or folders.");
     if ((mode ?? this.host.defaultMode()) === "embedded" && !(await this.host.confirmDesktop())) return;
     this.host.assertSupported();
-    await this.host.assertSaved([left, right]);
-    await this.host.launch(comparisonArguments({ left, right }));
+    if (left.kind === "folder") await this.host.assertSaved([left, right]);
+    await this.compareInputs([await this.fileInput(left), await this.fileInput(right)], { mode: "desktop" });
   }
 
   async compare(paths: readonly string[], mode?: LaunchMode): Promise<void> {

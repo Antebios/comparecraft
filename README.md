@@ -42,11 +42,12 @@
 
 ## Features
 
-### VS Code extension (Phase 1)
+### VS Code extension
 
-Use the [CompareCraft VS Code extension](extensions/vscode/README.md) to open saved
-file and folder comparisons in the installed desktop app from Explorer, editors,
-and tabs. Embedded views and Git workflows are planned in
+Use the [CompareCraft VS Code extension](extensions/vscode/README.md) to open file,
+folder, unsaved-text, clipboard and Git comparisons (including merge/rebase
+conflict resolution and optional `git mergetool`/`difftool` setup) in the
+installed desktop app. Embedded views are planned in
 [incremental phases](docs/vscode-extension/plan.md).
 
 CompareCraft opens the right view for whatever you give it: two files, two folders, three files to merge, or a saved session.

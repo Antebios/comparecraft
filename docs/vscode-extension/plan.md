@@ -2,10 +2,13 @@
 
 ## Status and purpose
 
-**Phase 1 is complete** (T001-T003 done, accepted by the owner) on the Windows
-development machine. On 2026-10-21, the owner confirmed opening the extension in
-the Extension Development Host and testing context menus on Windows.
-Phases 2-6 remain pending. Native Linux/macOS validation is still required.
+**Phases 1 and 2 are complete.** Phase 1 (T001-T003) was accepted by the owner;
+on 2026-10-21 the owner confirmed opening the extension in the Extension
+Development Host and testing context menus on Windows. Phase 2 (T004-T006,
+snapshots, Git comparisons/conflicts, opt-in Git tools) passed its automated gate
+on Windows with real Git fixtures; manual desktop-GUI journeys are listed in
+[handoff.md](handoff.md). Phases 3-6 remain pending. Native Linux/macOS
+validation is still required.
 This directory is the portable source of truth: no prior chat or session database
 is required to resume. Read [decisions.md](decisions.md) and
 [handoff.md](handoff.md) before working.

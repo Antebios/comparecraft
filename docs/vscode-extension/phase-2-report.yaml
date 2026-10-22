@@ -1,0 +1,65 @@
+batch_id: phase-2
+completed_tasks: [T004, T005, T006]
+blocked_tasks: []
+files_changed:
+  T004:
+    - {file: extensions/vscode/src/snapshots.ts, change_type: created, description: "Owned read-only snapshot sessions, PID markers, safe sweep"}
+    - {file: extensions/vscode/src/contracts.ts, change_type: modified, description: "Comparison sides with titles, read-only flags and content sources"}
+    - {file: extensions/vscode/src/process.ts, change_type: modified, description: "Titles, -roN, -solo arguments and tracked exit callbacks"}
+    - {file: extensions/vscode/src/controller.ts, change_type: modified, description: "compareInputs; dirty files routed to snapshots"}
+    - {file: extensions/vscode/src/resources.ts, change_type: modified, description: "Folders containing dirty files still refused"}
+    - {file: extensions/vscode/src/extension.ts, change_type: modified, description: "Saved/clipboard/selection/left-text/active-diff commands"}
+    - {file: extensions/vscode/test/core.test.ts, change_type: modified, description: "Argument and snapshot routing tests"}
+  T005:
+    - {file: extensions/vscode/src/git.ts, change_type: created, description: "Shell-free Git runner, stages, blobs, operation labels, config"}
+    - {file: extensions/vscode/src/conflicts.ts, change_type: created, description: "Stage validation, binary/marker checks, conflict plan"}
+    - {file: extensions/vscode/src/gitWorkflows.ts, change_type: created, description: "HEAD/index/working/revision comparisons, resolve, revalidated staging"}
+    - {file: extensions/vscode/package.json, change_type: modified, description: "24 commands, Git submenu, SCM/editor-title menus, palette gating"}
+    - {file: extensions/vscode/test/git.test.ts, change_type: created, description: "Snapshot, conflict and real-Git fixture tests"}
+    - {file: extensions/vscode/test/manifest.test.ts, change_type: modified, description: "Command count, Git submenu and SCM gating"}
+    - {file: extensions/vscode/test/host.ts, change_type: modified, description: "All 24 commands registered in real VS Code"}
+  T006:
+    - {file: extensions/vscode/src/gitTools.ts, change_type: created, description: "Reversible mergetool/difftool configuration with recorded prior values"}
+    - {file: extensions/vscode/README.md, change_type: modified, description: "Text, snapshot, Git, conflict and Git-tool documentation"}
+upstream_artifacts_consumed:
+  all_tasks:
+    - {artifact: docs/vscode-extension/plan.md, used_for: "Phase 2 scope, dependencies and acceptance gate"}
+    - {artifact: docs/vscode-extension/decisions.md, used_for: "Snapshot safety, explicit staging, opt-in Git configuration"}
+    - {artifact: docs/vscode-extension/handoff.md, used_for: "Evidence tracking and portable state"}
+evidence_mapping:
+  T004: {output: extensions/vscode/src/snapshots.ts, evidence: "Snapshot read-only/release/sweep tests and dirty-file snapshot launch test"}
+  T005: {output: extensions/vscode/src/gitWorkflows.ts, evidence: "Real disposable merge/rebase/add-add/modify-delete/cherry-pick repositories"}
+  T006: {output: extensions/vscode/src/gitTools.ts, evidence: "Local and temp-global apply/remove tests, real git mergetool run, installed ccomp -solo wait smoke"}
+traceability:
+  - {requirement: REQ-003, plan_item: "2.1", tasks: [T004, T005], status: "Advanced external workflows implemented"}
+  - {requirement: REQ-004, plan_item: "2.2", tasks: [T005], status: "Git comparisons and conflict resolution implemented; operations never continued/aborted"}
+  - {requirement: REQ-005, plan_item: "2.3", tasks: [T006], status: "Opt-in reversible mergetool/difftool implemented"}
+  - {requirement: REQ-006, plan_item: "2.1", tasks: [T004], status: "Unsaved/virtual content via read-only snapshots"}
+  - {requirement: REQ-009, plan_item: "2.x", tasks: [T004, T005, T006], status: "Shell-free Git, trust guard, owned snapshot cleanup"}
+  - {requirement: REQ-010, plan_item: "2.x", tasks: [T004, T005, T006], status: "Portable evidence recorded; release remains pending"}
+protocol_violation: false
+errors: []
+warnings:
+  - "Manual desktop-GUI journeys (Resolve Conflict save/stage, Compare with Saved, SCM menu visuals, mergetool with real app) not yet run."
+  - "Stash conflicts not automated; binary conflicts unit-tested only."
+  - "Desktop ccomp appends -solo after user arguments when absent; extension avoids it by passing -solo before --. Desktop fix not applied."
+  - "No native Linux/macOS validation."
+test_results:
+  unit:
+    command: "npm test (extensions/vscode)"
+    passed: 30
+    failed: 0
+    skipped: 0
+  host:
+    command: "npm run test:integration with installed VSCODE_EXECUTABLE_PATH"
+    result: PASS
+    environment: "Windows x64, VS Code 1.143.0, Git 2.53.0.windows.2"
+    note: "Test VS Code spawned hung wsl.exe -l -q holding the pipe; stopped those PIDs, exit code 0"
+  desktop_types:
+    command: "npm run typecheck (repository root)"
+    result: PASS
+  installed_smoke:
+    result: PASS
+    checks:
+      - "ccomp.exe -solo -- 'a b.txt' 'c d.txt' forwarded arguments intact and waited for the GUI child"
+    cleanup: "Owned GUI process stopped by PID and temporary fixtures removed"

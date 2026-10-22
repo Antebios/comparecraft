@@ -15,13 +15,20 @@ test("manifest declares the isolated build/test scripts and local trusted extens
 
 test("all context menu commands exist and executable settings cannot be workspace settings", () => {
   const commands = new Set(manifest.contributes.commands.map((command: { command: string }) => command.command));
-  assert.equal(commands.size, 11);
+  assert.equal(commands.size, 24);
   const menus: Record<string, { command?: string; submenu?: string; when?: string }[]> = manifest.contributes.menus;
   for (const entries of Object.values(menus)) {
     for (const entry of entries) if (entry.command) assert.ok(commands.has(entry.command), entry.command);
   }
   for (const id of ["explorer/context", "editor/context", "editor/title/context"]) {
     assert.ok(menus[id]?.some(entry => entry.submenu === "comparecraft.comparisons" && entry.when?.includes("resourceScheme == file")));
+  }
+  assert.ok(menus["comparecraft.comparisons"]?.some(entry => entry.submenu === "comparecraft.git"));
+  for (const entry of menus["scm/resourceState/context"] ?? []) assert.match(entry.when ?? "", /scmProvider == git/);
+  assert.ok(menus["scm/resourceState/context"]?.some(entry =>
+    entry.command === "comparecraft.gitResolveConflict" && entry.when?.includes("scmResourceGroup == merge")));
+  for (const entry of menus["comparecraft.comparisons"] ?? []) {
+    if (entry.command?.match(/Selected|selectLeft$|compareWithLeft|FileWith|FolderWith/)) assert.match(entry.when ?? "", /resourceScheme == file/, entry.command);
   }
   const settings = manifest.contributes.configuration.properties;
   assert.equal(settings["comparecraft.defaultMode"].default, "embedded");
