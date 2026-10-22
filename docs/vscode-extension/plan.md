@@ -3,7 +3,9 @@
 ## Status and purpose
 
 **Phase 1 is complete** (T001-T003 done, accepted by the owner) on the Windows
-development machine. Phases 2-6 remain pending. Native Linux/macOS validation is still required.
+development machine. On 2026-10-21, the owner confirmed opening the extension in
+the Extension Development Host and testing context menus on Windows.
+Phases 2-6 remain pending. Native Linux/macOS validation is still required.
 This directory is the portable source of truth: no prior chat or session database
 is required to resume. Read [decisions.md](decisions.md) and
 [handoff.md](handoff.md) before working.

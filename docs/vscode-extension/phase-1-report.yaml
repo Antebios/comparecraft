@@ -55,6 +55,14 @@ test_results:
     command: "npm run test:integration with installed VSCODE_EXECUTABLE_PATH"
     result: PASS
     environment: "Windows x64, VS Code 1.143.0, isolated profile and harmless Node launcher"
+  manual_windows:
+    date: "2026-10-21"
+    source: "Owner confirmation"
+    result: PASS
+    checks:
+      - "Opened extension in the Extension Development Host"
+      - "Tested context menus"
+    scope: "Not exhaustive verification of every menu location, picker, or comparison workflow"
   desktop_types:
     command: "npm run typecheck (repository root)"
     result: PASS

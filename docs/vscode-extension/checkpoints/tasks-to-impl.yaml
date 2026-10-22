@@ -53,13 +53,13 @@ tasks:
       requirements: [REQ-001, REQ-003, REQ-006, REQ-009]
     verification:
       build_passed: true
-      evidence: "Controller and dirty-resource tests plus actual host command dispatch passed"
+      evidence: "Controller and dirty-resource tests plus actual host command dispatch passed; owner confirmed Extension Development Host startup and context-menu testing on Windows on 2026-10-21"
 pending_tasks: [T004, T005, T006, T007, T008, T009, T010, T011, T012, T013, T014]
 untracked_changes: []
 validation:
   passed: true
   errors: []
   warnings:
-    - "Native Linux/macOS and visual menu/picker checks remain unexecuted."
+    - "Native Linux/macOS, exhaustive menu-location checks, and picker checks remain unexecuted; owner confirmed Windows host startup and context-menu testing."
     - "This checkpoint completes Phase 1, not all feature requirements."
   blocking_issues: []

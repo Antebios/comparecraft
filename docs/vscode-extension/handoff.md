@@ -106,6 +106,10 @@ Phase 1 checks (from `extensions/vscode` unless stated otherwise):
   desktop dispatch. This is not visual menu/picker automation.
 - Root `npm run typecheck`: passed. No Rust or desktop frontend implementation
   changed; full Rust/build suites were not run.
+- Manual Windows validation (owner-reported, 2026-10-21): successfully opened
+  the extension in the Extension Development Host and tested context menus.
+  This confirms host startup and context-menu testing, not exhaustive coverage
+  of every menu location, picker, or comparison workflow.
 - Installed discovery found `%LOCALAPPDATA%\CompareCraft\comparecraft.exe`.
   Installed `ccomp.exe -qc=binary -- <left> <right>` with differing temporary
   files and spaces returned expected code 11.
@@ -139,8 +143,9 @@ Missing GUI, platform, or signing validation remains a gap, not a pass.
   an explicit desktop action. Set `comparecraft.defaultMode` to `desktop` for
   direct external launches.
 - Remaining checks: native Linux/macOS install/GUI tests; minimum VS Code runtime
-  (types compile against 1.95, host tested on 1.143); visual context menu and picker
-  checks; untrusted/remote UI flows (controller guards and manifest are tested).
+  (types compile against 1.95, host tested on 1.143); exhaustive menu-location
+  and picker checks; untrusted/remote UI flows (controller guards and manifest
+  are tested). Host startup and context-menu testing were confirmed by the owner.
 - Next sequential task: T004 (Phase 2), requiring user authorization. T007 is
   independently ready after T001, but also outside Phase 1 approval.
 - Detailed trace: [tasks-to-impl.yaml](checkpoints/tasks-to-impl.yaml).
