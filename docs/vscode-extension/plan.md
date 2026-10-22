@@ -7,8 +7,10 @@ on 2026-10-21 the owner confirmed opening the extension in the Extension
 Development Host and testing context menus on Windows. Phase 2 (T004-T006,
 snapshots, Git comparisons/conflicts, opt-in Git tools) passed its automated gate
 on Windows with real Git fixtures; manual desktop-GUI journeys are listed in
-[handoff.md](handoff.md). Phases 3-6 remain pending. Native Linux/macOS
-validation is still required.
+[handoff.md](handoff.md). Phase 3 (T007-T008, headless `comparecraft-backend`
+helper, protocol client, packaging) is complete and verified on Windows,
+including against an installed build. Phases 4-6 remain
+pending. Native Linux/macOS validation is still required.
 This directory is the portable source of truth: no prior chat or session database
 is required to resume. Read [decisions.md](decisions.md) and
 [handoff.md](handoff.md) before working.
@@ -55,7 +57,8 @@ protocol design is a prerequisite task, not an already completed artifact.
 - `extensions/vscode/`: isolated extension manifest/toolchain, host, commands,
   discovery, snapshots, Git integration, backend client, tests, and VSIX packaging.
 - `src/`: shared views and typed host adapters, plus a separate webview entry/build.
-- Shared Rust engine crate: exact location chosen in T007 after dependency inspection.
+- Shared Rust engine crate: decided in T007; the existing `comparecraft_lib` is the
+  shared engine and the helper is a third bin (see [backend-protocol.md](backend-protocol.md)).
 - `src-tauri/`: retain desktop host and add the headless helper entry point.
 - Existing installers distribute the helper. No native engine in the VSIX,
   automatic engine download, TCP listener, or OS service.
@@ -122,7 +125,9 @@ scope requires consent and can be reversed without overwriting later user edits.
   crate boundary and protocol contract in this documentation directory before
   extraction. Implement shared engine and headless helper with handshake,
   framing, request IDs, capability/version checks, limits, cancellation, errors,
-  and stderr diagnostics.
+  and stderr diagnostics. *Done:* contract in
+  [backend-protocol.md](backend-protocol.md); `src-tauri/src/backend.rs` plus the
+  `comparecraft-backend` bin.
 - **T008 [Plan:3.1]:** Add the client in `extensions/vscode/src/` and helper
   build/sign/bundle/CI integration in `scripts/`, `src-tauri/tauri*.conf.json`,
   and `.github/workflows/build.yml`. Verify actual installed helper locations.

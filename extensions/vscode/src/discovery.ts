@@ -48,26 +48,45 @@ async function isExecutable(value: string): Promise<boolean> {
   }
 }
 
+async function validateOverride(setting: string, override: string, platform: NodeJS.Platform, check: (value: string) => Promise<boolean>): Promise<string> {
+  const paths = platform === "win32" ? path.win32 : path.posix;
+  if (!paths.isAbsolute(override)) {
+    throw new InstallationError(`comparecraft.${setting} must be an absolute path to an executable, not a directory or command.`);
+  }
+  if (platform === "win32" && paths.extname(override).toLowerCase() !== ".exe") {
+    throw new InstallationError(`On Windows, comparecraft.${setting} must point to an .exe file.`);
+  }
+  if (!(await check(override))) {
+    throw new InstallationError(`The configured executable is missing or not executable: ${override}. Correct comparecraft.${setting}; automatic discovery was not used.`);
+  }
+  return override;
+}
+
 export async function discoverDesktop(options: DiscoveryOptions = {}): Promise<string> {
   const platform = options.platform ?? process.platform;
-  const paths = platform === "win32" ? path.win32 : path.posix;
   const override = options.override ?? "";
   const check = options.isExecutable ?? isExecutable;
-  if (override) {
-    if (!paths.isAbsolute(override)) {
-      throw new InstallationError("comparecraft.desktopPath must be an absolute path to an executable, not a directory or command.");
-    }
-    if (platform === "win32" && paths.extname(override).toLowerCase() !== ".exe") {
-      throw new InstallationError("On Windows, comparecraft.desktopPath must point to an .exe file.");
-    }
-    if (!(await check(override))) {
-      throw new InstallationError(`The configured CompareCraft executable is missing or not executable: ${override}. Correct comparecraft.desktopPath; automatic discovery was not used.`);
-    }
-    return override;
-  }
+  if (override) return validateOverride("desktopPath", override, platform, check);
   const candidates = desktopCandidates(options);
   for (const candidate of candidates) {
     if (await check(candidate)) return candidate;
   }
   throw new InstallationError(`CompareCraft was not found. Install the desktop app or use Locate Desktop Executable. Checked: ${candidates.join(", ")}.`);
+}
+
+interface BackendDiscoveryOptions extends DiscoveryOptions {
+  /** comparecraft.desktopPath, used to find the helper installed next to the desktop app. */
+  desktopOverride?: string;
+}
+
+/** Finds `comparecraft-backend`: the explicit backendPath, else the helper installed beside the desktop executable. */
+export async function discoverBackend(options: BackendDiscoveryOptions = {}): Promise<string> {
+  const platform = options.platform ?? process.platform;
+  const check = options.isExecutable ?? isExecutable;
+  if (options.override) return validateOverride("backendPath", options.override, platform, check);
+  const desktop = await discoverDesktop({ ...options, override: options.desktopOverride ?? "" });
+  const paths = platform === "win32" ? path.win32 : path.posix;
+  const helper = paths.join(paths.dirname(desktop), platform === "win32" ? "comparecraft-backend.exe" : "comparecraft-backend");
+  if (await check(helper)) return helper;
+  throw new InstallationError(`The installed CompareCraft (${desktop}) does not include the embedded-mode helper ${helper}. Update CompareCraft to a release that includes it, or set comparecraft.backendPath.`);
 }

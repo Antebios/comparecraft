@@ -46,7 +46,8 @@
       { "command": "comparecraft.gitResolveConflict", "title": "Resolve Conflict in Desktop App", "category": "CompareCraft" },
       { "command": "comparecraft.gitStageResolved", "title": "Stage Resolved Conflict...", "category": "CompareCraft" },
       { "command": "comparecraft.configureGitTools", "title": "Configure as Git Merge/Diff Tool...", "category": "CompareCraft" },
-      { "command": "comparecraft.removeGitTools", "title": "Remove Git Tool Configuration...", "category": "CompareCraft" }
+      { "command": "comparecraft.removeGitTools", "title": "Remove Git Tool Configuration...", "category": "CompareCraft" },
+      { "command": "comparecraft.checkBackend", "title": "Check Embedded Backend", "category": "CompareCraft" }
     ],
     "submenus": [
       { "id": "comparecraft.comparisons", "label": "CompareCraft" },
@@ -124,7 +125,7 @@
         "comparecraft.backendPath": {
           "type": "string",
           "default": "",
-          "description": "Reserved absolute path to the future headless backend. Not used by the current desktop commands.",
+          "description": "Absolute path to the headless comparecraft-backend executable used by embedded mode, not its directory. Empty uses the helper installed next to the desktop app. An invalid path fails without falling back.",
           "scope": "machine"
         }
       }

@@ -20,6 +20,11 @@ path = "src/main.rs"
 name = "ccomp"
 path = "src/console.rs"
 
+# Headless helper for the VS Code extension: JSON-RPC over stdio, no window. See docs/vscode-extension/backend-protocol.md.
+[[bin]]
+name = "comparecraft-backend"
+path = "src/backend_main.rs"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

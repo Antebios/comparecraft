@@ -1,4 +1,5 @@
 pub mod align;
+pub mod backend;
 pub mod cli;
 pub mod diff;
 pub mod fileio;

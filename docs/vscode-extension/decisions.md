@@ -2,7 +2,7 @@
 
 See [plan.md](plan.md) for tasks and [handoff.md](handoff.md) for current status.
 These are user-confirmed product decisions and implementation constraints.
-Detailed protocol/engine design remains a prerequisite in T007.
+Protocol and crate boundary were decided in T007: [backend-protocol.md](backend-protocol.md).
 
 ## Modes and installation
 
@@ -79,8 +79,11 @@ Detailed protocol/engine design remains a prerequisite in T007.
 
 ## Remaining engineering decisions
 
-- T007: shared crate placement and complete bounded protocol contract, including
-  framing, IDs, payload limits, cancellation, capabilities, and explicit failures.
+- T007 (decided): no crate extraction; the Tauri-free engine stays in
+  `comparecraft_lib` and the helper is a third bin. Bounded protocol v1 (framing,
+  IDs, payload limits, cancellation, capabilities, explicit failures) is in
+  [backend-protocol.md](backend-protocol.md). The helper is read-only; writes stay
+  in VS Code document APIs.
 - T004: snapshot ownership, lifetime and recovery based on observed process behavior.
 - T010: webview/custom-editor document integration guaranteeing lossless editing
   and close/reload handling before enabling writes.

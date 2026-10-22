@@ -2,7 +2,8 @@ import * as vscode from "vscode";
 import { realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { ComparisonController, type ComparisonHost } from "./controller";
-import { discoverDesktop, InstallationError } from "./discovery";
+import { discoverBackend, discoverDesktop, InstallationError } from "./discovery";
+import { BackendManager } from "./backend";
 import { launchDesktop } from "./process";
 import { assertSavedResources } from "./resources";
 import { SnapshotStore } from "./snapshots";
@@ -315,6 +316,43 @@ export function activate(context: vscode.ExtensionContext): void {
     return desktop;
   }
 
+  function executableSetting(key: "desktopPath" | "backendPath"): string {
+    const configured = vscode.workspace.getConfiguration("comparecraft").inspect<string>(key);
+    // Never honor a workspace-supplied executable, even if injected programmatically.
+    return configured?.globalValue ?? configured?.defaultValue ?? "";
+  }
+
+  const backend = new BackendManager(
+    async () => {
+      assertSupported();
+      return discoverBackend({ override: executableSetting("backendPath"), desktopOverride: executableSetting("desktopPath") });
+    },
+    {
+      client: { name: "comparecraft-vscode", version: String(context.extension.packageJSON.version ?? "0.0.0") },
+      requiredMethods: ["path.info", "text.load", "text.diff", "text.merge"],
+      log: line => output.appendLine(line)
+    }
+  );
+  context.subscriptions.push(
+    { dispose: () => { void backend.dispose(); } },
+    vscode.workspace.onDidChangeConfiguration(event => {
+      if (event.affectsConfiguration("comparecraft.backendPath") || event.affectsConfiguration("comparecraft.desktopPath")) void backend.reset();
+    })
+  );
+
+  async function checkBackend(): Promise<{ executable: string; version: string; protocolVersion: number }> {
+    assertSupported();
+    const client = await backend.get();
+    const started = Date.now();
+    const diff = await client.request<{ identical: boolean }>("text.diff", { left: ["CompareCraft", "check"], right: ["CompareCraft", "check!"] });
+    if (diff.identical !== false) throw new Error("The CompareCraft backend returned an unexpected comparison result.");
+    const { server, protocolVersion, capabilities } = client.info;
+    const summary = `CompareCraft backend ${server.version} (protocol ${protocolVersion}) is working: ${client.executable}`;
+    output.appendLine(`${summary}; methods: ${capabilities.methods.join(", ")}; sample diff took ${Date.now() - started} ms.`);
+    void vscode.window.showInformationMessage(summary);
+    return { executable: client.executable, version: server.version, protocolVersion };
+  }
+
   async function repositoryRoots(): Promise<string[]> {
     const g = await git();
     const folders = [
@@ -405,9 +443,9 @@ export function activate(context: vscode.ExtensionContext): void {
     void vscode.window.showInformationMessage(`Restored ${result.restored.length} Git setting(s).${skipped}`);
   }
 
-  function register(id: string, callback: (first: unknown, selected: unknown) => Promise<void>): void {
+  function register(id: string, callback: (first: unknown, selected: unknown) => Promise<unknown>): void {
     context.subscriptions.push(vscode.commands.registerCommand(`comparecraft.${id}`, async (first: unknown, selected: unknown) => {
-      try { await callback(first, selected); } catch (error) { await report(error); }
+      try { return await callback(first, selected); } catch (error) { await report(error); return undefined; }
     }));
   }
   for (const [id, mode] of [
@@ -450,4 +488,5 @@ export function activate(context: vscode.ExtensionContext): void {
   register("gitStageResolved", async first => { await (await workflows()).stageResolved(gitTarget(first)); });
   register("configureGitTools", async () => configureGitTools());
   register("removeGitTools", async () => removeGitTools());
+  register("checkBackend", async () => checkBackend());
 }

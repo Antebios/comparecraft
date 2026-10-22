@@ -3,6 +3,9 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
+// Command-line helpers Tauri copies into Contents/MacOS; each must be signed before the app is.
+export const MACOS_HELPERS = ["ccomp", "comparecraft-backend"];
+
 export function signMacosBinaries({
   platform = process.platform,
   env = process.env,
@@ -16,11 +19,14 @@ export function signMacosBinaries({
   const directories = [targetDirectory];
   if (env.TAURI_ENV_TARGET_TRIPLE)
     directories.push(resolve(targetDirectory, env.TAURI_ENV_TARGET_TRIPLE));
-  const binaries = directories
-    .map((directory) => resolve(directory, profile, "ccomp"))
-    .filter((binary) => exists(binary));
-  if (binaries.length === 0)
-    throw new Error("No built macOS ccomp binary found before bundling.");
+  const binaries = MACOS_HELPERS.flatMap((helper) => {
+    const found = directories
+      .map((directory) => resolve(directory, profile, helper))
+      .filter((binary) => exists(binary));
+    if (found.length === 0)
+      throw new Error(`No built macOS ${helper} binary found before bundling.`);
+    return found;
+  });
 
   const identity = env.APPLE_SIGNING_IDENTITY || "-";
   for (const binary of binaries) {

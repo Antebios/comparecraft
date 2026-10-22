@@ -14,7 +14,11 @@ async function main() {
         directory, "--disable-extensions", "--disable-workspace-trust",
         "--skip-welcome", "--skip-release-notes", "--user-data-dir", path.join(directory, "profile")
       ],
-      extensionTestsEnv: { COMPARECRAFT_TEST_NODE: process.execPath, COMPARECRAFT_TEST_DIRECTORY: directory }
+      extensionTestsEnv: {
+        COMPARECRAFT_TEST_NODE: process.execPath,
+        COMPARECRAFT_TEST_DIRECTORY: directory,
+        ...(process.env.COMPARECRAFT_BACKEND ? { COMPARECRAFT_TEST_BACKEND: process.env.COMPARECRAFT_BACKEND } : {})
+      }
     });
   } finally {
     await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 });

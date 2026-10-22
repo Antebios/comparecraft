@@ -2,11 +2,12 @@
 
 ## Current state
 
-**Phases 1 and 2 are complete.** Phase 1 (T001-T003) was accepted by the owner and
-committed/pushed on `feature/vscode-ui` (`f595f27`, `be98a7c`). Phase 2 (T004-T006)
-is implemented and verified on Windows but **not yet committed**. Phases 3-6 have
-not been started. No backend/installer/desktop source changes, commits of Phase 2,
-or Marketplace publication have been performed. Git configuration is changed
+**Phases 1 and 2 are complete and committed** on `feature/vscode-ui` (Phase 1:
+`f595f27`, `be98a7c`; Phase 2 and the `ccomp` fix: `e565e21`, `7051dc8`,
+`5532e29`). **Phase 3 (T007-T008) is complete and verified on Windows,
+including against the owner's reinstalled build, but not yet committed.**
+Phases 4-6 have not been started.
+No Marketplace publication has been performed. Git configuration is changed
 only by the user-invoked, confirmed setup command; tests use disposable
 repositories and a temporary `GIT_CONFIG_GLOBAL`.
 
@@ -50,8 +51,8 @@ Planning coverage is not evidence of implementation completion.
 | T004 | 2 | done | T003 | Snapshot store/session, buffer/selection/clipboard/saved/diff commands; unit + host tests pass |
 | T005 | 2 | done | T004 | Git HEAD/index/working/revision and conflict resolve/stage; real merge/rebase/cherry-pick fixtures pass |
 | T006 | 2 | done | T005 | Reversible mergetool/difftool setup; real `git mergetool` run and installed `ccomp` wait smoke pass |
-| T007 | 3 | pending | T001 | |
-| T008 | 3 | pending | T002, T007 | |
+| T007 | 3 | done | T001 | Contract in backend-protocol.md; `comparecraft-backend` bin; 11 unit + 3 stdio integration tests pass |
+| T008 | 3 | done | T002, T007 | Client/manager/discovery + Check Embedded Backend; 8 client tests incl. real helper; signing/ZIP/PKGBUILD updated; verified against the reinstalled helper in real VS Code |
 | T009 | 4 | pending | T007 | |
 | T010 | 4 | pending | T008, T009 | |
 | T011 | 5 | pending | T005, T010 | |
@@ -74,7 +75,7 @@ VS Code version, app/helper/protocol versions, and installer type.
 | Merge/rebase/cherry-pick/stash resolution | real Git fixture pass for merge, rebase, cherry-pick stage/labels; stash label generic; manual GUI not run | not run | not run |
 | Missing stages, renames, binary conflicts | add/add empty base and modify/delete refusal pass; binary/link/submodule unit pass | not run | not run |
 | Opt-in Git setup, wait/cancel, reversal | local+global (temp) apply/remove pass; real `git mergetool` with fake tool pass; installed `ccomp -solo` waits for GUI | not run | not run |
-| Installed helper, incompatibility, crash | not run | not run | not run |
+| Installed helper, incompatibility, crash | NSIS reinstall puts the helper next to `comparecraft.exe`; default discovery finds it; client contract tests and Check Embedded Backend in real VS Code pass against it; crash/mismatch/timeout/framing via fake helper pass; a pre-helper install gives the explicit "update CompareCraft" error | not run | not run |
 | Embedded text, edits, undo/save/close/reload | not run | not run | not run |
 | Embedded merge and remaining views | not run | not run | not run |
 | Formats/backups, read-only, destructive confirmations | not run | not run | not run |
@@ -147,6 +148,43 @@ Phase 2 checks (Windows, from `extensions/vscode` unless stated otherwise):
   window. Git then kept the file unresolved because it was unchanged, as expected.
   No extension change was required.
 
+Phase 3 checks (Windows x64, 2026-10-22):
+
+- `cd src-tauri; cargo test`: `backend::tests` 11 passed (framing, oversize skip,
+  handshake gating, exit codes, malformed messages, engine parity with direct
+  engine calls, invalid params, concurrency, cancellation, busy queue, duplicate
+  ids). `tests/backend.rs` 3 passed against the built binary over real pipes
+  (`--version`, usage exit 2, full session, stdout carries only frames, EOF
+  without shutdown exits 1). `ccomp` unit 2 and `tests/console.rs` passed.
+  `tests/script_golden.rs` fails 14 tests **with and without** the Phase 3
+  changes (verified by stashing them): a pre-existing Windows issue, out of scope.
+- `cargo clippy --all-targets`: no warnings in `backend.rs`/`backend_main.rs`
+  (pre-existing warnings elsewhere unchanged).
+- `extensions/vscode`: `npm test` 38 passed (8 new backend client tests, one of
+  them against `src-tauri/target/debug/comparecraft-backend.exe`);
+  `npm run test:integration` exit 0 with 25 commands; root `npm run typecheck`
+  passed; `node --test tests/macos-signing.test.mjs` 7 passed.
+- `cargo build --release --bin comparecraft-backend`: 2.2 MB. A copy in
+  `%TEMP%` (outside the repo) printed `comparecraft-backend 0.1.0 (protocol 1)`
+  and passed the real contract test via `COMPARECRAFT_BACKEND=<path>`.
+- `discoverBackend()` against the currently installed per-user build (which
+  predates the helper) reported: "The installed CompareCraft (...) does not
+  include the embedded-mode helper ...\comparecraft-backend.exe. Update
+  CompareCraft ...", as intended.
+- `npx tauri build --bundles nsis` succeeded. The generated
+  `target/release/nsis/x64/installer.nsi` installs
+  `comparecraft-backend.exe` next to `ccomp.exe` and deletes it on uninstall,
+  confirming Tauri bundles the third bin with no configuration changes.
+- After the owner reinstalled from that build (2026-10-22),
+  `%LOCALAPPDATA%\CompareCraft\comparecraft-backend.exe` (2.3 MB) is present;
+  `--version` prints `comparecraft-backend 0.1.0 (protocol 1)` and no arguments
+  exit 2 with usage. `discoverBackend()` with no override returns that path.
+  `node --test out/test/backend.test.js` with `COMPARECRAFT_BACKEND` set to it:
+  8 passed, 0 skipped. `npm run test:integration` with the same variable runs
+  **Check Embedded Backend** in real VS Code and asserts the returned executable
+  and protocol (PASS); with a nonexistent path it fails as expected. No
+  `comparecraft-backend` processes remain afterwards.
+
 ## Phase 1 implementation handoff
 
 - Branch: `feature/vscode-ui`. Transfer state: local only, not committed/pushed.
@@ -215,6 +253,48 @@ Phase 2 checks (Windows, from `extensions/vscode` unless stated otherwise):
   installed app after Configure, then Remove restores settings.
 - Next sequential task: T007 (Phase 3 backend), requiring user authorization.
 - Batch evidence: [phase-2-report.yaml](phase-2-report.yaml).
+
+## Phase 3 implementation handoff
+
+- Task IDs / status: T007 and T008 done.
+  Branch `feature/vscode-ui`; transfer state: local only, not committed.
+- Environment: Windows x64, Rust stable, Node 24.14.1, VS Code 1.143.0.
+- Crate boundary: no extraction. `comparecraft_lib` engine modules (`diff`,
+  `merge`, `fileio`, ...) are already Tauri-free; only `lib.rs` uses Tauri. The
+  helper is a third `[[bin]]` (`src/backend_main.rs`) like `ccomp`, so Tauri
+  bundles it next to the desktop executable with no config. Contract and
+  rationale: [backend-protocol.md](backend-protocol.md).
+- Rust: `src-tauri/src/backend.rs` (protocol server: Content-Length framing,
+  JSON-RPC 2.0, `initialize`/`shutdown`/`exit`/`$/cancelRequest`, worker pool,
+  limits, read-only `path.info`/`text.load`/`text.diff`/`text.merge`),
+  `src/backend_main.rs`, `tests/backend.rs`; `lib.rs` exports the module.
+  `tests/console.rs` now expects `-solo L R -ro` (it was left at the old order by
+  the `ccomp` fix and would have failed on Linux/macOS CI).
+- Extension: `src/backend.ts` (`BackendClient`: handshake with 10 s timeout,
+  protocol/capability checks, AbortSignal cancellation, crash rejection with exit
+  code and recent stderr, shutdown/exit/kill dispose; `BackendManager`: lazy
+  start, crash restart, reset on `desktopPath`/`backendPath` change, disposed on
+  deactivate). `discovery.ts`: `discoverBackend` (global `backendPath`, else the
+  sibling of the discovered desktop executable; no fallback on an invalid
+  override). New command **CompareCraft: Check Embedded Backend**
+  (`comparecraft.checkBackend`, 25 commands).
+- Packaging: `scripts/sign-macos-binaries.mjs` signs every helper
+  (`ccomp`, `comparecraft-backend`) and fails if either is missing; Windows
+  portable ZIP includes `comparecraft-backend.exe`; Arch `PKGBUILD` installs
+  `/usr/bin/comparecraft-backend`; Windows portable and macOS packaging READMEs
+  mention it. deb/rpm/AppImage/NSIS/MSI/app bundles include every Cargo bin
+  automatically.
+- Open risks: on Linux the helper links the same library as the desktop app, so
+  it may need the WebKitGTK shared libraries present (as `ccomp` does); the
+  native Linux/macOS builds and macOS signing have not been run here.
+- Installed check: done on Windows (see "Phase 3 checks"). To repeat on another
+  machine, install a build containing the helper, then run **CompareCraft:
+  Check Embedded Backend** in the Extension Development Host, or
+  `npm run test:integration` with `COMPARECRAFT_BACKEND` set to the helper. It
+  should report `CompareCraft backend 0.1.0 (protocol 1) is working`.
+- Next sequential task: T009 (Phase 4 embedded text views), requiring user
+  authorization.
+- Batch evidence: [phase-3-report.yaml](phase-3-report.yaml).
 
 ## Per-increment handoff entry
 

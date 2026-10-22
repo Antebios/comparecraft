@@ -1,12 +1,12 @@
 metadata:
   source_tasks: "../plan.md"
   execution_ledger: "../handoff.md"
-  scope: "Phases 1-2 implementation; later phases are pending"
+  scope: "Phases 1-3 implementation; later phases are pending"
 summary:
   total_tasks: 14
-  completed_tasks: 6
+  completed_tasks: 8
   in_progress_tasks: 0
-  pending_tasks: 8
+  pending_tasks: 6
 tasks:
   - task_id: T001
     status: completed
@@ -100,7 +100,43 @@ tasks:
     verification:
       build_passed: true
       evidence: "Local/temp-global apply and remove tests, real git mergetool run with fake tool, installed ccomp -solo wait smoke"
-pending_tasks: [T007, T008, T009, T010, T011, T012, T013, T014]
+  - task_id: T007
+    status: completed
+    implementation:
+      files:
+        - docs/vscode-extension/backend-protocol.md
+        - src-tauri/src/backend.rs
+        - src-tauri/src/backend_main.rs
+        - src-tauri/src/lib.rs
+        - src-tauri/Cargo.toml
+        - src-tauri/tests/backend.rs
+        - src-tauri/tests/console.rs
+    upstream_trace:
+      plan_item: "3.1"
+      requirements: [REQ-007, REQ-009, REQ-010]
+    verification:
+      build_passed: true
+      evidence: "11 backend unit tests and 3 stdio integration tests; engine parity with direct calls"
+  - task_id: T008
+    status: completed
+    implementation:
+      files:
+        - extensions/vscode/src/backend.ts
+        - extensions/vscode/src/discovery.ts
+        - extensions/vscode/src/extension.ts
+        - extensions/vscode/package.json
+        - extensions/vscode/test/backend.test.ts
+        - scripts/sign-macos-binaries.mjs
+        - tests/macos-signing.test.mjs
+        - .github/workflows/build.yml
+        - packaging/arch/PKGBUILD
+    upstream_trace:
+      plan_item: "3.1"
+      requirements: [REQ-007, REQ-009, REQ-010]
+    verification:
+      build_passed: true
+      evidence: "38 extension tests incl. real helper; host 25 commands; installed helper passes the contract test and Check Embedded Backend in real VS Code"
+pending_tasks: [T009, T010, T011, T012, T013, T014]
 untracked_changes: []
 validation:
   passed: true
@@ -108,5 +144,6 @@ validation:
   warnings:
     - "Native Linux/macOS, exhaustive menu-location checks, and picker checks remain unexecuted; owner confirmed Windows host startup and context-menu testing."
     - "Phase 2 manual desktop-GUI journeys (conflict save/stage, Compare with Saved, real mergetool) remain unexecuted."
-    - "This checkpoint completes Phases 1-2, not all feature requirements."
+    - "This checkpoint completes Phases 1-3, not all feature requirements."
+    - "Phase 3 is verified on Windows only; native Linux/macOS helper checks remain."
   blocking_issues: []

@@ -1,10 +1,11 @@
-# CompareCraft for VS Code (Phase 2)
+# CompareCraft for VS Code (Phase 3)
 
 Compare files, folders, editor text, and Git revisions, and resolve Git merge or
 rebase conflicts, using the installed CompareCraft desktop application. This is
 an early increment of one extension that will offer both desktop and embedded
 experiences. **The embedded (in-editor) UI is not available yet**; every command
-opens the desktop app.
+opens the desktop app. The headless helper the embedded UI will use is already
+installed with CompareCraft and can be checked with **Check Embedded Backend**.
 
 ## Requirements
 
@@ -53,6 +54,17 @@ Tests use a temporary profile/workspace and a harmless Node launcher to verify
 commands and arguments without changing your normal VS Code settings or opening
 the desktop GUI. They do not substitute for manual installer/GUI verification.
 
+To also run **Check Embedded Backend** in that VS Code instance against a real
+helper, set `COMPARECRAFT_BACKEND` first; without it, that step is skipped:
+
+```powershell
+$env:COMPARECRAFT_BACKEND = "$env:LOCALAPPDATA\CompareCraft\comparecraft-backend.exe"
+npm run test:integration
+```
+
+The same variable makes `npm test` run the client contract test against that
+helper instead of the repository's debug build.
+
 ## Commands
 
 Right-click resources in Explorer, a text editor, or an editor tab and open the
@@ -71,6 +83,7 @@ Right-click resources in Explorer, a text editor, or an editor tab and open the
 | Compare Parent Folder With... | Compares the selected file's parent directory against a chosen folder. |
 | Open Desktop App | Opens CompareCraft's home view directly. |
 | Locate Desktop Executable... | Validates and saves an absolute executable path in user settings. |
+| Check Embedded Backend | Starts the installed headless helper, runs a sample text comparison, and reports its version and protocol. |
 
 Only two files or two folders can be compared. Duplicate items, mixed types, and
 invalid resources produce visible errors. From the palette, Compare Selected
@@ -171,7 +184,7 @@ git difftool HEAD~1 -- path/to/file
 |---|---|---|
 | `comparecraft.defaultMode` | `embedded` | Applies to Compare Selected. `embedded` offers an explicit desktop action until embedded mode exists. Set to `desktop` for direct external launches. Text and Git commands always use the desktop app. |
 | `comparecraft.desktopPath` | empty | User/machine absolute executable path; never a directory or shell command. |
-| `comparecraft.backendPath` | empty | Reserved for the later headless backend; currently unused. |
+| `comparecraft.backendPath` | empty | Absolute path to `comparecraft-backend`, the windowless helper for embedded mode. Empty uses the helper installed next to the desktop executable. |
 
 An invalid explicit path is an error, not permission to use another installation.
 Workspace-controlled executable settings are ignored.
@@ -195,9 +208,29 @@ file/folder comparisons may be handed to an existing CompareCraft instance throu
 its normal single-instance behavior. The extension does not report a successful
 merge merely because an application launches or closes.
 
+## Embedded backend helper
+
+CompareCraft installs `comparecraft-backend` (`comparecraft-backend.exe` on
+Windows) next to the desktop executable, for example
+`%LOCALAPPDATA%\CompareCraft\comparecraft-backend.exe`,
+`CompareCraft.app/Contents/MacOS/comparecraft-backend`, or
+`/usr/bin/comparecraft-backend`. The extension starts it only when needed, talks
+to it over stdin/stdout (no network port), and stops it when VS Code closes or
+the executable settings change. It only reads files; it never writes them.
+
+Run **CompareCraft: Check Embedded Backend** from the Command Palette to confirm
+the helper starts and compares text. Its version and protocol appear in a
+notification and in the **CompareCraft** Output channel. If your installed
+CompareCraft predates the helper, the command says so; update CompareCraft. An
+older or newer helper with an incompatible protocol, or one that crashes, is
+reported explicitly rather than replaced by another installation. Set
+`COMPARECRAFT_BACKEND_LOG=debug` before starting VS Code for per-request timing
+in the Output channel. The protocol is documented in
+[backend-protocol.md](../../docs/vscode-extension/backend-protocol.md).
+
 ## Next increments
 
 See the repository's [implementation plan](../../docs/vscode-extension/plan.md)
-and [portable handoff](../../docs/vscode-extension/handoff.md). Phase 3 adds a
-headless backend for the embedded UI. Marketplace publication is not part of
+and [portable handoff](../../docs/vscode-extension/handoff.md). Phase 4 adds
+embedded text comparison in VS Code tabs. Marketplace publication is not part of
 this increment.

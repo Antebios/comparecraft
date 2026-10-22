@@ -17,7 +17,7 @@ export async function run(): Promise<void> {
     "compareParentFolderWith", "openDesktop", "locateDesktop",
     "compareWithSaved", "compareWithClipboard", "selectLeftText", "compareTextWithLeft", "compareActiveDiff",
     "gitCompareHead", "gitCompareIndex", "gitCompareHeadIndex", "gitCompareRevision",
-    "gitResolveConflict", "gitStageResolved", "configureGitTools", "removeGitTools"
+    "gitResolveConflict", "gitStageResolved", "configureGitTools", "removeGitTools", "checkBackend"
   ]) assert.ok(commands.includes(`comparecraft.${id}`), `Registered command: ${id}`);
   assert.equal(vscode.workspace.isTrusted, true);
   const config = vscode.workspace.getConfiguration("comparecraft");
@@ -63,8 +63,21 @@ export async function run(): Promise<void> {
     await verifyLaunch("comparecraft.compareWithLeft", [r], right);
     await verifyLaunch("comparecraft.compareSelected", [lf, [lf, rf]], rightFolder);
     await vscode.commands.executeCommand("comparecraft.clearLeft");
-    console.log("PASS: actual VS Code activation, 24 registered commands, Explorer multi-selection, file/folder launches, independent left selections, default desktop dispatch and clear.");
+    console.log("PASS: actual VS Code activation, 25 registered commands, Explorer multi-selection, file/folder launches, independent left selections, default desktop dispatch and clear.");
+
+    const helper = process.env.COMPARECRAFT_TEST_BACKEND;
+    if (helper) {
+      await config.update("backendPath", helper, vscode.ConfigurationTarget.Global);
+      const result = await vscode.commands.executeCommand<{ executable: string; version: string; protocolVersion: number } | undefined>("comparecraft.checkBackend");
+      assert.ok(result, `Check Embedded Backend failed for ${helper}; see the CompareCraft output channel`);
+      assert.equal(await realpath(result.executable), await realpath(helper));
+      assert.equal(result.protocolVersion, 1);
+      console.log(`PASS: Check Embedded Backend started ${helper} (version ${result.version}) and completed a sample comparison.`);
+    } else {
+      console.log("SKIP: Check Embedded Backend (set COMPARECRAFT_BACKEND to a helper executable).");
+    }
   } finally {
+    await config.update("backendPath", undefined, vscode.ConfigurationTarget.Global);
     await config.update("desktopPath", undefined, vscode.ConfigurationTarget.Global);
     await config.update("defaultMode", undefined, vscode.ConfigurationTarget.Global);
   }
