@@ -1,0 +1,67 @@
+batch_id: phase-1
+completed_tasks: [T001, T002, T003]
+blocked_tasks: []
+files_changed:
+  T001:
+    - {file: extensions/vscode/package.json, change_type: created, description: "Isolated manifest, machine-scoped executables, commands, menus, build/test scripts"}
+    - {file: extensions/vscode/package-lock.json, change_type: created, description: "Reproducible extension-only development dependencies"}
+    - {file: extensions/vscode/tsconfig.json, change_type: created, description: "Strict isolated TypeScript build"}
+    - {file: extensions/vscode/dev.code-workspace, change_type: created, description: "F5 development without touching root workspace configuration"}
+    - {file: extensions/vscode/.gitignore, change_type: created, description: "Ignore outputs/dependencies/test cache"}
+    - {file: extensions/vscode/.vscodeignore, change_type: created, description: "Exclude development assets from future VSIX"}
+    - {file: extensions/vscode/LICENSE, change_type: created, description: "Existing project MIT license"}
+    - {file: extensions/vscode/src/contracts.ts, change_type: created, description: "Typed launch/resource/comparison contracts"}
+    - {file: extensions/vscode/scripts/test-integration.cjs, change_type: created, description: "Isolated real VS Code test runner"}
+    - {file: extensions/vscode/test/manifest.test.ts, change_type: created, description: "Manifest/contribution constraints"}
+  T002:
+    - {file: extensions/vscode/src/discovery.ts, change_type: created, description: "Standard-path discovery and explicit override validation"}
+    - {file: extensions/vscode/src/process.ts, change_type: created, description: "Shell-free launch and asynchronous failure reporting"}
+    - {file: extensions/vscode/test/core.test.ts, change_type: created, description: "Discovery/process/controller/resource tests"}
+  T003:
+    - {file: extensions/vscode/src/controller.ts, change_type: created, description: "Core comparison workflows and mode routing"}
+    - {file: extensions/vscode/src/extension.ts, change_type: created, description: "VS Code adapters, trust/environment guards, notifications and commands"}
+    - {file: extensions/vscode/src/resources.ts, change_type: created, description: "Dirty-file/folder-descendant protection"}
+    - {file: extensions/vscode/test/host.ts, change_type: created, description: "Actual host activation and file/folder launch integration"}
+    - {file: extensions/vscode/README.md, change_type: created, description: "Requirements, setup, settings, behavior and limitations"}
+    - {file: README.md, change_type: modified, description: "Link to Phase 1 extension"}
+upstream_artifacts_consumed:
+  all_tasks:
+    - {artifact: docs/vscode-extension/plan.md, used_for: "Phase 1 scope, task dependencies and acceptance gate"}
+    - {artifact: docs/vscode-extension/decisions.md, used_for: "Explicit mode fallback, trusted launch, installed engine and content safety"}
+    - {artifact: docs/vscode-extension/handoff.md, used_for: "Portable status, unrelated workspace preservation and evidence tracking"}
+evidence_mapping:
+  T001: {output: extensions/vscode/package.json, evidence: "Manifest tests and host activation"}
+  T002: {output: extensions/vscode/src/discovery.ts, evidence: "Platform candidate tests, invalid overrides, installed Windows discovery and launch tests"}
+  T003: {output: extensions/vscode/src/controller.ts, evidence: "Unit workflow tests and VS Code host multi-selection/file/folder dispatch"}
+traceability:
+  - {requirement: REQ-001, plan_item: "1.1", tasks: [T001, T003], status: "Phase 1 complete; embedded implementation remains pending"}
+  - {requirement: REQ-002, plan_item: "1.1", tasks: [T002], status: "Implemented; native Linux/macOS verification remains pending"}
+  - {requirement: REQ-003, plan_item: "1.1", tasks: [T003], status: "Core external subset complete; advanced workflows are Phase 2"}
+  - {requirement: REQ-006, plan_item: "1.1", tasks: [T003], status: "Unsaved inputs explicitly blocked until snapshot support"}
+  - {requirement: REQ-009, plan_item: "1.1", tasks: [T001, T002, T003], status: "Phase 1 trust/process/resource guards implemented"}
+  - {requirement: REQ-010, plan_item: "1.1", tasks: [T001, T003], status: "Portable development and evidence recorded; release remains pending"}
+protocol_violation: false
+errors: []
+warnings:
+  - "No native Linux/macOS validation, visual menu/picker automation, or minimum-version runtime run."
+  - "Embedded UI, backend, Git, snapshots, installers and VSIX release remain in later phases."
+test_results:
+  unit:
+    command: "npm test (extensions/vscode)"
+    passed: 15
+    failed: 0
+    skipped: 0
+  host:
+    command: "npm run test:integration with installed VSCODE_EXECUTABLE_PATH"
+    result: PASS
+    environment: "Windows x64, VS Code 1.143.0, isolated profile and harmless Node launcher"
+  desktop_types:
+    command: "npm run typecheck (repository root)"
+    result: PASS
+  installed_smoke:
+    result: PASS
+    checks:
+      - "Standard per-user Windows executable discovery"
+      - "Installed ccomp binary comparison returned expected difference code 11"
+      - "Isolated desktop comparison opened responsive native window"
+    cleanup: "Owned desktop process stopped by PID and temporary fixtures removed"

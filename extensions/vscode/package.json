@@ -1,0 +1,93 @@
+{
+  "name": "comparecraft",
+  "displayName": "CompareCraft",
+  "description": "Compare files and folders with your installed CompareCraft desktop app. Embedded integration is planned.",
+  "version": "0.1.0",
+  "publisher": "antebios",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/Antebios/comparecraft.git", "directory": "extensions/vscode" },
+  "engines": { "vscode": "^1.95.0" },
+  "categories": ["Other"],
+  "main": "./out/src/extension.js",
+  "extensionKind": ["ui"],
+  "capabilities": {
+    "untrustedWorkspaces": { "supported": false, "description": "CompareCraft launches a locally installed executable and requires workspace trust." },
+    "virtualWorkspaces": { "supported": false, "description": "CompareCraft currently requires local files and folders." }
+  },
+  "scripts": {
+    "build": "tsc -p .",
+    "typecheck": "tsc -p . --noEmit",
+    "test": "npm run build && node --test out/test/*.test.js",
+    "test:integration": "npm run build && node scripts/test-integration.cjs",
+    "vscode:prepublish": "npm run build"
+  },
+  "contributes": {
+    "commands": [
+      { "command": "comparecraft.compareSelected", "title": "Compare Selected...", "category": "CompareCraft" },
+      { "command": "comparecraft.compareSelectedDesktop", "title": "Compare Selected in Desktop App", "category": "CompareCraft" },
+      { "command": "comparecraft.compareSelectedEmbedded", "title": "Compare Selected in VS Code", "category": "CompareCraft" },
+      { "command": "comparecraft.selectLeft", "title": "Select Left File or Folder", "category": "CompareCraft" },
+      { "command": "comparecraft.compareWithLeft", "title": "Compare with Selected Left...", "category": "CompareCraft" },
+      { "command": "comparecraft.clearLeft", "title": "Clear Left Selections", "category": "CompareCraft" },
+      { "command": "comparecraft.compareFileWith", "title": "Compare File With...", "category": "CompareCraft" },
+      { "command": "comparecraft.compareFolderWith", "title": "Compare Folder With...", "category": "CompareCraft" },
+      { "command": "comparecraft.compareParentFolderWith", "title": "Compare Parent Folder With...", "category": "CompareCraft" },
+      { "command": "comparecraft.openDesktop", "title": "Open Desktop App", "category": "CompareCraft" },
+      { "command": "comparecraft.locateDesktop", "title": "Locate Desktop Executable...", "category": "CompareCraft" }
+    ],
+    "submenus": [{ "id": "comparecraft.comparisons", "label": "CompareCraft" }],
+    "menus": {
+      "explorer/context": [
+        { "submenu": "comparecraft.comparisons", "when": "resourceScheme == file", "group": "navigation@90" }
+      ],
+      "editor/context": [
+        { "submenu": "comparecraft.comparisons", "when": "resourceScheme == file", "group": "navigation@90" }
+      ],
+      "editor/title/context": [
+        { "submenu": "comparecraft.comparisons", "when": "resourceScheme == file", "group": "navigation@90" }
+      ],
+      "comparecraft.comparisons": [
+        { "command": "comparecraft.compareSelected", "group": "1_compare@1" },
+        { "command": "comparecraft.compareSelectedDesktop", "group": "1_compare@2" },
+        { "command": "comparecraft.compareSelectedEmbedded", "group": "1_compare@3" },
+        { "command": "comparecraft.selectLeft", "group": "2_left@1" },
+        { "command": "comparecraft.compareWithLeft", "when": "comparecraft.hasLeft", "group": "2_left@2" },
+        { "command": "comparecraft.clearLeft", "when": "comparecraft.hasLeft", "group": "2_left@3" },
+        { "command": "comparecraft.compareFileWith", "when": "!explorerResourceIsFolder", "group": "3_picker@1" },
+        { "command": "comparecraft.compareFolderWith", "when": "explorerResourceIsFolder", "group": "3_picker@2" },
+        { "command": "comparecraft.compareParentFolderWith", "when": "!explorerResourceIsFolder", "group": "3_picker@3" },
+        { "command": "comparecraft.openDesktop", "group": "4_app@1" }
+      ]
+    },
+    "configuration": {
+      "title": "CompareCraft",
+      "properties": {
+        "comparecraft.defaultMode": {
+          "type": "string",
+          "enum": ["embedded", "desktop"],
+          "default": "embedded",
+          "description": "Default destination. Embedded mode is not available in Phase 1 and offers an explicit desktop-launch action instead.",
+          "scope": "window"
+        },
+        "comparecraft.desktopPath": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to the installed desktop executable, not its directory. Empty enables standard-location discovery. AppImages require an explicit path.",
+          "scope": "machine"
+        },
+        "comparecraft.backendPath": {
+          "type": "string",
+          "default": "",
+          "description": "Reserved absolute path to the future headless backend. Not used by Phase 1 desktop commands.",
+          "scope": "machine"
+        }
+      }
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "1.95.0",
+    "@vscode/test-electron": "^2.5.2",
+    "typescript": "~5.9.3"
+  }
+}

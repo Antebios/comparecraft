@@ -1,0 +1,65 @@
+metadata:
+  source_tasks: "../plan.md"
+  execution_ledger: "../handoff.md"
+  scope: "Phase 1 implementation; later phases are pending"
+summary:
+  total_tasks: 14
+  completed_tasks: 3
+  in_progress_tasks: 0
+  pending_tasks: 11
+tasks:
+  - task_id: T001
+    status: completed
+    implementation:
+      files:
+        - extensions/vscode/package.json
+        - extensions/vscode/package-lock.json
+        - extensions/vscode/tsconfig.json
+        - extensions/vscode/dev.code-workspace
+        - extensions/vscode/src/contracts.ts
+        - extensions/vscode/test/manifest.test.ts
+        - extensions/vscode/scripts/test-integration.cjs
+    upstream_trace:
+      plan_item: "1.1"
+      requirements: [REQ-001, REQ-009, REQ-010]
+    verification:
+      build_passed: true
+      evidence: "15 unit/manifest tests and actual VS Code host activation passed"
+  - task_id: T002
+    status: completed
+    implementation:
+      files:
+        - extensions/vscode/src/discovery.ts
+        - extensions/vscode/src/process.ts
+        - extensions/vscode/test/core.test.ts
+    upstream_trace:
+      plan_item: "1.1"
+      requirements: [REQ-002, REQ-009]
+    verification:
+      build_passed: true
+      evidence: "Discovery/process tests, Windows installed discovery, CLI and responsive GUI smoke passed"
+  - task_id: T003
+    status: completed
+    implementation:
+      files:
+        - extensions/vscode/src/controller.ts
+        - extensions/vscode/src/resources.ts
+        - extensions/vscode/src/extension.ts
+        - extensions/vscode/test/host.ts
+        - extensions/vscode/README.md
+        - README.md
+    upstream_trace:
+      plan_item: "1.1"
+      requirements: [REQ-001, REQ-003, REQ-006, REQ-009]
+    verification:
+      build_passed: true
+      evidence: "Controller and dirty-resource tests plus actual host command dispatch passed"
+pending_tasks: [T004, T005, T006, T007, T008, T009, T010, T011, T012, T013, T014]
+untracked_changes: []
+validation:
+  passed: true
+  errors: []
+  warnings:
+    - "Native Linux/macOS and visual menu/picker checks remain unexecuted."
+    - "This checkpoint completes Phase 1, not all feature requirements."
+  blocking_issues: []

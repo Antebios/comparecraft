@@ -1,0 +1,37 @@
+metadata:
+  source_plan: "../plan.md"
+  target_tasks: "../plan.md#incremental-phases-and-concrete-tasks"
+  scope: "Planning coverage only; execution status is in ../handoff.md"
+summary:
+  total_plan_items: 7
+  covered_plan_items: 7
+  missing_plan_items: 0
+  coverage_percentage: 100.0
+  total_tasks_generated: 14
+  orphan_tasks: 0
+phases:
+  - phase_id: "1"
+    items:
+      - {item_id: "1.1", tasks: [T001, T002, T003]}
+  - phase_id: "2"
+    items:
+      - {item_id: "2.1", tasks: [T004, T005]}
+      - {item_id: "2.2", tasks: [T006]}
+  - phase_id: "3"
+    items:
+      - {item_id: "3.1", tasks: [T007, T008]}
+  - phase_id: "4"
+    items:
+      - {item_id: "4.1", tasks: [T009, T010]}
+  - phase_id: "5"
+    items:
+      - {item_id: "5.1", tasks: [T011, T012]}
+  - phase_id: "6"
+    items:
+      - {item_id: "6.1", tasks: [T013, T014]}
+missing_plan_items: []
+orphan_tasks: []
+validation:
+  passed: true
+  errors: []
+  warnings: []
