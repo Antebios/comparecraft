@@ -28,15 +28,22 @@ fn gui_exe() -> PathBuf {
     PathBuf::from(format!("comparecraft{suffix}"))
 }
 
+/// The GUI arguments: a new instance is needed, because a running instance would take the request and
+/// return immediately. `-solo` goes first so a `--` in `argv` cannot turn it into a path.
+fn gui_args(argv: &[String], solo: bool) -> Vec<String> {
+    let mut out = Vec::with_capacity(argv.len() + 1);
+    if !solo {
+        out.push("-solo".to_string());
+    }
+    out.extend(argv.iter().cloned());
+    out
+}
+
 /// Opens a new window with the given arguments and waits for it to close.
 fn launch_and_wait(argv: &[String], solo: bool) -> i32 {
     let exe = gui_exe();
     let mut cmd = Command::new(&exe);
-    cmd.args(argv);
-    // A new instance is needed: a running instance would take the request and return immediately.
-    if !solo {
-        cmd.arg("-solo");
-    }
+    cmd.args(gui_args(argv, solo));
     let mut child = match cmd.spawn() {
         Ok(c) => c,
         Err(e) => {
@@ -85,4 +92,32 @@ fn main() {
         let _ = std::fs::remove_file(t);
     }
     std::process::exit(code);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn strings(v: &[&str]) -> Vec<String> {
+        v.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn solo_precedes_end_of_options() {
+        let argv = strings(&["-title1=A", "--", "a.txt", "b.txt"]);
+        let out = gui_args(&argv, false);
+        assert_eq!(
+            out,
+            strings(&["-solo", "-title1=A", "--", "a.txt", "b.txt"])
+        );
+        let parsed = cli::parse(&out).unwrap();
+        assert!(parsed.solo);
+        assert_eq!(parsed.positional, strings(&["a.txt", "b.txt"]));
+    }
+
+    #[test]
+    fn existing_solo_is_not_duplicated() {
+        let argv = strings(&["-solo", "--", "a.txt", "b.txt"]);
+        assert_eq!(gui_args(&argv, true), argv);
+    }
 }

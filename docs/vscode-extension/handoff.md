@@ -189,11 +189,11 @@ Phase 2 checks (Windows, from `extensions/vscode` unless stated otherwise):
   Conflict sides come from index stages (never markers in the working file); the
   working file is the 4th (output) side. Staging is explicit, confirmed, refuses
   stale stage signatures, and never continues/aborts operations.
-- Desktop finding: `src-tauri/src/console.rs` `launch_and_wait` appends `-solo`
-  after the user's arguments when absent. If those arguments contain `--`, the
-  appended `-solo` becomes an extra positional path. Git tool commands avoid this
-  by passing `-solo` before `--` (verified with the installed `ccomp`). Desktop
-  code was not changed; fixing it (insert `-solo` first) is a small follow-up.
+- Desktop fix: `src-tauri/src/console.rs` used to append `-solo` after the
+  user's arguments, so a `--` in them turned it into an extra positional path.
+  `gui_args` now inserts `-solo` first (unit-tested with `cargo test --bin ccomp`).
+  Git tool commands still pass `-solo` before `--`, so they also work with older
+  installed builds.
 - Git exit-code semantics: the GUI exit code does not distinguish save from
   cancel, so `trustExitCode=false`; Git judges success by whether MERGED changed.
 - Integration-runner note: on this machine the test VS Code starts `wsl.exe -l -q`,

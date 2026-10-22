@@ -42,7 +42,7 @@ errors: []
 warnings:
   - "Manual desktop-GUI journeys (Resolve Conflict save/stage, Compare with Saved, SCM menu visuals, mergetool with real app) not yet run."
   - "Stash conflicts not automated; binary conflicts unit-tested only."
-  - "Desktop ccomp appends -solo after user arguments when absent; extension avoids it by passing -solo before --. Desktop fix not applied."
+  - "Desktop ccomp appended -solo after user arguments; fixed in console.rs (gui_args puts -solo first, cargo test --bin ccomp passes). Extension still passes -solo before -- for older installs."
   - "No native Linux/macOS validation."
 test_results:
   unit:
