@@ -85,8 +85,21 @@ Protocol and crate boundary were decided in T007: [backend-protocol.md](backend-
   [backend-protocol.md](backend-protocol.md). The helper is read-only; writes stay
   in VS Code document APIs.
 - T004: snapshot ownership, lifetime and recovery based on observed process behavior.
-- T010: webview/custom-editor document integration guaranteeing lossless editing
-  and close/reload handling before enabling writes.
+- T009 (decided): `src/host/` is the only module that touches platform services.
+  `tauriHost` is set by the desktop entry point and `vscodeHost` by the webview
+  entry; Tauri packages are imported type-only by shared code, so the separate
+  `vite.webview.config.ts` bundle contains no Tauri runtime.
+- T010 (decided): a `WebviewPanel` with a serializer, not a `CustomEditor`.
+  A comparison spans two documents, and custom editors bind one resource. Each
+  side writes through its VS Code `TextDocument` (`WorkspaceEdit` + `save()`), so
+  undo, dirty state, local history, and save participants behave as for any edit.
+  A per-panel guard remembers the exact text each side loaded; saves are refused
+  if the document (VS Code buffer or disk) changed since. Read-only and
+  in-memory sides (saved-on-disk, clipboard, Git revisions) are content sides.
+  Panel close cannot be vetoed, so closing with unsaved side text offers
+  Restore Comparison or Open as Untitled; reload restores from webview state,
+  including unsaved text. Settings are separate from the desktop app
+  (`globalState`); sessions, reports, backups, and Open With are desktop-only.
 - Webviews require restrictive CSP/resource roots and validated message dispatch.
   Never eagerly load Tauri runtime services into the extension webview.
 - Preserve desktop behavior through extraction; no unnecessary module churn.

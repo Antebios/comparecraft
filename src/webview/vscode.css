@@ -1,0 +1,46 @@
+/* VS Code webview theme bridge: surfaces and text follow the active VS Code theme, while the
+   difference colors use CompareCraft's light or dark palette to match. Variables are set on
+   body so they override the :root values chosen by the CompareCraft theme setting. */
+body.vscode-light,
+body.vscode-high-contrast-light {
+  color-scheme: light;
+}
+
+body.vscode-dark,
+body.vscode-high-contrast:not(.vscode-high-contrast-light) {
+  color-scheme: dark;
+  --diff-bg: #4a2427;
+  --diff-fg: #ff8f8f;
+  --diff-hl: #84353a;
+  --unimp-bg: #22324f;
+  --unimp-fg: #8fb3ff;
+  --unimp-hl: #33508a;
+  --orphan-bg: #3c2a50;
+  --orphan-fg: #d2a8ff;
+  --older-fg: #7d8494;
+  --same-fg: #7fcf86;
+  --conflict-bg: #4d3a1a;
+  --filler: repeating-linear-gradient(135deg, #262a32 0 4px, #1f2229 4px 8px);
+}
+
+body.vscode-light,
+body.vscode-dark,
+body.vscode-high-contrast {
+  --bg: var(--vscode-editor-background);
+  --bg2: var(--vscode-input-background, var(--vscode-editor-background));
+  --bg3: var(--vscode-sideBar-background, var(--vscode-editorWidget-background));
+  --fg: var(--vscode-editor-foreground);
+  --muted: var(--vscode-descriptionForeground);
+  --border: var(--vscode-panel-border, var(--vscode-widget-border, #8888));
+  --accent: var(--vscode-focusBorder);
+  --sel: var(--vscode-editor-selectionBackground);
+  --mono: var(--vscode-editor-font-family), monospace;
+  padding: 0;
+  font-family: var(--vscode-font-family);
+}
+
+body.vscode-high-contrast .trow.sel,
+body.vscode-high-contrast .trow.cur {
+  outline: 1px dashed var(--vscode-contrastActiveBorder, var(--accent));
+  outline-offset: -1px;
+}

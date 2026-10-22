@@ -3,7 +3,7 @@
  * Name Filters, Other Filters and Misc, with a "Use for this view only /
  * Also update session defaults / Also update saved session" choice.
  */
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { open as openDialog } from "../host";
 import { createSignal, For, type JSX, Match, Show, Switch } from "solid-js";
 import { createStore, unwrap } from "solid-js/store";
 import { fmtSize, type FolderOptions, type OtherFilter } from "../api";

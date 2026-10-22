@@ -14,7 +14,10 @@ export interface ComparisonHost {
   resource(value: string): Promise<LocalResource>;
   pick(kind: ResourceKind, title: string): Promise<string | undefined>;
   defaultMode(): LaunchMode;
+  /** Explicit notice for comparisons the embedded UI cannot show yet; true opens the desktop app. */
   confirmDesktop(): Promise<boolean>;
+  /** Opens a two-sided comparison in the embedded CompareCraft text comparison panel. */
+  openEmbedded(inputs: readonly SideInput[]): Promise<void>;
   /** Rejects folders that contain unsaved VS Code documents, which cannot be snapshotted. */
   assertSaved(resources: readonly LocalResource[]): void | Promise<void>;
   /** Current text of an open document with unsaved changes, if any. */
@@ -38,12 +41,20 @@ export class ComparisonController {
   constructor(private readonly host: ComparisonHost) {}
 
   /**
-   * Launches the desktop app for two (compare) or four (merge) sides. Content inputs become owned
-   * read-only snapshots that are released when the dedicated desktop process exits.
+   * Opens two (compare) or four (merge) sides. Embedded mode shows two-sided comparisons that do
+   * not wait for a desktop process in a VS Code panel; anything else asks before using the desktop.
+   * Desktop content inputs become owned read-only snapshots released when the process exits.
    * Returns false when the user declines the explicit embedded-mode notice.
    */
   async compareInputs(inputs: readonly SideInput[], options: CompareOptions = {}): Promise<boolean> {
-    if ((options.mode ?? this.host.defaultMode()) === "embedded" && !(await this.host.confirmDesktop())) return false;
+    if ((options.mode ?? this.host.defaultMode()) === "embedded") {
+      this.host.assertSupported();
+      if (inputs.length === 2 && !options.onClosed) {
+        await this.host.openEmbedded(inputs);
+        return true;
+      }
+      if (!(await this.host.confirmDesktop())) return false;
+    }
     this.host.assertSupported();
     let session: SnapshotSession | undefined;
     try {
@@ -93,7 +104,11 @@ export class ComparisonController {
     if (left.kind !== right.kind) throw new Error("Cannot compare a file with a folder. Select two files or two folders.");
     const key = (value: string) => process.platform === "win32" ? value.toLowerCase() : value;
     if (key(left.path) === key(right.path)) throw new Error("Choose two different files or folders.");
-    if ((mode ?? this.host.defaultMode()) === "embedded" && !(await this.host.confirmDesktop())) return;
+    if ((mode ?? this.host.defaultMode()) === "embedded") {
+      this.host.assertSupported();
+      if (left.kind === "file") return this.host.openEmbedded([{ kind: "path", path: left.path }, { kind: "path", path: right.path }]);
+      if (!(await this.host.confirmDesktop())) return;
+    }
     this.host.assertSupported();
     if (left.kind === "folder") await this.host.assertSaved([left, right]);
     await this.compareInputs([await this.fileInput(left), await this.fileInput(right)], { mode: "desktop" });

@@ -1,7 +1,7 @@
 {
   "name": "comparecraft",
   "displayName": "CompareCraft",
-  "description": "Compare files, folders, editor text, and Git revisions and resolve Git conflicts with your installed CompareCraft desktop app. Embedded integration is planned.",
+  "description": "Compare files, folders, editor text, and Git revisions in VS Code or your installed CompareCraft desktop app, and resolve Git conflicts with CompareCraft.",
   "version": "0.1.0",
   "publisher": "antebios",
   "license": "MIT",
@@ -9,6 +9,7 @@
   "engines": { "vscode": "^1.95.0" },
   "categories": ["Other"],
   "main": "./out/src/extension.js",
+  "activationEvents": ["onWebviewPanel:comparecraft.textCompare"],
   "extensionKind": ["ui"],
   "capabilities": {
     "untrustedWorkspaces": { "supported": false, "description": "CompareCraft launches a locally installed executable and requires workspace trust." },
@@ -16,10 +17,12 @@
   },
   "scripts": {
     "build": "tsc -p .",
+    "build:webview": "npm --prefix ../.. run build:webview",
+    "build:all": "npm run build:webview && npm run build",
     "typecheck": "tsc -p . --noEmit",
     "test": "npm run build && node --test out/test/*.test.js",
-    "test:integration": "npm run build && node scripts/test-integration.cjs",
-    "vscode:prepublish": "npm run build"
+    "test:integration": "npm run build:webview && npm run build && node scripts/test-integration.cjs",
+    "vscode:prepublish": "npm run build:webview && npm run build"
   },
   "contributes": {
     "commands": [
@@ -113,7 +116,7 @@
           "type": "string",
           "enum": ["embedded", "desktop"],
           "default": "embedded",
-          "description": "Default destination for Compare Selected. Embedded mode is not available yet and offers an explicit desktop-launch action instead. Text, Git, and conflict commands always use the desktop app.",
+          "description": "Default destination for comparisons. Embedded mode shows two-sided text comparisons (files, editor text, clipboard, Git revisions) in a VS Code panel; folder comparisons and three-way conflict merges ask before opening the desktop app. Desktop mode always launches the installed app.",
           "scope": "window"
         },
         "comparecraft.desktopPath": {

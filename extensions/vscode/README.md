@@ -1,11 +1,11 @@
-# CompareCraft for VS Code (Phase 3)
+# CompareCraft for VS Code (Phase 4)
 
 Compare files, folders, editor text, and Git revisions, and resolve Git merge or
-rebase conflicts, using the installed CompareCraft desktop application. This is
-an early increment of one extension that will offer both desktop and embedded
-experiences. **The embedded (in-editor) UI is not available yet**; every command
-opens the desktop app. The headless helper the embedded UI will use is already
-installed with CompareCraft and can be checked with **Check Embedded Backend**.
+rebase conflicts, using CompareCraft. Two-sided text comparisons can open in a
+**CompareCraft tab inside VS Code** (embedded mode, the default) or in the
+installed desktop app. Folder comparisons and three-way conflict merges still
+use the desktop app. Both modes require an installed CompareCraft: embedded mode
+uses its windowless `comparecraft-backend` helper.
 
 ## Requirements
 
@@ -20,18 +20,23 @@ only when you run **Configure as Git Merge/Diff Tool...** and confirm.
 
 ## Develop and run
 
-From this directory:
+From this directory (the embedded view is built from the repository root's
+shared UI, so run `npm ci` in the repository root as well):
 
 Use Node.js 22 or newer for development and tests.
 
 ```text
 npm ci
-npm run build
+npm run build:all
 npm test
 ```
 
+`build:all` runs `build:webview` (the root Vite build that writes
+`media/webview/`, which is git-ignored) and then `build` (extension TypeScript).
+
 Open [dev.code-workspace](dev.code-workspace) in VS Code and press F5 using
-**Run CompareCraft Extension**. This uses a separate workspace configuration,
+**Run CompareCraft Extension**. Its pre-launch task runs `npm run build:all`.
+This uses a separate workspace configuration,
 without editing the repository's existing workspace settings. In the Extension
 Development Host, open a trusted local folder.
 
@@ -54,8 +59,9 @@ Tests use a temporary profile/workspace and a harmless Node launcher to verify
 commands and arguments without changing your normal VS Code settings or opening
 the desktop GUI. They do not substitute for manual installer/GUI verification.
 
-To also run **Check Embedded Backend** in that VS Code instance against a real
-helper, set `COMPARECRAFT_BACKEND` first; without it, that step is skipped:
+To also run **Check Embedded Backend** and the embedded-panel tests in that VS
+Code instance against a real helper, set `COMPARECRAFT_BACKEND` first; without
+it, those steps are skipped:
 
 ```powershell
 $env:COMPARECRAFT_BACKEND = "$env:LOCALAPPDATA\CompareCraft\comparecraft-backend.exe"
@@ -74,7 +80,7 @@ Right-click resources in Explorer, a text editor, or an editor tab and open the
 |---|---|
 | Compare Selected... | Uses the configured destination; two Explorer selections preserve the supplied left/right order. With one item, picks a matching right item. |
 | Compare Selected in Desktop App | Explicitly launches the installed desktop app. |
-| Compare Selected in VS Code | Explains that embedded support is not available and offers **Open in Desktop App**; never silently switches. |
+| Compare Selected in VS Code | Opens two files in an embedded CompareCraft tab. Folders ask before opening the desktop app; never silently switches. |
 | Select Left File or Folder | Remembers one file and one folder independently for this VS Code window. |
 | Compare with Selected Left... | Compares the chosen right item with the remembered left item of the same type. |
 | Clear Left Selections | Clears both remembered selections. |
@@ -104,7 +110,9 @@ Right-click inside an editor (including untitled ones) and open **CompareCraft**
 | Open Active Diff in Desktop App | In a VS Code diff editor (including Git diffs), opens the same two sides in CompareCraft. Available from the diff editor's **...** menu. |
 
 **Unsaved content is never silently replaced by disk content, and never saved
-automatically.** When a compared file has unsaved changes, the extension writes
+automatically.** In embedded mode these comparisons open in a CompareCraft tab
+(see [Embedded comparisons](#embedded-comparisons)). In desktop mode, when a
+compared file has unsaved changes, the extension writes
 its current buffer to a private, read-only snapshot labeled *(unsaved buffer)*.
 Snapshots live in the extension's global storage, are never write-back targets,
 and are deleted when the desktop window that uses them closes (or, if VS Code
@@ -178,11 +186,45 @@ git mergetool
 git difftool HEAD~1 -- path/to/file
 ```
 
+## Embedded comparisons
+
+In embedded mode, two-sided comparisons open in a **CompareCraft** editor tab
+that uses the same text-comparison UI as the desktop app, styled with your VS
+Code theme. Several tabs can be open at once. What opens where:
+
+| Comparison | Embedded mode |
+|---|---|
+| Two Explorer files, Compare File With..., Select Left / Compare with Left | VS Code tab; both sides editable |
+| Compare with Saved, text/selection/clipboard, Git HEAD/index/revision | VS Code tab; sides without a file (or the saved disk side) are read-only |
+| Folders | Asks, then opens the desktop app |
+| Resolve Conflict in Desktop App, Open Active Diff in Desktop App | Always the desktop app |
+
+Editing and saving:
+
+- An editable side shows the file's **current VS Code buffer**, including
+  unsaved edits made in a normal editor. Saving in the CompareCraft tab
+  writes through VS Code (so Undo in the normal editor, Local History, and
+  format-on-save apply) and saves that file.
+- If the file changed in a normal editor or on disk after the tab loaded it,
+  the save is refused and the tab warns you; reload the side first. Line
+  endings and encoding of existing files are preserved.
+- Closing a tab that has unsaved changes cannot be cancelled by an extension,
+  so a notification offers **Restore Comparison** (reopens it with your edits)
+  or **Open as Untitled** (puts the edited text in new untitled editors).
+  Reloading the window restores open tabs, including unsaved text.
+
+Limitations in this increment: text comparison only (folder, merge, binary,
+image, table, hex, and other views open in the desktop app); no sessions,
+reports, backups, or Open With; embedded view settings are stored by VS Code
+and are separate from the desktop app's settings. If the helper is missing or
+crashes, the tab shows the error; fix the installation or `backendPath` and
+reopen the comparison (a crashed helper is restarted on the next request).
+
 ## Settings and installation discovery
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `comparecraft.defaultMode` | `embedded` | Applies to Compare Selected. `embedded` offers an explicit desktop action until embedded mode exists. Set to `desktop` for direct external launches. Text and Git commands always use the desktop app. |
+| `comparecraft.defaultMode` | `embedded` | Where Compare Selected, Compare with..., editor-text, and Git comparisons open. `embedded` opens two-sided comparisons in a VS Code tab and asks before using the desktop app for folders. `desktop` always launches the desktop app. Commands named "in Desktop App" always use the desktop app. |
 | `comparecraft.desktopPath` | empty | User/machine absolute executable path; never a directory or shell command. |
 | `comparecraft.backendPath` | empty | Absolute path to `comparecraft-backend`, the windowless helper for embedded mode. Empty uses the helper installed next to the desktop executable. |
 
@@ -231,6 +273,6 @@ in the Output channel. The protocol is documented in
 ## Next increments
 
 See the repository's [implementation plan](../../docs/vscode-extension/plan.md)
-and [portable handoff](../../docs/vscode-extension/handoff.md). Phase 4 adds
-embedded text comparison in VS Code tabs. Marketplace publication is not part of
-this increment.
+and [portable handoff](../../docs/vscode-extension/handoff.md). Phase 5 adds
+embedded three-way conflict resolution and the remaining views. Marketplace
+publication is not part of this increment.

@@ -1,4 +1,4 @@
-import { ask, message } from "@tauri-apps/plugin-dialog";
+import { ask, message } from "../host";
 import { createSignal, Show, type JSX } from "solid-js";
 import { dirname, type ReportRequest } from "../api";
 import type { Command } from "../commands";

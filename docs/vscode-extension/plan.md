@@ -9,8 +9,12 @@ snapshots, Git comparisons/conflicts, opt-in Git tools) passed its automated gat
 on Windows with real Git fixtures; manual desktop-GUI journeys are listed in
 [handoff.md](handoff.md). Phase 3 (T007-T008, headless `comparecraft-backend`
 helper, protocol client, packaging) is complete and verified on Windows,
-including against an installed build. Phases 4-6 remain
-pending. Native Linux/macOS validation is still required.
+including against an installed build. Phase 4 (T009-T010, host adapters,
+webview bundle, embedded text-comparison panels) is complete: it passed its
+automated gate on Windows against the installed helper, and on 2026-10-22 the
+owner confirmed it in the Extension Development Host (after the undo/Ctrl+Z
+fixes recorded in [handoff.md](handoff.md)). Phases 5-6 remain pending. Native Linux/macOS
+validation is still required.
 This directory is the portable source of truth: no prior chat or session database
 is required to resume. Read [decisions.md](decisions.md) and
 [handoff.md](handoff.md) before working.
@@ -147,6 +151,8 @@ regressions pass; package placement/signing is verified, not assumed.
   shared text UI/backend. Implement themes/focus/navigation, panel state, guarded
   document edits, undo/save/dirty behavior, and lossless close/reload handling.
   Use custom-editor integration if needed before enabling writes.
+  *Done:* a `WebviewPanel` with a serializer and guarded `TextDocument` writes
+  was chosen over a custom editor (see [decisions.md](decisions.md)).
 
 **Gate:** embedded comparisons use current buffers and protect intervening edits.
 Test concurrent panels, backend failures, undo/save/close/reload, and unchanged

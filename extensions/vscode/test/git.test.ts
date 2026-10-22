@@ -184,6 +184,7 @@ test("merge conflicts open current, incoming, base snapshots and the working fil
     assert.equal(base!.title, "Base: common ancestor");
     assert.deepEqual([text(current!), text(incoming!), text(base!)], ["one\nmain\nthree\n", "one\nfeature\nthree\n", "one\ntwo\nthree\n"]);
     assert.deepEqual(output, { kind: "path", path: target, title: "Result: file name.txt" });
+    assert.equal(calls[0]!.options!.mode, "desktop");
 
     await assert.rejects(flows.compareIndexWorking(target), /unresolved conflicts/);
     host.dirty.add(target);

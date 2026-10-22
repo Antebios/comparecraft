@@ -6,7 +6,7 @@ import path from "node:path";
 import { desktopCandidates, discoverDesktop, InstallationError } from "../src/discovery";
 import { ComparisonController, type ComparisonHost, type LaunchTracking } from "../src/controller";
 import { comparisonArguments, launchDesktop } from "../src/process";
-import type { LaunchMode, LocalResource, ResourceKind } from "../src/contracts";
+import type { LaunchMode, LocalResource, ResourceKind, SideInput } from "../src/contracts";
 import { assertSavedResources } from "../src/resources";
 import { SnapshotStore, type SnapshotSession } from "../src/snapshots";
 
@@ -38,6 +38,8 @@ class FakeHost implements ComparisonHost {
   async pick(_kind: ResourceKind, _title: string) { return this.picks.shift(); }
   defaultMode() { return this.mode; }
   async confirmDesktop() { this.embeddedNotices++; return this.embeddedAccepted; }
+  embedded: string[][] = [];
+  async openEmbedded(inputs: readonly SideInput[]) { this.embedded.push(inputs.map(input => input.kind === "path" ? input.path : `content:${input.name}`)); }
   assertSaved(_resources: readonly LocalResource[]) { if (this.dirty) throw new Error("Unsaved changes"); }
   async launch(args: readonly string[], tracking?: LaunchTracking) { this.launches.push([...args]); this.tracking.push(tracking); }
   async setHasLeft(value: boolean) { this.leftContext = value; }
@@ -119,8 +121,23 @@ test("two selected files launch the desktop without an embedded notice", async (
   assert.equal(host.embeddedNotices, 0);
 });
 
-test("embedded/default dispatch never silently falls back", async () => {
+test("embedded/default mode opens two files in the embedded panel without launching", async () => {
   const host = new FakeHost(), left = file("left.txt"), right = file("right.txt");
+  host.add(left, right);
+  host.mode = "embedded";
+  const controller = new ComparisonController(host);
+  await controller.compare([left.path, right.path]);
+  await controller.compare([left.path, right.path], "embedded");
+  assert.deepEqual(host.embedded, [[left.path, right.path], [left.path, right.path]]);
+  assert.equal(host.embeddedNotices, 0);
+  assert.equal(host.launches.length, 0);
+  host.trusted = false;
+  await assert.rejects(controller.compare([left.path, right.path]), /Trust required/);
+  assert.equal(host.embedded.length, 2);
+});
+
+test("embedded folder comparisons never silently fall back to the desktop", async () => {
+  const host = new FakeHost(), left = folder("left"), right = folder("right");
   host.add(left, right);
   host.mode = "embedded";
   const controller = new ComparisonController(host);
@@ -130,6 +147,23 @@ test("embedded/default dispatch never silently falls back", async () => {
   host.embeddedAccepted = true;
   await controller.compare([left.path, right.path], "embedded");
   assert.deepEqual(host.launches, [["--", left.path, right.path]]);
+  assert.equal(host.embedded.length, 0);
+});
+
+test("embedded mode shows two-sided content comparisons in the panel; merges ask before the desktop", async () => {
+  const host = new FakeHost();
+  host.mode = "embedded";
+  const controller = new ComparisonController(host);
+  const sides: SideInput[] = [{ kind: "content", name: "a.txt", title: "a.txt (HEAD)", content: "old" }, { kind: "path", path: path.resolve("a.txt") }];
+  assert.equal(await controller.compareInputs(sides), true);
+  assert.deepEqual(host.embedded, [["content:a.txt", path.resolve("a.txt")]]);
+  assert.equal(await controller.compareInputs([...sides, ...sides], { onClosed: async () => {} }), false);
+  assert.equal(host.embeddedNotices, 1);
+  assert.equal(host.launches.length, 0);
+  assert.equal(await controller.compareInputs(sides, { mode: "desktop" }), true);
+  assert.equal(host.launches.length, 1);
+  await host.tracking[0]?.session?.release();
+  assert.equal(host.embedded.length, 1);
 });
 
 test("canceling pickers does not launch, and invalid selections fail visibly", async () => {

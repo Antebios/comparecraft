@@ -129,7 +129,7 @@ export class GitWorkflows {
       base ? { kind: "content", name, title: "Base: common ancestor", content: base }
         : empty(name, "Base: none (added on both sides)"),
       { kind: "path", path: file.absolute, title: `Result: ${file.relative}` }
-    ], { onClosed: () => this.afterMerge(file) });
+    ], { mode: "desktop", onClosed: () => this.afterMerge(file) });
     if (launched) this.pending.set(this.key(file), { signature, mtimeMs });
   }
 

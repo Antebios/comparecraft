@@ -1,4 +1,4 @@
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { openUrl } from "../host";
 import { createEffect, createMemo, createSignal, For, on, onCleanup, onMount, Show } from "solid-js";
 import { hasPage, highlight, imageUrl, NAV, ONLINE_MANUAL, page, PAGE_ORDER, queryTerms, search, type NavItem } from "../help/manual";
 

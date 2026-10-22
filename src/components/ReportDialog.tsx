@@ -1,6 +1,4 @@
-import { save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { openPath } from "@tauri-apps/plugin-opener";
+import { save as saveDialog, writeText, openPath } from "../host";
 import { createSignal, For, Show } from "solid-js";
 import { createStore } from "solid-js/store";
 import { api, type ReportRequest, type ReportSpec } from "../api";

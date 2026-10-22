@@ -1,4 +1,4 @@
-import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { writeText } from "../host";
 import { batch, createEffect, createMemo, createSignal, For, Index, on, onMount, Show } from "solid-js";
 import { createStore } from "solid-js/store";
 import { api, errText, type TableOptions, type TableResult, type TableRow } from "../api";

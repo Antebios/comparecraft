@@ -19,7 +19,7 @@
       {
         "label": "Build extension",
         "type": "shell",
-        "command": "npm run build",
+        "command": "npm run build:all",
         "options": { "cwd": "${workspaceFolder:vscode}" },
         "problemMatcher": "$tsc",
         "group": "build"

@@ -1,4 +1,4 @@
-import { ask } from "@tauri-apps/plugin-dialog";
+import { ask } from "../host";
 import { createSignal, For } from "solid-js";
 import { setSetting, settings } from "../settings";
 import { KIND_LABEL } from "../store";

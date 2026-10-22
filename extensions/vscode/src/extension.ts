@@ -4,7 +4,8 @@ import path from "node:path";
 import { ComparisonController, type ComparisonHost } from "./controller";
 import { discoverBackend, discoverDesktop, InstallationError } from "./discovery";
 import { BackendManager } from "./backend";
-import { launchDesktop } from "./process";
+import { EmbeddedPanels, specFromInputs } from "./embedded";
+import { comparisonArguments, launchDesktop } from "./process";
 import { assertSavedResources } from "./resources";
 import { SnapshotStore } from "./snapshots";
 import { Git } from "./git";
@@ -18,7 +19,7 @@ const TOOL_RECORDS = "comparecraft.gitToolRecords";
 interface GitExtensionApi { readonly git: { readonly path: string } }
 interface GitExtensionExports { getAPI(version: 1): GitExtensionApi }
 
-export function activate(context: vscode.ExtensionContext): void {
+export function activate(context: vscode.ExtensionContext): { embedded: EmbeddedPanels } | undefined {
   const output = vscode.window.createOutputChannel("CompareCraft");
   context.subscriptions.push(output);
   const snapshots = new SnapshotStore(path.join(context.globalStorageUri.fsPath, "snapshots"));
@@ -122,9 +123,14 @@ export function activate(context: vscode.ExtensionContext): void {
     },
     async confirmDesktop() {
       return await vscode.window.showInformationMessage(
-        "Embedded CompareCraft is not available yet. Open this comparison in the installed desktop app instead?",
+        "Embedded CompareCraft does not support this comparison yet (folder and merge views use the desktop app). Open it in the installed desktop app instead?",
         { modal: true }, "Open in Desktop App"
       ) === "Open in Desktop App";
+    },
+    async openEmbedded(inputs) {
+      const spec = await specFromInputs(inputs, async file =>
+        (await (await backend.get()).request<{ lines: string[] }>("text.load", { path: file })).lines);
+      embedded.open(spec);
     },
     async assertSaved(resources) {
       await assertSavedResources(resources, vscode.workspace.textDocuments
@@ -261,7 +267,7 @@ export function activate(context: vscode.ExtensionContext): void {
     assertSupported();
     const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
     if (!(input instanceof vscode.TabInputTextDiff)) throw new Error("Open a text diff editor first.");
-    await controller.compareInputs([await diffSide(input.original), await diffSide(input.modified)]);
+    await controller.compareInputs([await diffSide(input.original), await diffSide(input.modified)], { mode: "desktop" });
   }
 
   const gitHost: GitHost = {
@@ -339,6 +345,20 @@ export function activate(context: vscode.ExtensionContext): void {
       if (event.affectsConfiguration("comparecraft.backendPath") || event.affectsConfiguration("comparecraft.desktopPath")) void backend.reset();
     })
   );
+
+  const embedded = new EmbeddedPanels(context, backend, {
+    assertSupported,
+    log: line => output.appendLine(line),
+    async openInDesktop(kind, paths) {
+      const choice = await vscode.window.showInformationMessage(
+        `The ${kind} view is not available in embedded CompareCraft. Open it in the installed desktop app?`,
+        { modal: true }, "Open in Desktop App"
+      );
+      if (choice !== "Open in Desktop App") return;
+      await host.launch(paths.length >= 2 ? comparisonArguments({ sides: paths.map(item => ({ path: item })), solo: false }) : []);
+    }
+  });
+  context.subscriptions.push(embedded);
 
   async function checkBackend(): Promise<{ executable: string; version: string; protocolVersion: number }> {
     assertSupported();
@@ -489,4 +509,7 @@ export function activate(context: vscode.ExtensionContext): void {
   register("configureGitTools", async () => configureGitTools());
   register("removeGitTools", async () => removeGitTools());
   register("checkBackend", async () => checkBackend());
+
+  // Integration tests drive embedded panels directly; nothing is exported to other extensions.
+  return context.extensionMode === vscode.ExtensionMode.Test ? { embedded } : undefined;
 }

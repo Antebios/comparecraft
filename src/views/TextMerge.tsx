@@ -1,4 +1,4 @@
-import { ask, save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { ask, save as saveDialog } from "../host";
 import { settings } from "../settings";
 import { batch, createEffect, createMemo, createSignal, Index, onMount, Show } from "solid-js";
 import { api, errText, strictRules, type Chunk, type MergeResult, type Rules, type TextFile } from "../api";

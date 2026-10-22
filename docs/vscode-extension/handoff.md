@@ -2,11 +2,13 @@
 
 ## Current state
 
-**Phases 1 and 2 are complete and committed** on `feature/vscode-ui` (Phase 1:
+**Phases 1-3 are complete and committed** on `feature/vscode-ui` (Phase 1:
 `f595f27`, `be98a7c`; Phase 2 and the `ccomp` fix: `e565e21`, `7051dc8`,
-`5532e29`). **Phase 3 (T007-T008) is complete and verified on Windows,
-including against the owner's reinstalled build, but not yet committed.**
-Phases 4-6 have not been started.
+`5532e29`; Phase 3: `3d5cdc0`). **Phase 4 (T009-T010, embedded text
+comparison) is complete**: it passed its automated gate on Windows and the owner
+confirmed it in the Extension Development Host on 2026-10-22 (after the undo and
+Ctrl+Z fixes below); it is committed by the owner after this update.
+Phases 5-6 have not been started.
 No Marketplace publication has been performed. Git configuration is changed
 only by the user-invoked, confirmed setup command; tests use disposable
 repositories and a temporary `GIT_CONFIG_GLOBAL`.
@@ -53,8 +55,8 @@ Planning coverage is not evidence of implementation completion.
 | T006 | 2 | done | T005 | Reversible mergetool/difftool setup; real `git mergetool` run and installed `ccomp` wait smoke pass |
 | T007 | 3 | done | T001 | Contract in backend-protocol.md; `comparecraft-backend` bin; 11 unit + 3 stdio integration tests pass |
 | T008 | 3 | done | T002, T007 | Client/manager/discovery + Check Embedded Backend; 8 client tests incl. real helper; signing/ZIP/PKGBUILD updated; verified against the reinstalled helper in real VS Code |
-| T009 | 4 | pending | T007 | |
-| T010 | 4 | pending | T008, T009 | |
+| T009 | 4 | done | T007 | `src/host/` adapters (Tauri + VS Code); 20 shared files import only the host; `npm run build:webview` bundle has 0 Tauri references; desktop typecheck/build pass |
+| T010 | 4 | done | T008, T009 | `embedded.ts` WebviewPanel + serializer, CSP, validated RPC, guarded document writes, external-change events, restore on close/reload; 45 unit tests; real VS Code host test with installed helper passes; owner F5 test passed 2026-10-22 after undo/Ctrl+Z fixes |
 | T011 | 5 | pending | T005, T010 | |
 | T012 | 5 | pending | T010 | |
 | T013 | 6 | pending | T006, T011, T012 | |
@@ -76,7 +78,7 @@ VS Code version, app/helper/protocol versions, and installer type.
 | Missing stages, renames, binary conflicts | add/add empty base and modify/delete refusal pass; binary/link/submodule unit pass | not run | not run |
 | Opt-in Git setup, wait/cancel, reversal | local+global (temp) apply/remove pass; real `git mergetool` with fake tool pass; installed `ccomp -solo` waits for GUI | not run | not run |
 | Installed helper, incompatibility, crash | NSIS reinstall puts the helper next to `comparecraft.exe`; default discovery finds it; client contract tests and Check Embedded Backend in real VS Code pass against it; crash/mismatch/timeout/framing via fake helper pass; a pre-helper install gives the explicit "update CompareCraft" error | not run | not run |
-| Embedded text, edits, undo/save/close/reload | not run | not run | not run |
+| Embedded text, edits, undo/save/close/reload | host test pass: real webview bundle loads under CSP, two concurrent panels load files and diff via installed helper; saves through VS Code documents keep CRLF, use unsaved buffers, reject stale writes after editor or disk changes; missing backend fails visibly. Manual F5 edit/undo/close-restore/reload not run | not run | not run |
 | Embedded merge and remaining views | not run | not run | not run |
 | Formats/backups, read-only, destructive confirmations | not run | not run | not run |
 | VSIX install/upgrade/removal, desktop regressions | not run | not run | not run |
@@ -184,6 +186,27 @@ Phase 3 checks (Windows x64, 2026-10-22):
   **Check Embedded Backend** in real VS Code and asserts the returned executable
   and protocol (PASS); with a nonexistent path it fails as expected. No
   `comparecraft-backend` processes remain afterwards.
+
+Phase 4 checks (Windows x64, VS Code 1.143.0, installed helper 0.1.0, 2026-10-22):
+
+- Root `npm run typecheck` and `npm run build` (desktop) pass. Desktop
+  behavior only changed under `isEmbedded()` checks in `TextCompare.tsx`.
+- Root `npm run build:webview`: `extensions/vscode/media/webview/webview.js`
+  (100 KB) and `webview.css` (33 KB); `__TAURI` occurs 0 times in the bundle.
+- `extensions/vscode`: `npm test` 45 passed (new: spec validation, exact
+  line-ending round trips, document guard, dialog filters, input conversion,
+  embedded routing for files/folders/content/merges).
+- `npm run test:integration` with `VSCODE_EXECUTABLE_PATH` and
+  `COMPARECRAFT_BACKEND=%LOCALAPPDATA%\CompareCraft\comparecraft-backend.exe`:
+  exit 0 on three consecutive runs. The host test opens two real panels via
+  **Compare Selected in VS Code** and waits for the webview's own `init`,
+  `load_text` x2 and `diff_texts` requests and state; then drives the panel's
+  request handler against real documents (CRLF save, conflict after an unsaved
+  VS Code edit, unsaved buffer as source, conflict after an external disk
+  write, new-file creation, unsupported command, refused `file:` URL, missing
+  backend error and recovery). Extension-host stdout capture is flaky on this
+  machine, so some runs print no `PASS:` lines; the exit code is authoritative.
+- No Rust code changed in Phase 4; `cargo test` was not rerun.
 
 ## Phase 1 implementation handoff
 
@@ -295,6 +318,67 @@ Phase 3 checks (Windows x64, 2026-10-22):
 - Next sequential task: T009 (Phase 4 embedded text views), requiring user
   authorization.
 - Batch evidence: [phase-3-report.yaml](phase-3-report.yaml).
+
+## Phase 4 implementation handoff
+
+- Task IDs / status: T009 and T010 done; Phase 4 closed 2026-10-22 after the
+  owner's manual F5 confirmation. Branch `feature/vscode-ui`; committed by the
+  owner after this update.
+- Environment: Windows x64, Node 24.14.1, VS Code 1.143.0, installed
+  CompareCraft with `comparecraft-backend` 0.1.0 (protocol 1).
+- T009 (shared UI): `src/host/index.ts` defines the `Host` interface and
+  delegating wrappers named like the Tauri functions; `src/host/tauri.ts` is
+  the desktop implementation (`src/index.tsx` calls `setHost(tauriHost)`).
+  Twenty shared files now import from `host` instead of `@tauri-apps/*`.
+  `TextCompare.tsx` gains embedded-only hooks: `restore` option (unsaved text
+  over loaded files), `file-changed` event (reload clean side, warn on dirty
+  side), and a `text-state` emit (paths, titles, options, dirty flags, unsaved
+  lines, content of path-less sides). Webview entry: `src/webview/main.tsx`
+  (one text comparison per panel; other views are forwarded as `openTab`),
+  `src/webview/host.ts` (request/response RPC, debounced state),
+  `src/webview/vscode.css` (VS Code theme tokens), `vite.webview.config.ts`,
+  root script `build:webview`.
+- T010 (extension): `src/embeddedCore.ts` (pure: spec validation, line
+  split/join, `DocumentGuard`, input conversion) and `src/embedded.ts`
+  (`EmbeddedPanels` with serializer, `EmbeddedPanel` with nonce CSP, validated
+  messages, guarded `load_text`/`save_text` through `TextDocument`s, backend
+  `text.diff`/`text.merge`/`path.info`, settings in `globalState`, dialogs,
+  clipboard, URL allow-list, file watchers, restore on close). `controller.ts`:
+  in embedded mode, two-sided inputs (files, editor text, clipboard, saved
+  version, Git revisions) open a panel; folders and tracked three-way merges ask
+  before using the desktop app. `package.json`: `onWebviewPanel` activation,
+  descriptions, `build:webview`/prepublish/integration scripts. Media output
+  `media/webview/` is git-ignored and built by `vscode:prepublish`.
+- Behavior notes: dirty Explorer files open as live (editable) sides because
+  `load_text` reads the VS Code buffer; read-only inputs such as "saved on disk"
+  become content sides. Backups, sessions, reports, and Open With are
+  desktop-only; embedded settings are separate from the desktop app.
+  Format-on-save results are reloaded into the view after saving. Commands
+  titled "in Desktop App" (Open Active Diff, Resolve Conflict) pass
+  `mode: "desktop"` and never open a panel or ask.
+- Owner manual F5 test (2026-10-22): comparison, editing and saving worked.
+  Two defects found and fixed: (1) Ctrl+Z/Ctrl+Y (and Ctrl+S/F/P) did nothing
+  in the panel because VS Code's webview wrapper registers its keydown listener
+  on the frame before the page loads and calls `preventDefault` on those
+  chords; `src/webview/main.tsx` now claims them in the capture phase.
+  (2) Undo after a save restored the pre-edit dirty flag, so Save stayed
+  disabled although the text no longer matched the file (desktop app too);
+  `TextCompare.tsx` now records a per-side disk baseline id in each undo entry
+  and marks a side dirty when undo/redo crosses a load or save. Verified in a
+  browser against the built bundle with a wrapper-like listener and the real
+  helper: edit, Save, Ctrl+Z re-enables Save; Ctrl+Y disables it again.
+  The owner re-tested in F5 and confirmed the fixes work ("working great").
+- Development: F5 now runs `npm run build:all` in `extensions/vscode` (webview
+  bundle via the root Vite build, then the extension TypeScript), so the root
+  dependencies must be installed (`npm ci` in the repository root) as well as
+  the extension's.
+- Optional regression checks for later phases (not blocking; not individually
+  recorded by the owner): close a panel with unsaved changes (Restore/Untitled),
+  reload the window with a panel open, edit the file in a normal editor and
+  confirm the warning, switch light/dark/high-contrast themes, keyboard focus.
+- Next sequential task: T011 (Phase 5 embedded conflicts) and T012 (remaining
+  views), requiring user authorization.
+- Batch evidence: [phase-4-report.yaml](phase-4-report.yaml).
 
 ## Per-increment handoff entry
 

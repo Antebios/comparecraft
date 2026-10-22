@@ -1,4 +1,4 @@
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { open as openDialog } from "../host";
 import { createMemo, createSignal, For, type JSX, Match, onMount, Show, Switch } from "solid-js";
 import { createStore, unwrap } from "solid-js/store";
 import { api, errText, type ShellItem, type ShellStatus } from "../api";
