@@ -139,6 +139,13 @@ Phase 2 checks (Windows, from `extensions/vscode` unless stated otherwise):
 - Installed `ccomp.exe -solo -- "a b.txt" "c d.txt"` kept running while its
   `comparecraft.exe -solo -- ...` child ran and exited after that owned child was
   stopped; arguments were forwarded intact. Fixtures removed.
+- 2026-10-22, after the owner installed the rebuilt desktop with the `ccomp`
+  fix: `ccomp.exe -title1=Left -- "a b.txt" "c d.txt"` (no `-solo`) launched
+  `comparecraft.exe -solo -title1=Left -- ...` and waited for the window.
+  A real `git mergetool` using the extension's generated command opened the
+  installed app on a disposable conflict and waited until the owner closed the
+  window. Git then kept the file unresolved because it was unchanged, as expected.
+  No extension change was required.
 
 ## Phase 1 implementation handoff
 
