@@ -41,15 +41,16 @@ export class ComparisonController {
   constructor(private readonly host: ComparisonHost) {}
 
   /**
-   * Opens two (compare) or four (merge) sides. Embedded mode shows two-sided comparisons that do
-   * not wait for a desktop process in a VS Code panel; anything else asks before using the desktop.
+   * Opens two (compare) or four (merge) sides. Embedded mode shows two-sided comparisons and
+   * merges that do not wait for a desktop process in a VS Code panel; anything else asks before
+   * using the desktop.
    * Desktop content inputs become owned read-only snapshots released when the process exits.
    * Returns false when the user declines the explicit embedded-mode notice.
    */
   async compareInputs(inputs: readonly SideInput[], options: CompareOptions = {}): Promise<boolean> {
     if ((options.mode ?? this.host.defaultMode()) === "embedded") {
       this.host.assertSupported();
-      if (inputs.length === 2 && !options.onClosed) {
+      if ((inputs.length === 2 || inputs.length === 4) && !options.onClosed) {
         await this.host.openEmbedded(inputs);
         return true;
       }

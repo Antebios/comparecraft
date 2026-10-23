@@ -34,7 +34,17 @@ export function request<T>(method: string, params?: unknown): Promise<T> {
   const id = nextId++;
   return new Promise<T>((resolve, reject) => {
     pending.set(id, { resolve: resolve as (value: unknown) => void, reject });
-    vscode.postMessage({ type: "request", id, method, params });
+    try {
+      vscode.postMessage({ type: "request", id, method, params });
+    } catch {
+      // Reactive store proxies cannot be structured-cloned; send a plain copy instead.
+      try {
+        vscode.postMessage({ type: "request", id, method, params: params === undefined ? undefined : JSON.parse(JSON.stringify(params)) });
+      } catch (e) {
+        pending.delete(id);
+        reject(`Cannot send ${method} to VS Code: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
   });
 }
 

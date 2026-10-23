@@ -46,6 +46,7 @@
       { "command": "comparecraft.gitCompareIndex", "title": "Compare Index with Working Tree", "category": "CompareCraft" },
       { "command": "comparecraft.gitCompareHeadIndex", "title": "Compare HEAD with Index", "category": "CompareCraft" },
       { "command": "comparecraft.gitCompareRevision", "title": "Compare with Revision...", "category": "CompareCraft" },
+      { "command": "comparecraft.gitResolveConflictEmbedded", "title": "Resolve Conflict in VS Code", "category": "CompareCraft" },
       { "command": "comparecraft.gitResolveConflict", "title": "Resolve Conflict in Desktop App", "category": "CompareCraft" },
       { "command": "comparecraft.gitStageResolved", "title": "Stage Resolved Conflict...", "category": "CompareCraft" },
       { "command": "comparecraft.configureGitTools", "title": "Configure as Git Merge/Diff Tool...", "category": "CompareCraft" },
@@ -54,7 +55,8 @@
     ],
     "submenus": [
       { "id": "comparecraft.comparisons", "label": "CompareCraft" },
-      { "id": "comparecraft.git", "label": "Git" }
+      { "id": "comparecraft.git", "label": "Git" },
+      { "id": "comparecraft.scm", "label": "CompareCraft" }
     ],
     "menus": {
       "explorer/context": [
@@ -70,12 +72,16 @@
         { "command": "comparecraft.compareActiveDiff", "when": "isInDiffEditor", "group": "1_comparecraft@1" }
       ],
       "scm/resourceState/context": [
-        { "command": "comparecraft.gitResolveConflict", "when": "scmProvider == git && scmResourceGroup == merge", "group": "comparecraft@1" },
-        { "command": "comparecraft.gitStageResolved", "when": "scmProvider == git && scmResourceGroup == merge", "group": "comparecraft@2" },
-        { "command": "comparecraft.gitCompareHead", "when": "scmProvider == git && scmResourceGroup != merge", "group": "comparecraft@3" },
-        { "command": "comparecraft.gitCompareIndex", "when": "scmProvider == git && scmResourceGroup == workingTree", "group": "comparecraft@4" },
-        { "command": "comparecraft.gitCompareHeadIndex", "when": "scmProvider == git && scmResourceGroup == index", "group": "comparecraft@5" },
-        { "command": "comparecraft.gitCompareRevision", "when": "scmProvider == git && scmResourceGroup != merge && scmResourceGroup != untracked", "group": "comparecraft@6" }
+        { "submenu": "comparecraft.scm", "when": "scmProvider == git", "group": "comparecraft@1" }
+      ],
+      "comparecraft.scm": [
+        { "command": "comparecraft.gitResolveConflictEmbedded", "when": "scmProvider == git && scmResourceGroup == merge", "group": "1_conflict@1" },
+        { "command": "comparecraft.gitResolveConflict", "when": "scmProvider == git && scmResourceGroup == merge", "group": "1_conflict@2" },
+        { "command": "comparecraft.gitStageResolved", "when": "scmProvider == git && scmResourceGroup == merge", "group": "1_conflict@3" },
+        { "command": "comparecraft.gitCompareHead", "when": "scmProvider == git && scmResourceGroup != merge", "group": "2_compare@1" },
+        { "command": "comparecraft.gitCompareIndex", "when": "scmProvider == git && scmResourceGroup == workingTree", "group": "2_compare@2" },
+        { "command": "comparecraft.gitCompareHeadIndex", "when": "scmProvider == git && scmResourceGroup == index", "group": "2_compare@3" },
+        { "command": "comparecraft.gitCompareRevision", "when": "scmProvider == git && scmResourceGroup != merge && scmResourceGroup != untracked", "group": "2_compare@4" }
       ],
       "commandPalette": [
         { "command": "comparecraft.compareTextWithLeft", "when": "comparecraft.hasLeftText" },
@@ -103,8 +109,9 @@
         { "command": "comparecraft.gitCompareIndex", "group": "1_compare@2" },
         { "command": "comparecraft.gitCompareHeadIndex", "group": "1_compare@3" },
         { "command": "comparecraft.gitCompareRevision", "group": "1_compare@4" },
-        { "command": "comparecraft.gitResolveConflict", "group": "2_conflict@1" },
-        { "command": "comparecraft.gitStageResolved", "group": "2_conflict@2" },
+        { "command": "comparecraft.gitResolveConflictEmbedded", "group": "2_conflict@1" },
+        { "command": "comparecraft.gitResolveConflict", "group": "2_conflict@2" },
+        { "command": "comparecraft.gitStageResolved", "group": "2_conflict@3" },
         { "command": "comparecraft.configureGitTools", "group": "3_tools@1" },
         { "command": "comparecraft.removeGitTools", "group": "3_tools@2" }
       ]
@@ -116,7 +123,7 @@
           "type": "string",
           "enum": ["embedded", "desktop"],
           "default": "embedded",
-          "description": "Default destination for comparisons. Embedded mode shows two-sided text comparisons (files, editor text, clipboard, Git revisions) in a VS Code panel; folder comparisons and three-way conflict merges ask before opening the desktop app. Desktop mode always launches the installed app.",
+          "description": "Default destination for comparisons. Embedded mode shows two-sided text comparisons (files, editor text, clipboard, Git revisions) in a VS Code panel; folder comparisons ask before opening the desktop app. Git conflicts open in an embedded three-way merge with CompareCraft: Resolve Conflict. Desktop mode always launches the installed app.",
           "scope": "window"
         },
         "comparecraft.desktopPath": {

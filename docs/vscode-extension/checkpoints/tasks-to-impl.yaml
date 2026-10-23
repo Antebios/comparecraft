@@ -172,7 +172,31 @@ tasks:
     verification:
       build_passed: true
       evidence: "45 extension tests; real VS Code panels with the installed helper: concurrent panels, guarded saves, stale-write refusal, backend failure and recovery; owner F5 confirmation 2026-10-22 after undo/Ctrl+Z fixes"
-pending_tasks: [T011, T012, T013, T014]
+  - task_id: T011
+    status: completed
+    implementation:
+      files:
+        - src/views/TextMerge.tsx
+        - src/webview/main.tsx
+        - src/webview/host.ts
+        - extensions/vscode/src/embedded.ts
+        - extensions/vscode/src/embeddedCore.ts
+        - extensions/vscode/src/controller.ts
+        - extensions/vscode/src/extension.ts
+        - extensions/vscode/src/gitWorkflows.ts
+        - extensions/vscode/package.json
+        - extensions/vscode/test/embedded.test.ts
+        - extensions/vscode/test/core.test.ts
+        - extensions/vscode/test/git.test.ts
+        - extensions/vscode/test/manifest.test.ts
+        - extensions/vscode/test/host.ts
+    upstream_trace:
+      plan_item: "5.1"
+      requirements: [REQ-004, REQ-005, REQ-006, REQ-008, REQ-009]
+    verification:
+      build_passed: true
+      evidence: "47 extension tests; real VS Code host test (26 commands; merge writes only its result, keeps CRLF, refuses with unsaved edits elsewhere); browser check of the merge webview with the installed helper; owner F5 test passed 2026-10-23 after three fixes"
+pending_tasks: [T012, T013, T014]
 untracked_changes: []
 validation:
   passed: true

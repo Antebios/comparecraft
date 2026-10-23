@@ -18,6 +18,8 @@ export interface EmbeddedHost {
   log(message: string): void;
   /** Offers to open a view the embedded panel does not provide in the desktop app. */
   openInDesktop(kind: string, paths: readonly string[]): Promise<void>;
+  /** Called after a merge result is written; offers explicit review and staging. */
+  afterMergeSaved(file: string): Promise<void>;
 }
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -33,7 +35,9 @@ export class EmbeddedPanels implements vscode.Disposable {
     context.subscriptions.push(vscode.window.registerWebviewPanelSerializer(VIEW_TYPE, {
       deserializeWebviewPanel: async (panel, state) => {
         try {
-          this.attach(panel, parseSpec(state));
+          const spec = parseSpec(state);
+          this.attach(panel, { ...spec, output: null });
+          if (spec.kind === "merge" && spec.output) void this.offerMergedText(spec);
         } catch (error) {
           host.log(`Discarded an embedded comparison that could not be restored: ${errorText(error)}`);
           panel.dispose();
@@ -57,7 +61,9 @@ export class EmbeddedPanels implements vscode.Disposable {
 
   open(spec: EmbeddedSpec): EmbeddedPanel {
     this.host.assertSupported();
-    const panel = vscode.window.createWebviewPanel(VIEW_TYPE, titleOf(spec), vscode.ViewColumn.Active, { enableFindWidget: false });
+    // Kept alive while hidden: a reload would lose merge choices and undo history, and would re-read
+    // files as their new baseline, hiding edits made in other tabs from the stale-write check.
+    const panel = vscode.window.createWebviewPanel(VIEW_TYPE, titleOf(spec), vscode.ViewColumn.Active, { enableFindWidget: false, retainContextWhenHidden: true });
     return this.attach(panel, spec);
   }
 
@@ -66,6 +72,18 @@ export class EmbeddedPanels implements vscode.Disposable {
     this.panels.add(embedded);
     panel.onDidDispose(() => this.panels.delete(embedded));
     return embedded;
+  }
+
+  /** Offers unsaved merged text from a merge that was closed or reloaded; resolution choices are not kept. */
+  async offerMergedText(spec: EmbeddedSpec): Promise<void> {
+    if (!spec.output) return;
+    const choice = await vscode.window.showWarningMessage(
+      `CompareCraft: "${titleOf(spec)}" had unsaved merge changes that cannot be restored as choices.`, "Open Merged Text as Untitled"
+    );
+    if (choice === "Open Merged Text as Untitled") {
+      const document = await vscode.workspace.openTextDocument({ content: spec.output.join("\n") });
+      await vscode.window.showTextDocument(document, { preview: false });
+    }
   }
 
   /** Offers to recover unsaved side text from a comparison that was closed. */
@@ -285,8 +303,14 @@ export class EmbeddedPanel {
     switch (command) {
       case "load_text":
         return this.loadText(requireAbsolute(args.path));
-      case "save_text":
-        return this.saveText(args);
+      case "save_text": {
+        const file = requireAbsolute(args.path);
+        const merge = this.spec.kind === "merge";
+        if (merge && pathKey(file) !== pathKey(this.spec.paths[3] ?? "")) throw new Error("A merge can only write its result file.");
+        const info = await this.saveText(args);
+        if (merge) void this.owner.host.afterMergeSaved(file).catch(error => this.owner.host.log(`Merge follow-up failed: ${errorText(error)}`));
+        return info;
+      }
       case "diff_texts":
         return this.backendRequest("text.diff", {
           left: requireLines(args.left, "left text"), right: requireLines(args.right, "right text"), rules: requireObject(args.rules, "rules")
@@ -367,6 +391,10 @@ export class EmbeddedPanel {
         const uri = vscode.Uri.file(file);
         const document = await vscode.workspace.openTextDocument(uri);
         const current = document.getText();
+        // The merge view never shows the result file's buffer, so it must not replace unsaved edits made there.
+        if (this.spec.kind === "merge" && document.isDirty) {
+          throw new Error(`${path.basename(file)} has unsaved changes in another VS Code editor. Save or revert them there, then Refresh this merge before saving.`);
+        }
         if (this.guard.has(file)) this.guard.assertUnchanged(file, current);
         else if (document.isDirty) throw new Error(`${path.basename(file)} has unsaved changes in VS Code. Save or revert them there first.`);
         const text = joinLines(lines, eolOf(document), finalNewline);
@@ -416,7 +444,9 @@ export class EmbeddedPanel {
   private disposed(): void {
     for (const disposable of [...this.disposables, ...this.watchers.values()]) disposable.dispose();
     this.watchers.clear();
-    if (!this.owner.isDisposing && (this.dirty[0] || this.dirty[1])) void this.owner.offerRestore(this.spec);
+    if (!this.owner.isDisposing && (this.dirty[0] || this.dirty[1])) {
+      void (this.spec.kind === "merge" ? this.owner.offerMergedText(this.spec) : this.owner.offerRestore(this.spec));
+    }
   }
 }
 

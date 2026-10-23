@@ -356,6 +356,13 @@ export function activate(context: vscode.ExtensionContext): { embedded: Embedded
       );
       if (choice !== "Open in Desktop App") return;
       await host.launch(paths.length >= 2 ? comparisonArguments({ sides: paths.map(item => ({ path: item })), solo: false }) : []);
+    },
+    async afterMergeSaved(file) {
+      try {
+        await (await workflows()).afterEmbeddedSave(file);
+      } catch (error) {
+        await report(error);
+      }
     }
   });
   context.subscriptions.push(embedded);
@@ -505,6 +512,10 @@ export function activate(context: vscode.ExtensionContext): { embedded: Embedded
   register("gitCompareHeadIndex", async first => (await workflows()).compareHeadIndex(gitTarget(first)));
   register("gitCompareRevision", async first => (await workflows()).compareRevision(gitTarget(first)));
   register("gitResolveConflict", async first => (await workflows()).resolveConflict(gitTarget(first)));
+  register("gitResolveConflictEmbedded", async first => {
+    assertSupported();
+    await (await workflows()).resolveConflict(gitTarget(first), "embedded");
+  });
   register("gitStageResolved", async first => { await (await workflows()).stageResolved(gitTarget(first)); });
   register("configureGitTools", async () => configureGitTools());
   register("removeGitTools", async () => removeGitTools());

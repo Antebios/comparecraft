@@ -15,7 +15,7 @@ test("manifest declares the isolated build/test scripts and local trusted extens
 
 test("all context menu commands exist and executable settings cannot be workspace settings", () => {
   const commands = new Set(manifest.contributes.commands.map((command: { command: string }) => command.command));
-  assert.equal(commands.size, 25);
+  assert.equal(commands.size, 26);
   const menus: Record<string, { command?: string; submenu?: string; when?: string }[]> = manifest.contributes.menus;
   for (const entries of Object.values(menus)) {
     for (const entry of entries) if (entry.command) assert.ok(commands.has(entry.command), entry.command);
@@ -24,9 +24,11 @@ test("all context menu commands exist and executable settings cannot be workspac
     assert.ok(menus[id]?.some(entry => entry.submenu === "comparecraft.comparisons" && entry.when?.includes("resourceScheme == file")));
   }
   assert.ok(menus["comparecraft.comparisons"]?.some(entry => entry.submenu === "comparecraft.git"));
-  for (const entry of menus["scm/resourceState/context"] ?? []) assert.match(entry.when ?? "", /scmProvider == git/);
-  assert.ok(menus["scm/resourceState/context"]?.some(entry =>
-    entry.command === "comparecraft.gitResolveConflict" && entry.when?.includes("scmResourceGroup == merge")));
+  for (const entry of [...menus["scm/resourceState/context"] ?? [], ...menus["comparecraft.scm"] ?? []]) assert.match(entry.when ?? "", /scmProvider == git/);
+  assert.deepEqual(menus["scm/resourceState/context"]?.map(entry => entry.submenu), ["comparecraft.scm"]);
+  for (const id of ["comparecraft.gitResolveConflictEmbedded", "comparecraft.gitResolveConflict", "comparecraft.gitStageResolved"]) {
+    assert.ok(menus["comparecraft.scm"]?.some(entry => entry.command === id && entry.when?.includes("scmResourceGroup == merge")), id);
+  }
   for (const entry of menus["comparecraft.comparisons"] ?? []) {
     if (entry.command?.match(/Selected|selectLeft$|compareWithLeft|FileWith|FolderWith/)) assert.match(entry.when ?? "", /resourceScheme == file/, entry.command);
   }

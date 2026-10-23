@@ -160,10 +160,14 @@ test("embedded mode shows two-sided content comparisons in the panel; merges ask
   assert.equal(await controller.compareInputs([...sides, ...sides], { onClosed: async () => {} }), false);
   assert.equal(host.embeddedNotices, 1);
   assert.equal(host.launches.length, 0);
+  assert.equal(await controller.compareInputs([...sides, ...sides]), true, "an untracked four-input merge opens in the panel");
+  assert.equal(host.embedded.length, 2);
+  assert.equal(host.embeddedNotices, 1);
+  assert.equal(host.launches.length, 0);
   assert.equal(await controller.compareInputs(sides, { mode: "desktop" }), true);
   assert.equal(host.launches.length, 1);
   await host.tracking[0]?.session?.release();
-  assert.equal(host.embedded.length, 1);
+  assert.equal(host.embedded.length, 2);
 });
 
 test("canceling pickers does not launch, and invalid selections fail visibly", async () => {

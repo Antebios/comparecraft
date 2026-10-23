@@ -215,6 +215,47 @@ test("merge conflicts open current, incoming, base snapshots and the working fil
   }
 });
 
+test("embedded conflict resolution opens a merge, validates state, and offers staging only without markers", async () => {
+  const f = await fixture();
+  try {
+    await divergent(f);
+    assert.notEqual(await f.tryRun("merge", "-q", "feature"), 0);
+    const { host, calls, flows } = workflows(f);
+    const target = path.join(f.repo, "file name.txt");
+    const before = await readFile(target, "utf8");
+    await flows.resolveConflict(target, "embedded");
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0]!.inputs.length, 4);
+    assert.deepEqual(calls[0]!.options, { mode: "embedded" });
+    assert.equal(calls[0]!.options!.onClosed, undefined);
+    host.dirty.add(target);
+    await assert.rejects(flows.resolveConflict(target, "embedded"), /Save or revert.*merge writes/);
+    host.dirty.clear();
+    assert.equal(await readFile(target, "utf8"), before, "opening never writes");
+
+    // Saved with markers: no staging offer, only a warning.
+    host.stage = true;
+    await flows.afterEmbeddedSave(target);
+    assert.match(host.warnings.at(-1)!, /conflict markers/);
+    assert.equal((await f.git.unmerged(f.repo, "file name.txt")).length, 3);
+
+    // Saved cleanly: declining the offer leaves the index alone; accepting stages once, after confirmation.
+    await writeFile(target, "one\nmerged\nthree\n");
+    host.stage = false;
+    await flows.afterEmbeddedSave(target);
+    assert.equal((await f.git.unmerged(f.repo, "file name.txt")).length, 3);
+    host.stage = true;
+    host.answers.push(true);
+    await flows.afterEmbeddedSave(target);
+    assert.equal((await f.git.unmerged(f.repo, "file name.txt")).length, 0);
+    assert.equal(await f.tryRun("rev-parse", "-q", "--verify", "MERGE_HEAD"), 0, "merge was not continued or committed");
+    // Once resolved in the index there is nothing further to offer.
+    await flows.afterEmbeddedSave(target);
+  } finally {
+    await rm(f.dir, { recursive: true, force: true });
+  }
+});
+
 test("rebase conflicts describe the replayed commit as incoming", async () => {
   const f = await fixture();
   try {

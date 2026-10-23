@@ -100,6 +100,17 @@ Protocol and crate boundary were decided in T007: [backend-protocol.md](backend-
   Restore Comparison or Open as Untitled; reload restores from webview state,
   including unsaved text. Settings are separate from the desktop app
   (`globalState`); sessions, reports, backups, and Open With are desktop-only.
+- Embedded conflict resolution (T011) reuses the shared `TextMerge` view in the
+  same panel type. Git index stages are read-only content sides; only the
+  result file may be written, through its VS Code document with the same stale
+  guard, and never while that file has unsaved edits in another editor (the
+  merge view does not show that buffer). Staging is always an explicit,
+  confirmed offer after a marker-free save; the extension never commits,
+  continues or aborts the Git operation. Merge choices are not persisted:
+  unsaved merged text is offered as an Untitled document on close or reload.
+  Panels use `retainContextWhenHidden` so switching tabs keeps choices, undo
+  and the loaded baselines. The desktop and embedded commands are both
+  offered ("Resolve Conflict in VS Code" / "in Desktop App").
 - Webviews require restrictive CSP/resource roots and validated message dispatch.
   Never eagerly load Tauri runtime services into the extension webview.
 - Preserve desktop behavior through extraction; no unnecessary module churn.

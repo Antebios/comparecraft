@@ -126,7 +126,8 @@ knows when it closes. Edits in a snapshot side cannot be saved back to VS Code.
 ### Git and conflicts
 
 Git commands are in the **CompareCraft > Git** submenu for files (Explorer and
-editor) and in the Source Control view's context menu for changed files:
+editor) and in the **CompareCraft** submenu of the Source Control view's context
+menu for changed files:
 
 | Command | Behavior |
 |---|---|
@@ -134,7 +135,8 @@ editor) and in the Source Control view's context menu for changed files:
 | Compare Index with Working Tree | Staged version vs working file. |
 | Compare HEAD with Index | Last commit vs staged version. |
 | Compare with Revision... | Pick one of the file's last 50 commits and compare with the working file. |
-| Resolve Conflict in Desktop App | For a conflicted file, opens a three-way merge: **Current**, **Incoming**, and **Base** come read-only from Git's index stages; the working file is the editable **Result**. |
+| Resolve Conflict in VS Code | For a conflicted file, opens a three-way merge in a VS Code tab: **Current**, **Incoming**, and **Base** come read-only from Git's index stages; the working file is the **Result**. Saving writes only the result; when no conflict markers remain you are offered to stage it (after confirmation). Nothing is ever committed. Unsaved merge work is offered as an Untitled document when the tab closes. |
+| Resolve Conflict in Desktop App | The same three-way merge in the desktop app. |
 | Stage Resolved Conflict... | After you save a resolution, runs `git add` for that file only, after confirmation. |
 | Configure as Git Merge/Diff Tool... | Opt-in setup so `git mergetool` / `git difftool` in a terminal use CompareCraft. |
 | Remove Git Tool Configuration... | Restores the Git settings changed by the command above. |
@@ -197,6 +199,7 @@ Code theme. Several tabs can be open at once. What opens where:
 | Two Explorer files, Compare File With..., Select Left / Compare with Left | VS Code tab; both sides editable |
 | Compare with Saved, text/selection/clipboard, Git HEAD/index/revision | VS Code tab; sides without a file (or the saved disk side) are read-only |
 | Folders | Asks, then opens the desktop app |
+| Resolve Conflict in VS Code | VS Code tab; three read-only sides and the result file |
 | Resolve Conflict in Desktop App, Open Active Diff in Desktop App | Always the desktop app |
 
 Editing and saving:
@@ -208,6 +211,11 @@ Editing and saving:
 - If the file changed in a normal editor or on disk after the tab loaded it,
   the save is refused and the tab warns you; reload the side first. Line
   endings and encoding of existing files are preserved.
+- A merge tab never shows the result file's own buffer, so it refuses to save
+  while that file has unsaved edits in another editor. Save or revert them,
+  click **Refresh** in the merge tab, then save.
+- Tabs keep their state while hidden behind other tabs, so switching away
+  does not lose merge choices or undo history.
 - Closing a tab that has unsaved changes cannot be cancelled by an extension,
   so a notification offers **Restore Comparison** (reopens it with your edits)
   or **Open as Untitled** (puts the edited text in new untitled editors).

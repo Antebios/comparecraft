@@ -1,11 +1,12 @@
-import { ask, save as saveDialog } from "../host";
+import { ask, emit, isEmbedded, listen, save as saveDialog } from "../host";
 import { settings } from "../settings";
-import { batch, createEffect, createMemo, createSignal, Index, onMount, Show } from "solid-js";
+import { batch, createEffect, createMemo, createSignal, Index, onCleanup, onMount, Show } from "solid-js";
 import { api, errText, strictRules, type Chunk, type MergeResult, type Rules, type TextFile } from "../api";
 import { Btn, Modal, PathBar, ROW_H, useViewport } from "../components/common";
 import { displayKeys, registerCommands } from "../commands";
 import { showContextMenu } from "../components/ContextMenu";
 import { persistSession, updateTab, type Tab } from "../store";
+import { unwrap } from "solid-js/store";
 import { mergeInfo } from "../components/InfoDialog";
 import { sessionCommands } from "./sessionMenu";
 
@@ -60,10 +61,30 @@ export default function TextMerge(props: { tab: Tab; active: boolean }) {
   const path = (i: number) => tab().paths[i] ?? "";
   const outputPath = () => tab().output ?? path(3);
 
+  // Embedded hosts hand over read-only side text (for example Git index stages) by value. Unwrapped
+  // from the store so the lines can be posted to the host (store proxies cannot be cloned).
+  const content = unwrap(tab().options.content) as (string[] | null)[] | undefined;
+  // The result file as the embedding host sees it; loading it also lets the host guard against
+  // edits made elsewhere before the output is written.
+  const [outFile, setOutFile] = createSignal<TextFile | null>(null);
+
   async function loadAll() {
     const fs: (TextFile | null)[] = [];
     const errs: string[] = [];
+    if (isEmbedded() && outputPath()) {
+      try {
+        setOutFile(await api.loadText(outputPath()));
+      } catch (e) {
+        setOutFile(null);
+        setMessage(`Cannot read the result file: ${errText(e)}`);
+      }
+    }
     for (let i = 0; i < 3; i++) {
+      if (!path(i) && content?.[i]) {
+        fs.push({ path: "", lines: content[i]!, encoding: "UTF-8", bom: false, eol: "LF", finalNewline: true, size: 0, modified: null, binary: false, readOnly: true });
+        errs.push("");
+        continue;
+      }
       if (!path(i)) {
         fs.push(null);
         errs.push("");
@@ -101,6 +122,32 @@ export default function TextMerge(props: { tab: Tab; active: boolean }) {
     await loadAll();
     if (path(0) || path(1)) void persistSession(tab());
   });
+
+  if (isEmbedded()) {
+    let unlisten: (() => void) | undefined;
+    let disposed = false;
+    void listen<string>("file-changed", (e) => {
+      if (e.payload === outputPath()) setMessage("The result file changed outside this merge. Refresh (F5) before saving.");
+    }).then((u) => (disposed ? u() : (unlisten = u)));
+    onCleanup(() => {
+      disposed = true;
+      unlisten?.();
+    });
+    // Mirrors the merge for reload restore. Unsaved merged text travels with it so the host can
+    // offer it back instead of losing resolution work when the panel closes.
+    createEffect(() => {
+      const d = dirty();
+      emit("text-state", {
+        kind: "merge",
+        paths: [0, 1, 2].map(path).concat(outputPath()),
+        titles: [...tab().titles],
+        readOnly: [...tab().readOnly],
+        options: { ...tab().options, content: [0, 1, 2].map((i) => (path(i) ? null : files()[i]?.lines ?? null)) },
+        dirty: [d, false],
+        output: d ? outRows().map((r) => r.text) : null,
+      });
+    });
+  }
 
   const topRows = createMemo(() => {
     const m = merge();
@@ -196,7 +243,7 @@ export default function TextMerge(props: { tab: Tab; active: boolean }) {
     }
     if (unresolved() && !(await ask(`${unresolved()} conflict(s) are unresolved and will be written with conflict markers. Save anyway?`, { kind: "warning" })))
       return;
-    const base = files()[2] ?? files()[0];
+    const base = outFile() ?? files()[2] ?? files()[0];
     try {
       await api.saveText({
         path: p,

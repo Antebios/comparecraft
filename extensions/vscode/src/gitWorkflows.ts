@@ -98,13 +98,16 @@ export class GitWorkflows {
   }
 
   /**
-   * Opens the desktop merge with read-only current/incoming/base snapshots from the actual index
-   * stages and the working-tree file as output. Never stages, continues, or aborts Git operations.
+   * Opens a merge with read-only current/incoming/base snapshots from the actual index stages and
+   * the working-tree file as the result. Never stages, continues, or aborts Git operations.
+   * Desktop mode stages after the window closes; the embedded panel offers it after each save.
    */
-  async resolveConflict(filePath: string): Promise<void> {
+  async resolveConflict(filePath: string, mode: "desktop" | "embedded" = "desktop"): Promise<void> {
     const file = await this.resolve(filePath);
     if (await this.host.isDirty(file.absolute)) {
-      throw new ConflictError(`Save or revert unsaved changes in ${file.relative} first. The desktop app writes the merge result to that file.`);
+      throw new ConflictError(mode === "embedded"
+        ? `Save or revert unsaved changes in ${file.relative} first. The merge writes its result to that file.`
+        : `Save or revert unsaved changes in ${file.relative} first. The desktop app writes the merge result to that file.`);
     }
     const entries = await this.git.unmerged(file.root, file.relative);
     const plan = conflictPlan(file.relative, entries);
@@ -123,14 +126,34 @@ export class GitWorkflows {
     const name = path.posix.basename(file.relative);
     const signature = stageSignature(entries);
     const mtimeMs = (await stat(file.absolute)).mtimeMs;
-    const launched = await this.compare([
+    const inputs: SideInput[] = [
       { kind: "content", name, title: operation.current, content: current },
       { kind: "content", name, title: operation.incoming, content: incoming },
       base ? { kind: "content", name, title: "Base: common ancestor", content: base }
         : empty(name, "Base: none (added on both sides)"),
       { kind: "path", path: file.absolute, title: `Result: ${file.relative}` }
-    ], { mode: "desktop", onClosed: () => this.afterMerge(file) });
+    ];
+    if (mode === "embedded") {
+      if (await this.compare(inputs, { mode: "embedded" })) this.pending.set(this.key(file), { signature, mtimeMs });
+      return;
+    }
+    const launched = await this.compare(inputs, { mode: "desktop", onClosed: () => this.afterMerge(file) });
     if (launched) this.pending.set(this.key(file), { signature, mtimeMs });
+  }
+
+  /** After the embedded merge saved its result: offer review and an explicit stage, unless markers remain. */
+  async afterEmbeddedSave(filePath: string): Promise<void> {
+    const file = await this.resolve(filePath);
+    const entries = await this.git.unmerged(file.root, file.relative);
+    if (entries.length === 0) return;
+    const content = await readFile(file.absolute);
+    if (!isBinary(content) && hasConflictMarkers(content.toString("utf8"))) {
+      this.host.warn(`${file.relative} was saved with conflict markers. Resolve the remaining conflicts before staging.`);
+      return;
+    }
+    if (await this.host.offerStage(`Saved ${file.relative}. Review the result, then stage it to mark the conflict resolved.`)) {
+      await this.stageResolved(file.absolute);
+    }
   }
 
   private async afterMerge(file: RepositoryFile): Promise<void> {

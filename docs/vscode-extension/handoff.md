@@ -8,7 +8,9 @@
 comparison) is complete**: it passed its automated gate on Windows and the owner
 confirmed it in the Extension Development Host on 2026-10-22 (after the undo and
 Ctrl+Z fixes below); it is committed by the owner after this update.
-Phases 5-6 have not been started.
+**Phase 5 is in progress: T011 (embedded three-way conflict merge) is done**
+and passed the owner's F5 test on 2026-10-23; T012 (remaining views) has not
+been started. Phase 6 has not been started.
 No Marketplace publication has been performed. Git configuration is changed
 only by the user-invoked, confirmed setup command; tests use disposable
 repositories and a temporary `GIT_CONFIG_GLOBAL`.
@@ -57,7 +59,7 @@ Planning coverage is not evidence of implementation completion.
 | T008 | 3 | done | T002, T007 | Client/manager/discovery + Check Embedded Backend; 8 client tests incl. real helper; signing/ZIP/PKGBUILD updated; verified against the reinstalled helper in real VS Code |
 | T009 | 4 | done | T007 | `src/host/` adapters (Tauri + VS Code); 20 shared files import only the host; `npm run build:webview` bundle has 0 Tauri references; desktop typecheck/build pass |
 | T010 | 4 | done | T008, T009 | `embedded.ts` WebviewPanel + serializer, CSP, validated RPC, guarded document writes, external-change events, restore on close/reload; 45 unit tests; real VS Code host test with installed helper passes; owner F5 test passed 2026-10-22 after undo/Ctrl+Z fixes |
-| T011 | 5 | pending | T005, T010 | |
+| T011 | 5 | done | T005, T010 | Embedded three-way merge (`gitResolveConflictEmbedded`); 47 unit tests; real VS Code host test incl. merge result-only/CRLF/unsaved-edit refusal; owner F5 test passed 2026-10-23 after three fixes |
 | T012 | 5 | pending | T010 | |
 | T013 | 6 | pending | T006, T011, T012 | |
 | T014 | 6 | pending | T013 | |
@@ -376,9 +378,43 @@ Phase 4 checks (Windows x64, VS Code 1.143.0, installed helper 0.1.0, 2026-10-22
   recorded by the owner): close a panel with unsaved changes (Restore/Untitled),
   reload the window with a panel open, edit the file in a normal editor and
   confirm the warning, switch light/dark/high-contrast themes, keyboard focus.
-- Next sequential task: T011 (Phase 5 embedded conflicts) and T012 (remaining
-  views), requiring user authorization.
 - Batch evidence: [phase-4-report.yaml](phase-4-report.yaml).
+
+## Phase 5 handoff (in progress)
+
+- T011 done (owner F5 sign-off 2026-10-23). New command **CompareCraft:
+  Resolve Conflict in VS Code** (`comparecraft.gitResolveConflictEmbedded`),
+  in the Source Control **CompareCraft** submenu for merge-group files and in
+  CompareCraft > Git. It opens `src/views/TextMerge.tsx` in a panel: Current,
+  Incoming and Base come from Git's index stages as read-only content sides;
+  the working file is the result. The panel can write only the result file,
+  through its VS Code document (guarded like text compare). After a save with
+  no conflict markers it offers to stage (with confirmation via
+  `stageResolved`); a save with markers only warns. Nothing commits, continues
+  or aborts the Git operation. Unsaved merged text is offered as an Untitled
+  document when the panel closes or is restored after a reload (resolution
+  choices are not persisted). Resolve Conflict in Desktop App is unchanged.
+- Defects found in the owner's F5 testing, all fixed and covered:
+  (1) blank merge panel: store-proxy side text could not be structured-cloned
+  to the host; `TextMerge` unwraps it and `src/webview/host.ts` retries with a
+  plain copy (or shows a readable error). (2) Source Control entries were flat
+  and "Resolve Conflict" was ambiguous; they are now under a CompareCraft
+  submenu and the command says "in VS Code". (3) Hidden panels were unloaded
+  and reloaded when shown again, losing merge choices and undo, and re-reading
+  the result file (including unsaved edits in another tab) as a new baseline;
+  panels now use `retainContextWhenHidden`, and a merge refuses to save while
+  its result file has unsaved edits in another editor (even after Refresh).
+- Owner manual journeys passed 2026-10-23 (repo with two conflicted files,
+  including a path with spaces and parentheses): open embedded merge, Take
+  Left/Right, save, stage prompt, staged without commit; save with an
+  unresolved conflict warns, writes markers and does not offer staging;
+  unsaved edit in another editor blocks the save and is preserved; recovery
+  after reverting and Refresh succeeds.
+- Next: T012 (remaining views). Requires a scope decision: new read-only
+  helper protocol methods for folder/hex/table/picture (with path and size
+  limits) versus recording them as explicit desktop-only release gaps; folder
+  sync/merge writes, text edit and patch need destructive-operation design.
+- Batch evidence: [phase-5-report.yaml](phase-5-report.yaml).
 
 ## Per-increment handoff entry
 

@@ -162,8 +162,13 @@ desktop text behavior. A rendered webview alone is not evidence of safe editing.
 
 **Plan item 5.1. Requirements:** REQ-004, REQ-005, REQ-006, REQ-008, REQ-009.
 
-- **T011 [Plan:5.1]:** Adapt `src/views/TextMerge.tsx` and Git routing for embedded
+- **T011 [Plan:5.1]:** (done; owner F5 sign-off 2026-10-23) Adapt `src/views/TextMerge.tsx` and Git routing for embedded
   three-way resolution, operation-aware labels, and explicit save/review/stage.
+  Adds `comparecraft.gitResolveConflictEmbedded`; the merge panel reuses the
+  text-compare view type, writes only the result file (guarded against stale
+  edits), offers staging only after a marker-free save, and offers unsaved
+  merged text as an Untitled document on close/reload. Automated: 47 unit tests
+  and the VS Code integration test pass.
 - **T012 [Plan:5.1]:** Extend protocol/host adapters across `src/views/` for folder
   compare/sync/merge, hex, table, picture, text edit, and patch. Maintain a per-view
   capability matrix, read-only constraints, and destructive confirmations.

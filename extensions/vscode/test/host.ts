@@ -19,7 +19,7 @@ export async function run(): Promise<void> {
     "compareParentFolderWith", "openDesktop", "locateDesktop",
     "compareWithSaved", "compareWithClipboard", "selectLeftText", "compareTextWithLeft", "compareActiveDiff",
     "gitCompareHead", "gitCompareIndex", "gitCompareHeadIndex", "gitCompareRevision",
-    "gitResolveConflict", "gitStageResolved", "configureGitTools", "removeGitTools", "checkBackend"
+    "gitResolveConflict", "gitResolveConflictEmbedded", "gitStageResolved", "configureGitTools", "removeGitTools", "checkBackend"
   ]) assert.ok(commands.includes(`comparecraft.${id}`), `Registered command: ${id}`);
   assert.equal(vscode.workspace.isTrusted, true);
   const config = vscode.workspace.getConfiguration("comparecraft");
@@ -65,7 +65,7 @@ export async function run(): Promise<void> {
     await verifyLaunch("comparecraft.compareWithLeft", [r], right);
     await verifyLaunch("comparecraft.compareSelected", [lf, [lf, rf]], rightFolder);
     await vscode.commands.executeCommand("comparecraft.clearLeft");
-    console.log("PASS: actual VS Code activation, 25 registered commands, Explorer multi-selection, file/folder launches, independent left selections, default desktop dispatch and clear.");
+    console.log("PASS: actual VS Code activation, 26 registered commands, Explorer multi-selection, file/folder launches, independent left selections, default desktop dispatch and clear.");
 
     const helper = process.env.COMPARECRAFT_TEST_BACKEND;
     if (helper) {
@@ -166,6 +166,38 @@ async function embeddedPanels(api: { embedded: EmbeddedPanels }, tempDirectory: 
   await assert.rejects(invoke("compare_folders", {}), /not available in the embedded comparison/);
   await assert.rejects(panel.handle("openUrl", { url: "file:///etc/passwd" }), /Refusing/);
   console.log("PASS: embedded saves go through VS Code documents, keep CRLF, use unsaved buffers, and reject stale writes after editor or disk changes.");
+
+  // A merge panel shows three read-only sides, writes only its result file, and never replaces unsaved
+  // edits made to that file in another editor (the merge view does not show that buffer).
+  const result = path.join(directory, "merge result.txt");
+  await writeFile(result, "<<<<<<< ours\r\nx\r\n=======\r\ny\r\n>>>>>>> theirs\r\n");
+  const merge = panels.open({ kind: "merge", paths: ["", "", "", result], titles: ["Current", "Incoming", "Base", "Result"], readOnly: [true, true, true, false], options: { content: [["x"], ["y"], ["base"]] } });
+  assert.equal(merge.panel.options.retainContextWhenHidden, true, "hidden panels keep merge choices and baselines");
+  await until("the merge webview to load its result and merge through the helper", () => merge.received.includes("merge_texts") && merge.received.includes("load_text"));
+  assert.equal(merge.panel.title, "Merge: merge result.txt");
+  const mergeInvoke = (cmd: string, args: Record<string, unknown>) => merge.handle("invoke", { cmd, args });
+  await assert.rejects(mergeInvoke("save_text", { path: c, lines: ["no"], finalNewline: true }), /only write its result file/);
+  const resultDocument = await vscode.workspace.openTextDocument(vscode.Uri.file(result));
+  const elsewhere = new vscode.WorkspaceEdit();
+  elsewhere.insert(resultDocument.uri, new vscode.Position(0, 0), "typed ");
+  assert.ok(await vscode.workspace.applyEdit(elsewhere));
+  await assert.rejects(mergeInvoke("save_text", { path: result, lines: ["x"], finalNewline: true }), /unsaved changes in another VS Code editor/);
+  // Even if the view re-reads the dirty buffer (Refresh), the merge must not replace it.
+  await mergeInvoke("load_text", { path: result });
+  await assert.rejects(mergeInvoke("save_text", { path: result, lines: ["x"], finalNewline: true }), /unsaved changes in another VS Code editor/);
+  assert.ok(resultDocument.getText().startsWith("typed "));
+  await vscode.commands.executeCommand("workbench.action.files.revert", resultDocument.uri).then(undefined, () => undefined);
+  if (resultDocument.isDirty) {
+    const undo = new vscode.WorkspaceEdit();
+    undo.delete(resultDocument.uri, new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 6)));
+    assert.ok(await vscode.workspace.applyEdit(undo));
+    assert.ok(await resultDocument.save());
+  }
+  await mergeInvoke("load_text", { path: result });
+  await mergeInvoke("save_text", { path: result, lines: ["x", "y"], finalNewline: true });
+  assert.equal(await readText(result), "x\r\ny\r\n");
+  merge.panel.dispose();
+  console.log("PASS: embedded merge writes only its result, keeps CRLF, and refuses to replace unsaved edits from another editor.");
 
   // Backend failures are reported to the view, not swallowed.
   const config = vscode.workspace.getConfiguration("comparecraft");

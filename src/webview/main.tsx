@@ -8,6 +8,7 @@ import { setHost } from "../host";
 import { loadSettings, settings } from "../settings";
 import { closeTab, openTab, state, type Tab } from "../store";
 import TextCompare from "../views/TextCompare";
+import TextMerge from "../views/TextMerge";
 import { ReplaceHost } from "../views/folderOps";
 import { ModalHost } from "../views/sessionMenu";
 import { request, vscode, vscodeHost } from "./host";
@@ -17,6 +18,7 @@ import "./vscode.css";
 setHost(vscodeHost);
 
 export interface EmbeddedSpec {
+  kind?: "text" | "merge";
   paths: string[];
   titles?: (string | null)[];
   readOnly?: boolean[];
@@ -55,7 +57,7 @@ function Embedded(props: { id: string }) {
         <Show when={tab()}>
           {(t) => (
             <div class="tab-view" style={{ display: "flex" }}>
-              <TextCompare tab={t()} active />
+              {t().kind === "merge" ? <TextMerge tab={t()} active /> : <TextCompare tab={t()} active />}
             </div>
           )}
         </Show>
@@ -77,7 +79,15 @@ async function start() {
     await loadSettings();
     const options = { ...(spec.options ?? {}) };
     if (spec.restore) options.restore = spec.restore;
-    const id = openTab({ kind: "text", paths: spec.paths, titles: spec.titles ?? [], readOnly: spec.readOnly ?? [], options });
+    const merge = spec.kind === "merge";
+    const id = openTab({
+      kind: merge ? "merge" : "text",
+      paths: spec.paths,
+      titles: spec.titles ?? [],
+      readOnly: spec.readOnly ?? [],
+      options,
+      ...(merge ? { output: spec.paths[3] } : {}),
+    });
     scope = id;
     render(() => <Embedded id={id} />, root);
   } catch (e) {

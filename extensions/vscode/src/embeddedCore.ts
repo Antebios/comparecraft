@@ -3,12 +3,16 @@ import type { SideInput } from "./contracts";
 
 /** Initial state of an embedded text comparison; also the persisted webview state. */
 export interface EmbeddedSpec {
+  /** Defaults to a two-sided text comparison. A merge has paths [current, incoming, base, result]. */
+  readonly kind?: "text" | "merge";
   readonly paths: string[];
   readonly titles: (string | null)[];
   readonly readOnly: boolean[];
   readonly options: Record<string, unknown>;
   /** Unsaved side text to restore over the loaded file, per side. */
   readonly restore?: [string[] | null, string[] | null];
+  /** Unsaved merged text of a merge, kept only to offer it back when the panel closes. */
+  readonly output?: string[] | null;
 }
 
 /** Desktop `TextFile` shape returned to the shared UI for `load_text`. */
@@ -31,13 +35,20 @@ const isLines = (value: unknown): value is string[] => Array.isArray(value) && v
 /** Validates a spec from a webview or persisted state; throws on anything unexpected. */
 export function parseSpec(value: unknown): EmbeddedSpec {
   if (!isObject(value)) throw new Error("Invalid embedded comparison state.");
-  const { paths, titles = [], readOnly = [], options = {}, restore } = value;
-  if (!Array.isArray(paths) || paths.length > 2 || !paths.every(item => typeof item === "string" && (item === "" || path.isAbsolute(item)))) {
-    throw new Error("Embedded comparisons need up to two absolute file paths.");
+  const { paths, titles = [], readOnly = [], options = {}, restore, kind = "text", output } = value;
+  if (kind !== "text" && kind !== "merge") throw new Error("Invalid embedded view kind.");
+  const merge = kind === "merge";
+  if (!Array.isArray(paths) || paths.length > (merge ? 4 : 2) || !paths.every(item => typeof item === "string" && (item === "" || path.isAbsolute(item)))) {
+    throw new Error(merge ? "Embedded merges need up to four absolute file paths." : "Embedded comparisons need up to two absolute file paths.");
   }
+  if (merge && (typeof paths[3] !== "string" || paths[3] === "")) throw new Error("An embedded merge needs a result file.");
   if (!Array.isArray(titles) || !titles.every(item => item === null || typeof item === "string")) throw new Error("Invalid comparison titles.");
   if (!Array.isArray(readOnly) || !readOnly.every(item => item === null || typeof item === "boolean")) throw new Error("Invalid read-only flags.");
   if (!isObject(options)) throw new Error("Invalid comparison options.");
+  if (output !== undefined && output !== null && !isLines(output)) throw new Error("Invalid merged text.");
+  if (merge && Array.isArray(options.content) && (options.content.length > 3 || !options.content.every(side => side === null || isLines(side)))) {
+    throw new Error("Invalid merge side text.");
+  }
   let restored: EmbeddedSpec["restore"];
   if (restore !== undefined && restore !== null) {
     if (!Array.isArray(restore) || restore.length !== 2 || !restore.every(side => side === null || isLines(side))) {
@@ -45,7 +56,12 @@ export function parseSpec(value: unknown): EmbeddedSpec {
     }
     restored = [restore[0] as string[] | null, restore[1] as string[] | null];
   }
-  return { paths: paths as string[], titles: titles as (string | null)[], readOnly: readOnly.map(item => item === true), options, ...(restored ? { restore: restored } : {}) };
+  return {
+    ...(merge ? { kind: "merge" as const } : {}),
+    paths: paths as string[], titles: titles as (string | null)[], readOnly: readOnly.map(item => item === true), options,
+    ...(restored ? { restore: restored } : {}),
+    ...(isLines(output) ? { output } : {})
+  };
 }
 
 /** Splits like the desktop loader: a trailing line break does not add an empty last line. */
@@ -161,6 +177,7 @@ export function requireObject(value: unknown, name: string): Record<string, unkn
 
 /** Panel title: the side names, or one name when both sides show the same file. */
 export function titleOf(spec: EmbeddedSpec): string {
+  if (spec.kind === "merge") return `Merge: ${path.basename(spec.paths[3] ?? "") || "result"}`;
   const names = [0, 1].map(side => spec.titles[side] || (spec.paths[side] ? path.basename(spec.paths[side]!) : "Untitled"));
   return names[0] === names[1] ? names[0]! : `${names[0]} ↔ ${names[1]}`;
 }
@@ -170,9 +187,11 @@ type Input = SideInput;
 /**
  * Converts controller inputs to an embedded spec. Editable files stay live documents; read-only
  * files (for example "saved on disk") and in-memory text become read-only content sides.
+ * Four inputs are a merge: three read-only sides (current, incoming, base) and the result file.
  */
 export async function specFromInputs(inputs: readonly Input[], loadDisk: (file: string) => Promise<string[]>): Promise<EmbeddedSpec> {
-  if (inputs.length !== 2) throw new Error("Embedded comparisons have exactly two sides.");
+  if (inputs.length === 4) return mergeSpec(inputs, loadDisk);
+  if (inputs.length !== 2) throw new Error("Embedded comparisons have two sides, or four inputs for a merge.");
   const paths: string[] = [], titles: (string | null)[] = [], readOnly: boolean[] = [], content: (string[] | null)[] = [];
   for (const input of inputs) {
     if (input.kind === "path" && !input.readOnly) {
@@ -190,4 +209,21 @@ export async function specFromInputs(inputs: readonly Input[], loadDisk: (file: 
     }
   }
   return { paths, titles, readOnly, options: content.some(Boolean) ? { content } : {} };
+}
+
+async function mergeSpec(inputs: readonly Input[], loadDisk: (file: string) => Promise<string[]>): Promise<EmbeddedSpec> {
+  const result = inputs[3]!;
+  if (result.kind !== "path" || result.readOnly || !path.isAbsolute(result.path)) throw new Error("An embedded merge needs a writable result file.");
+  const paths: string[] = [], titles: (string | null)[] = [], readOnly: boolean[] = [], content: string[][] = [];
+  for (const input of inputs.slice(0, 3)) {
+    paths.push("");
+    titles.push(input.title ?? (input.kind === "path" ? path.basename(input.path) : input.name));
+    readOnly.push(true);
+    content.push(input.kind === "path" ? await loadDisk(input.path)
+      : splitLines(typeof input.content === "string" ? input.content : new TextDecoder().decode(input.content)));
+  }
+  paths.push(result.path);
+  titles.push(result.title ?? null);
+  readOnly.push(false);
+  return { kind: "merge", paths, titles, readOnly, options: { content } };
 }

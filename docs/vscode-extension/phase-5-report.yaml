@@ -1,0 +1,56 @@
+batch_id: phase-5
+status: in_progress
+completed_tasks: [T011]
+pending_tasks: [T012]
+blocked_tasks: []
+files_changed:
+  T011:
+    - {file: src/views/TextMerge.tsx, change_type: modified, description: "Embedded: read-only content sides (unwrapped from the store), result file loaded to prime the host guard, file-changed message, text-state emit with unsaved merged lines"}
+    - {file: src/webview/main.tsx, change_type: modified, description: "Panel spec kind merge opens TextMerge with the result as output"}
+    - {file: src/webview/host.ts, change_type: modified, description: "Requests that cannot be structured-cloned are retried as plain JSON or rejected with a readable error"}
+    - {file: extensions/vscode/src/embeddedCore.ts, change_type: modified, description: "Merge specs (four paths, result required), merge titles, four-input conversion to three content sides plus writable result"}
+    - {file: extensions/vscode/src/embedded.ts, change_type: modified, description: "Merge saves limited to the result file and refused while it has unsaved edits elsewhere; afterMergeSaved hook; unsaved merged text offered as Untitled; retainContextWhenHidden"}
+    - {file: extensions/vscode/src/controller.ts, change_type: modified, description: "Embedded mode opens four-input merges in a panel"}
+    - {file: extensions/vscode/src/gitWorkflows.ts, change_type: modified, description: "resolveConflict desktop/embedded mode; afterEmbeddedSave warns on markers or offers confirmed staging"}
+    - {file: extensions/vscode/src/extension.ts, change_type: modified, description: "gitResolveConflictEmbedded command; afterMergeSaved host hook"}
+    - {file: extensions/vscode/package.json, change_type: modified, description: "Resolve Conflict in VS Code command; Source Control entries under a CompareCraft submenu"}
+    - {file: "extensions/vscode/test/{embedded,core,git,manifest}.test.ts", change_type: modified, description: "Merge spec/conversion, routing, embedded resolve/save/stage, menus"}
+    - {file: extensions/vscode/test/host.ts, change_type: modified, description: "26 commands; real merge panel write limits, CRLF, unsaved-edit refusal"}
+    - {file: extensions/vscode/README.md, change_type: modified, description: "Resolve Conflict in VS Code, SCM submenu, merge save rules, hidden tabs keep state"}
+upstream_artifacts_consumed:
+  all_tasks:
+    - {artifact: docs/vscode-extension/plan.md, used_for: "Phase 5 scope and gate"}
+    - {artifact: docs/vscode-extension/decisions.md, used_for: "Explicit staging, guarded writes, lossless close"}
+evidence_mapping:
+  T011: {output: extensions/vscode/src/embedded.ts, evidence: "47 unit tests; real VS Code host test exit 0 with all PASS lines; browser webview check with installed helper; owner F5 journeys passed 2026-10-23"}
+traceability:
+  - {requirement: REQ-004, plan_item: "5.1", tasks: [T011], status: "Three-way conflict resolution inside VS Code with operation-aware labels"}
+  - {requirement: REQ-005, plan_item: "5.1", tasks: [T011], status: "Explicit confirmed staging; never commits, continues or aborts"}
+  - {requirement: REQ-006, plan_item: "5.1", tasks: [T011], status: "Result written through VS Code documents; stale and unsaved-elsewhere writes refused; unsaved merge offered as Untitled"}
+  - {requirement: REQ-008, plan_item: "5.1", tasks: [T011], status: "Shared merge view in a VS Code panel; state kept while hidden"}
+  - {requirement: REQ-009, plan_item: "5.1", tasks: [T011], status: "Merge panel can write only its result path"}
+protocol_violation: false
+errors: []
+warnings:
+  - "T012 not started; requires a scope decision (helper protocol methods vs. explicit desktop-only gaps). The Phase 5 gate is not yet met."
+  - "Merge resolution choices are not persisted across window reload; unsaved merged text is offered as Untitled instead."
+  - "retainContextWhenHidden keeps hidden panels in memory; acceptable for a small number of comparison tabs."
+  - "Windows only; native Linux/macOS not run. No Rust changes, so cargo test was not rerun."
+test_results:
+  unit:
+    command: "npm test (extensions/vscode)"
+    passed: 47
+    failed: 0
+    skipped: 0
+  host:
+    command: "npm run test:integration with COMPARECRAFT_BACKEND=%LOCALAPPDATA%\\CompareCraft\\comparecraft-backend.exe"
+    result: PASS
+  desktop_types:
+    command: "npm run typecheck (repository root)"
+    result: PASS
+  webview_build:
+    command: "npm run build:webview (repository root)"
+    result: PASS
+  manual:
+    owner: "Extension Development Host, Windows, 2026-10-23"
+    result: PASS

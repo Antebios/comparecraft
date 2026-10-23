@@ -66,6 +66,36 @@ test("controller inputs become live files or read-only content sides", async () 
     paths: ["", ""], titles: ["a.txt (saved on disk)", "a.txt (buffer)"], readOnly: [true, true], options: { content: [["disk"], ["x", "y"]] }
   });
   assert.deepEqual(loaded, [a]);
-  await assert.rejects(specFromInputs([{ kind: "path", path: a }], disk), /exactly two/);
+  await assert.rejects(specFromInputs([{ kind: "path", path: a }], disk), /two sides/);
   await assert.rejects(specFromInputs([{ kind: "path", path: "rel.txt" }, { kind: "path", path: b }], disk), /absolute/);
+});
+
+test("merge specs carry three read-only sides and a writable result", async () => {
+  const disk = async () => ["disk"];
+  const out = path.resolve("result.txt");
+  const spec = await specFromInputs([
+    { kind: "content", name: "r.txt", title: "Current", content: "c\n" },
+    { kind: "content", name: "r.txt", title: "Incoming", content: "i\n" },
+    { kind: "content", name: "r.txt",     title: "Base", content: "b\n" },
+    { kind: "path", path: out, title: "Result" }
+  ], disk);
+  assert.deepEqual(spec, {
+    kind: "merge", paths: ["", "", "", out], titles: ["Current", "Incoming", "Base", "Result"],
+    readOnly: [true, true, true, false], options: { content: [["c"], ["i"], ["b"]] }
+  });
+  assert.deepEqual(parseSpec(spec), spec);
+  assert.equal(titleOf(spec), "Merge: result.txt");
+  const sides = spec.options.content as string[][];
+  await assert.rejects(specFromInputs([
+    { kind: "content", name: "r", title: "x", content: "" }, { kind: "content", name: "r", title: "x", content: "" },
+    { kind: "content", name: "r", title: "x", content: "" }, { kind: "path", path: out, readOnly: true }
+  ], disk), /writable result/);
+  assert.ok(sides.length === 3);
+  for (const bad of [
+    { kind: "merge", paths: ["", "", "", ""] }, { kind: "merge", paths: ["", "", ""] }, { kind: "merge", paths: [a, b, a, b, a] },
+    { kind: "other", paths: [a] }, { kind: "merge", paths: ["", "", "", out], options: { content: [[1]] } },
+    { kind: "merge", paths: ["", "", "", out], output: [1] }
+  ]) assert.throws(() => parseSpec(bad), Error, JSON.stringify(bad));
+  assert.deepEqual(parseSpec({ ...spec, output: ["merged"] }).output, ["merged"]);
+  assert.equal(parseSpec({ paths: [a, b], output: ["x"] }).kind, undefined);
 });
