@@ -5,13 +5,14 @@ import { ComparisonController, type ComparisonHost } from "./controller";
 import { discoverBackend, discoverDesktop, InstallationError } from "./discovery";
 import { BackendManager } from "./backend";
 import { EmbeddedPanels, specFromInputs } from "./embedded";
-import { comparisonArguments, launchDesktop } from "./process";
+import { pairViewKind, parseSpec, VIEW_METHODS, type EmbeddedSpec } from "./embeddedCore";
+import { desktopViewArguments, launchDesktop } from "./process";
 import { assertSavedResources } from "./resources";
 import { SnapshotStore } from "./snapshots";
 import { Git } from "./git";
 import { GitWorkflows, type GitHost } from "./gitWorkflows";
 import { applySettings, inspectSettings, proposedSettings, removeSettings, type ConfigScope, type ToolKinds, type ToolRecord } from "./gitTools";
-import type { ContentInput, LaunchMode, SideInput } from "./contracts";
+import type { ContentInput, LaunchMode, PathInput, SideInput } from "./contracts";
 
 const DOWNLOAD = vscode.Uri.parse("https://github.com/Antebios/comparecraft/releases");
 const TOOL_RECORDS = "comparecraft.gitToolRecords";
@@ -50,6 +51,35 @@ export function activate(context: vscode.ExtensionContext): { embedded: Embedded
       if (samePath(candidate, target)) return document;
     }
     return undefined;
+  }
+
+  /**
+   * Two files whose type is binary, table, or picture open in the matching read-only view.
+   * Text files, in-memory content, files with unsaved VS Code edits, and helpers without the
+   * view's methods keep the editable text comparison.
+   */
+  async function fileView(inputs: readonly SideInput[]): Promise<EmbeddedSpec | undefined> {
+    if (inputs.length !== 2 || !inputs.every((input): input is PathInput => input.kind === "path")) return undefined;
+    try {
+      const client = await backend.get();
+      const infos = await Promise.all(inputs.map(input => client.request<{ exists: boolean; isDir: boolean; kind: string }>("path.info", { path: input.path })));
+      const kind = pairViewKind(infos);
+      if (!kind) return undefined;
+      for (const input of inputs) {
+        if (await dirtyDocument(input.path)) {
+          vscode.window.setStatusBarMessage(`CompareCraft: ${path.basename(input.path)} has unsaved changes, so it is compared as text.`, 8000);
+          return undefined;
+        }
+      }
+      if (!client.supports(...VIEW_METHODS[kind])) {
+        output.appendLine(`The installed CompareCraft backend has no ${kind} view methods; comparing as text. Update CompareCraft for the embedded ${kind} view.`);
+        return undefined;
+      }
+      return parseSpec({ kind, paths: inputs.map(input => input.path), titles: inputs.map(input => input.title ?? null) });
+    } catch (error) {
+      output.appendLine(`Could not detect the file type; comparing as text: ${error instanceof Error ? error.message : String(error)}`);
+      return undefined;
+    }
   }
 
   let gitInstance: Git | undefined;
@@ -123,11 +153,16 @@ export function activate(context: vscode.ExtensionContext): { embedded: Embedded
     },
     async confirmDesktop() {
       return await vscode.window.showInformationMessage(
-        "Embedded CompareCraft does not support this comparison yet (folder and merge views use the desktop app). Open it in the installed desktop app instead?",
+        "Embedded CompareCraft does not support this comparison yet (folder comparisons, and comparisons a Git tool waits on, use the desktop app). Open it in the installed desktop app instead?",
         { modal: true }, "Open in Desktop App"
       ) === "Open in Desktop App";
     },
     async openEmbedded(inputs) {
+      const view = await fileView(inputs);
+      if (view) {
+        embedded.open(view);
+        return;
+      }
       const spec = await specFromInputs(inputs, async file =>
         (await (await backend.get()).request<{ lines: string[] }>("text.load", { path: file })).lines);
       embedded.open(spec);
@@ -349,13 +384,13 @@ export function activate(context: vscode.ExtensionContext): { embedded: Embedded
   const embedded = new EmbeddedPanels(context, backend, {
     assertSupported,
     log: line => output.appendLine(line),
-    async openInDesktop(kind, paths) {
+    async openInDesktop(kind, paths, reason) {
       const choice = await vscode.window.showInformationMessage(
-        `The ${kind} view is not available in embedded CompareCraft. Open it in the installed desktop app?`,
-        { modal: true }, "Open in Desktop App"
+        reason ?? `The ${kind} view is not available in embedded CompareCraft. Open it in the installed desktop app?`,
+        { modal: true, ...(reason ? { detail: "Open it in the installed desktop app instead?" } : {}) }, "Open in Desktop App"
       );
       if (choice !== "Open in Desktop App") return;
-      await host.launch(paths.length >= 2 ? comparisonArguments({ sides: paths.map(item => ({ path: item })), solo: false }) : []);
+      await host.launch(paths.length === 0 ? [] : desktopViewArguments(kind, paths));
     },
     async afterMergeSaved(file) {
       try {

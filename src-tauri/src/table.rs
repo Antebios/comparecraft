@@ -31,8 +31,8 @@ impl Default for TableOptions {
     fn default() -> Self {
         TableOptions {
             delimiter: String::new(),
-            header: true,
-            keys: vec![],
+            header: false,
+            keys: vec![0],
             ignore_case: false,
             trim: true,
             unimportant: vec![],
@@ -297,7 +297,7 @@ mod tests {
         let b = d.path().join("b.csv");
         std::fs::write(&a, "id,name,qty\n1,apple,3\n2,pear,5\n3,fig,1\n").unwrap();
         std::fs::write(&b, "id,name,qty\n2,pear,6\n1,apple,3\n4,kiwi,2\n").unwrap();
-        let o = TableOptions { keys: vec![0], ..Default::default() };
+        let o = TableOptions { header: true, ..Default::default() };
         let r = compare_tables(a.to_str().unwrap(), b.to_str().unwrap(), &o).unwrap();
         let kinds: Vec<&str> = r.rows.iter().map(|r| r.k.as_str()).collect();
         assert_eq!(kinds, vec!["same", "changed", "left", "right"]);
@@ -307,7 +307,7 @@ mod tests {
 
     #[test]
     fn unimportant_cells() {
-        let o = TableOptions { ignore_case: true, unimportant: vec![3], num_tolerance: 0.5, ..Default::default() };
+        let o = TableOptions { keys: vec![], ignore_case: true, unimportant: vec![3], num_tolerance: 0.5, ..Default::default() };
         assert_eq!(cell_kind("1.0", "1", 0, &o), 0);
         assert_eq!(cell_kind("1,000", "1000", 0, &o), 0);
         assert_eq!(cell_kind("1.2", "1.6", 0, &o), 1);
@@ -318,12 +318,28 @@ mod tests {
         let keyed = TableOptions { keys: vec![0, 3], ..o.clone() };
         assert_eq!(cell_kind("1.2", "1.6", 0, &keyed), 2);
         assert_eq!(cell_kind("x", "y", 3, &keyed), 2);
-        let rel = TableOptions { num_tolerance: 10.0, num_relative: true, ..Default::default() };
+        let rel = TableOptions { keys: vec![], num_tolerance: 10.0, num_relative: true, ..Default::default() };
         assert_eq!(cell_kind("100", "109", 0, &rel), 1);
         assert_eq!(cell_kind("100", "112", 0, &rel), 2);
         assert_eq!(number("1,23"), None);
         assert_eq!(number("abc"), None);
         assert_eq!(number("-"), None);
+    }
+
+    #[test]
+    fn defaults_key_on_first_column_without_header() {
+        let d = tempfile::tempdir().unwrap();
+        let a = d.path().join("a.csv");
+        let b = d.path().join("b.csv");
+        std::fs::write(&a, "\\Title\nDate,Name\n2019-05-01,x\n2019-05-01,y\n").unwrap();
+        std::fs::write(&b, "\\Title\nDate,Name\n2026-10-01,x\n").unwrap();
+        let r = compare_tables(a.to_str().unwrap(), b.to_str().unwrap(), &TableOptions::default()).unwrap();
+        assert!(r.header.is_empty());
+        let got: Vec<(Option<u32>, Option<u32>, &str)> = r.rows.iter().map(|x| (x.l, x.r, x.k.as_str())).collect();
+        assert_eq!(
+            got,
+            vec![(Some(2), None, "left"), (Some(3), None, "left"), (None, Some(2), "right"), (Some(1), Some(1), "same"), (Some(0), Some(0), "same")]
+        );
     }
 
     #[test]
@@ -333,7 +349,7 @@ mod tests {
         let b = d.path().join("b.csv");
         std::fs::write(&a, "id,name,note\n1,Apple,x\n2,pear,y\n").unwrap();
         std::fs::write(&b, "id,name,note\n1,apple,x\n2,pear,z\n").unwrap();
-        let o = TableOptions { keys: vec![0], ignore_case: true, unimportant: vec![], ..Default::default() };
+        let o = TableOptions { header: true, keys: vec![0], ignore_case: true, unimportant: vec![], ..Default::default() };
         let r = compare_tables(a.to_str().unwrap(), b.to_str().unwrap(), &o).unwrap();
         assert_eq!(r.rows[0].k, "unimportant");
         assert_eq!(r.rows[0].minor, vec![1]);

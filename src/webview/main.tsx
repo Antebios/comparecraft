@@ -7,6 +7,10 @@ import { PromptHost } from "../components/Prompt";
 import { setHost } from "../host";
 import { loadSettings, settings } from "../settings";
 import { closeTab, openTab, state, type Tab } from "../store";
+import HexCompare from "../views/HexCompare";
+import PatchView from "../views/PatchView";
+import PictureCompare from "../views/PictureCompare";
+import TableCompare from "../views/TableCompare";
 import TextCompare from "../views/TextCompare";
 import TextMerge from "../views/TextMerge";
 import { ReplaceHost } from "../views/folderOps";
@@ -17,8 +21,13 @@ import "./vscode.css";
 
 setHost(vscodeHost);
 
+/** Read-only views; the text views report their own state because they track unsaved edits. */
+const FILE_VIEWS = ["hex", "table", "picture", "patch"] as const;
+type FileView = (typeof FILE_VIEWS)[number];
+const isFileView = (kind: unknown): kind is FileView => FILE_VIEWS.includes(kind as FileView);
+
 export interface EmbeddedSpec {
-  kind?: "text" | "merge";
+  kind?: "text" | "merge" | FileView;
   paths: string[];
   titles?: (string | null)[];
   readOnly?: boolean[];
@@ -50,6 +59,29 @@ function Embedded(props: { id: string }) {
       void request("openTab", spec).catch(() => undefined);
     }
   });
+  // Read-only views persist their files and view options so a window reload restores them.
+  createEffect(() => {
+    const t = tab();
+    if (!t || !isFileView(t.kind)) return;
+    vscodeHost.emit?.("text-state", {
+      kind: t.kind,
+      paths: [...t.paths],
+      titles: [...t.titles],
+      readOnly: t.paths.map(() => true),
+      options: JSON.parse(JSON.stringify(t.options)),
+      dirty: [false, false],
+    });
+  });
+  const view = (t: Tab) => {
+    switch (t.kind) {
+      case "merge": return <TextMerge tab={t} active />;
+      case "hex": return <HexCompare tab={t} active />;
+      case "table": return <TableCompare tab={t} active />;
+      case "picture": return <PictureCompare tab={t} active />;
+      case "patch": return <PatchView tab={t} active />;
+      default: return <TextCompare tab={t} active />;
+    }
+  };
   return (
     <div class="app embedded" classList={{ "no-toolbar": !settings.showToolbar }}>
       <MenuBar scope={props.id} />
@@ -57,7 +89,7 @@ function Embedded(props: { id: string }) {
         <Show when={tab()}>
           {(t) => (
             <div class="tab-view" style={{ display: "flex" }}>
-              {t().kind === "merge" ? <TextMerge tab={t()} active /> : <TextCompare tab={t()} active />}
+              {view(t())}
             </div>
           )}
         </Show>
@@ -80,8 +112,9 @@ async function start() {
     const options = { ...(spec.options ?? {}) };
     if (spec.restore) options.restore = spec.restore;
     const merge = spec.kind === "merge";
+    const kind = merge ? "merge" : isFileView(spec.kind) ? spec.kind : "text";
     const id = openTab({
-      kind: merge ? "merge" : "text",
+      kind,
       paths: spec.paths,
       titles: spec.titles ?? [],
       readOnly: spec.readOnly ?? [],

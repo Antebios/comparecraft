@@ -196,11 +196,34 @@ Code theme. Several tabs can be open at once. What opens where:
 
 | Comparison | Embedded mode |
 |---|---|
-| Two Explorer files, Compare File With..., Select Left / Compare with Left | VS Code tab; both sides editable |
+| Two Explorer text files, Compare File With..., Select Left / Compare with Left | VS Code tab; both sides editable |
+| Two binary, picture, or table (CSV/TSV) files, chosen the same ways | Read-only Hex, Picture, or Table tab (needs a CompareCraft release with these helper methods; older installs compare as text) |
 | Compare with Saved, text/selection/clipboard, Git HEAD/index/revision | VS Code tab; sides without a file (or the saved disk side) are read-only |
 | Folders | Asks, then opens the desktop app |
 | Resolve Conflict in VS Code | VS Code tab; three read-only sides and the result file |
 | Resolve Conflict in Desktop App, Open Active Diff in Desktop App | Always the desktop app |
+
+The view is picked like the desktop app does: by the type of the first file
+that exists. A file with unsaved edits in a VS Code editor is always compared
+as text, so the unsaved edits are included. Git revisions, the clipboard, and
+other in-memory sides are always compared as text.
+
+Views inside a CompareCraft tab (for example **Hex Compare**, **Table
+Compare**, or **Text Compare** from a view's menu) open as another tab:
+
+| View | In VS Code | Notes |
+|---|---|---|
+| Text Compare | Yes, editable | Saves through VS Code documents |
+| Text Merge | Yes, result editable | Resolve Conflict in VS Code |
+| Hex Compare | Yes, read-only | Helper method `hex.align` |
+| Table Compare | Yes, read-only | Helper method `table.compare`; files up to 64 MB |
+| Picture Compare | Yes, read-only | Helper methods `pix.compare`, `pix.image`; files up to 64 MB |
+| Text Patch | Yes, read-only | Shows a `.patch`/`.diff` file |
+| Text Edit | Opens the file in VS Code's own editor | VS Code already is a full text editor |
+| Folder Compare, Folder Sync, Folder Merge | Desktop app (asks first) | Not embedded: copy, delete, and sync operations stay in the desktop app |
+
+If the installed helper is too old for a view, the tab offers to open that
+view in the desktop app instead.
 
 Editing and saving:
 
@@ -221,9 +244,9 @@ Editing and saving:
   or **Open as Untitled** (puts the edited text in new untitled editors).
   Reloading the window restores open tabs, including unsaved text.
 
-Limitations in this increment: text comparison only (folder, merge, binary,
-image, table, hex, and other views open in the desktop app); no sessions,
-reports, backups, or Open With; embedded view settings are stored by VS Code
+Limitations: folder compare, sync, and merge open in the desktop app; hex,
+table, picture, and patch views are read-only; no sessions, reports, backups,
+or Open With; embedded view settings are stored by VS Code
 and are separate from the desktop app's settings. If the helper is missing or
 crashes, the tab shows the error; fix the installation or `backendPath` and
 reopen the comparison (a crashed helper is restarted on the next request).
@@ -232,7 +255,7 @@ reopen the comparison (a crashed helper is restarted on the next request).
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `comparecraft.defaultMode` | `embedded` | Where Compare Selected, Compare with..., editor-text, and Git comparisons open. `embedded` opens two-sided comparisons in a VS Code tab and asks before using the desktop app for folders. `desktop` always launches the desktop app. Commands named "in Desktop App" always use the desktop app. |
+| `comparecraft.defaultMode` | `embedded` | Where Compare Selected, Compare with..., editor-text, and Git comparisons open. `embedded` opens two-sided comparisons (text, or hex/picture/table by file type) in a VS Code tab and asks before using the desktop app for folders. `desktop` always launches the desktop app. Commands named "in Desktop App" always use the desktop app. |
 | `comparecraft.desktopPath` | empty | User/machine absolute executable path; never a directory or shell command. |
 | `comparecraft.backendPath` | empty | Absolute path to `comparecraft-backend`, the windowless helper for embedded mode. Empty uses the helper installed next to the desktop executable. |
 

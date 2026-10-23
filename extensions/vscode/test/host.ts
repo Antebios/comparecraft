@@ -103,6 +103,54 @@ async function readText(file: string): Promise<string> {
   }), 10000).then(result => result.text);
 }
 
+/** Binary, picture and table pairs open their read-only views; a patch file opens the patch view. */
+async function fileViews(panels: EmbeddedPanels, directory: string): Promise<void> {
+  const write = async (name: string, data: string | Buffer) => {
+    const file = path.join(directory, name);
+    await writeFile(file, data);
+    return file;
+  };
+  const pixel = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+  const pairs = {
+    hex: [await write("one.bin", Buffer.from([0, 1, 2, 3, 0, 255])), await write("two.bin", Buffer.from([0, 1, 9, 3, 0]))],
+    picture: [await write("one.png", Buffer.from(pixel, "base64")), await write("two.png", Buffer.from(pixel, "base64"))],
+    table: [await write("one.csv", "id,name\n1,a\n2,b\n"), await write("two.csv", "id,name\n1,a\n2,c\n")],
+  } as const;
+  const expected = { hex: "hex_align", picture: "pix_compare", table: "compare_tables" } as const;
+  const opened = (before: Set<unknown>) => until("a new panel", () => panels.all.find(item => !before.has(item)));
+  if (!(await panels.supportsView("hex"))) {
+    const before = new Set(panels.all);
+    await vscode.commands.executeCommand("comparecraft.compareSelectedEmbedded", vscode.Uri.file(pairs.hex[0]), pairs.hex.map(file => vscode.Uri.file(file)));
+    const panel = await opened(before);
+    assert.equal(panel.state.spec.kind ?? "text", "text", "older helpers keep the text comparison");
+    panel.panel.dispose();
+    console.log("SKIP: the configured helper has no T012 view methods; verified the text fallback. Point COMPARECRAFT_BACKEND at a newer helper to test the views.");
+    return;
+  }
+  for (const kind of ["hex", "picture", "table"] as const) {
+    const before = new Set(panels.all);
+    await vscode.commands.executeCommand("comparecraft.compareSelectedEmbedded", vscode.Uri.file(pairs[kind][0]), pairs[kind].map(file => vscode.Uri.file(file)));
+    const panel = await opened(before);
+    assert.equal(panel.state.spec.kind, kind);
+    await until(`the ${kind} view to compare through the helper`, () => panel.received.includes(expected[kind]), 20000)
+      .catch(error => { console.log(JSON.stringify({ kind, received: panel.received })); throw error; });
+    assert.ok(panel.panel.title.startsWith(`${kind[0]!.toUpperCase()}${kind.slice(1)}: `), panel.panel.title);
+    panel.panel.dispose();
+  }
+  const panel = panels.open({ kind: "patch", paths: [await write("fix.patch", "--- a/x\n+++ b/x\n@@ -1 +1 @@\n-a\n+b\n")], titles: [], readOnly: [true], options: {} });
+  await until("the patch view to load its file", () => panel.received.includes("load_text"));
+  assert.equal(panel.panel.title, "Patch: fix.patch");
+  const view = (cmd: string, args: Record<string, unknown>) => panel.handle("invoke", { cmd, args });
+  assert.deepEqual([...Buffer.from(await view("read_bytes", { path: pairs.hex[0], offset: 4, len: 10 }) as string, "base64")], [0, 255]);
+  assert.match((await view("read_data_url", { path: pairs.picture[0] }) as { url: string }).url, /^data:image\/png;base64,/);
+  await assert.rejects(view("read_bytes", { path: pairs.hex[0], offset: -1, len: 1 }), /Invalid offset/);
+  await assert.rejects(view("hex_align", { left: "relative.bin", right: pairs.hex[1] }), /must be absolute/);
+  await panel.handle("openTab", { kind: "edit", paths: [pairs.table[0]] });
+  await until("Text Edit to open VS Code's editor", () => vscode.window.activeTextEditor?.document.uri.fsPath.toLowerCase() === pairs.table[0].toLowerCase() || undefined);
+  panel.panel.dispose();
+  console.log("PASS: binary, picture and table pairs open read-only hex/picture/table views through the helper; patch files, byte reads, data URLs and Text Edit (VS Code editor) work.");
+}
+
 async function embeddedPanels(api: { embedded: EmbeddedPanels }, tempDirectory: string): Promise<void> {
   assert.ok(api?.embedded, "Test-mode activation exposes embedded panels");
   const directory = await realpath(tempDirectory);
@@ -198,6 +246,8 @@ async function embeddedPanels(api: { embedded: EmbeddedPanels }, tempDirectory: 
   assert.equal(await readText(result), "x\r\ny\r\n");
   merge.panel.dispose();
   console.log("PASS: embedded merge writes only its result, keeps CRLF, and refuses to replace unsaved edits from another editor.");
+
+  await fileViews(panels, directory);
 
   // Backend failures are reported to the view, not swallowed.
   const config = vscode.workspace.getConfiguration("comparecraft");

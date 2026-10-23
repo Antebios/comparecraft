@@ -4,8 +4,8 @@ import { access, constants, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { BackendError, type BackendManager } from "./backend";
 import {
-  dialogFilters, DocumentGuard, joinLines, parseSpec, pathKey, requireAbsolute, requireLines, requireObject, requireString,
-  textFileFromBuffer, titleOf, unsupportedCommand, type EmbeddedSpec, type TextFileResult
+  dialogFilters, DocumentGuard, isFileView, joinLines, parseSpec, pathKey, readBytes, readDataUrl, requireAbsolute, requireLines, requireObject, requireString,
+  textFileFromBuffer, titleOf, unsupportedCommand, VIEW_METHODS, type EmbeddedSpec, type FileView, type TextFileResult
 } from "./embeddedCore";
 
 export { specFromInputs } from "./embeddedCore";
@@ -16,8 +16,8 @@ const SETTINGS_KEY = "comparecraft.embeddedSettings";
 export interface EmbeddedHost {
   assertSupported(): void;
   log(message: string): void;
-  /** Offers to open a view the embedded panel does not provide in the desktop app. */
-  openInDesktop(kind: string, paths: readonly string[]): Promise<void>;
+  /** Offers to open a view the embedded panel does not provide in the desktop app; `reason` says why. */
+  openInDesktop(kind: string, paths: readonly string[], reason?: string): Promise<void>;
   /** Called after a merge result is written; offers explicit review and staging. */
   afterMergeSaved(file: string): Promise<void>;
 }
@@ -57,6 +57,12 @@ export class EmbeddedPanels implements vscode.Disposable {
 
   get isDisposing(): boolean {
     return this.disposing;
+  }
+
+  /** True when the installed helper has every method the read-only view needs. */
+  async supportsView(kind: FileView): Promise<boolean> {
+    const methods = VIEW_METHODS[kind];
+    return methods.length === 0 || (await this.backend.get()).supports(...methods);
   }
 
   open(spec: EmbeddedSpec): EmbeddedPanel {
@@ -286,6 +292,19 @@ export class EmbeddedPanel {
           return null;
         }
         const paths = Array.isArray(p.paths) ? p.paths.filter((item): item is string => typeof item === "string" && path.isAbsolute(item)) : [];
+        if (kind === "edit") {
+          // Single-file editing is VS Code's own editor; the desktop Text Edit view is not embedded.
+          for (const file of paths.slice(0, 1)) await vscode.commands.executeCommand("vscode.open", vscode.Uri.file(file));
+          return null;
+        }
+        if (isFileView(kind)) {
+          if (await this.owner.supportsView(kind)) {
+            this.owner.open(parseSpec({ kind, paths: p.paths, titles: p.titles, options: p.options }));
+            return null;
+          }
+          await this.owner.host.openInDesktop(kind, paths, `The installed CompareCraft backend is too old for the embedded ${kind} view. Update CompareCraft to show it in VS Code.`);
+          return null;
+        }
         await this.owner.host.openInDesktop(kind, paths);
         return null;
       }
@@ -322,6 +341,27 @@ export class EmbeddedPanel {
         });
       case "path_info":
         return this.backendRequest("path.info", { path: requireAbsolute(args.path) });
+      case "read_bytes":
+        return readBytes(requireAbsolute(args.path), requireCount(args.offset, "offset"), requireCount(args.len, "length"));
+      case "read_data_url":
+        return readDataUrl(requireAbsolute(args.path));
+      case "hex_align": {
+        const align = args.align ?? "complete";
+        if (align !== "none" && align !== "fast" && align !== "complete") throw new Error("Invalid hex alignment.");
+        return this.backendRequest("hex.align", { left: requireAbsolute(args.left, "left path"), right: requireAbsolute(args.right, "right path"), align });
+      }
+      case "compare_tables":
+        return this.backendRequest("table.compare", {
+          left: requireAbsolute(args.left, "left path"), right: requireAbsolute(args.right, "right path"), options: requireObject(args.options ?? {}, "table options")
+        });
+      case "pix_compare":
+        return this.backendRequest("pix.compare", {
+          left: requireAbsolute(args.left, "left path"), right: requireAbsolute(args.right, "right path"),
+          options: requireObject(args.options ?? {}, "picture options"),
+          leftData: optionalString(args.leftData, "left picture"), rightData: optionalString(args.rightData, "right picture")
+        });
+      case "pix_image":
+        return this.backendRequest("pix.image", { path: requireAbsolute(args.path) });
       case "load_settings":
         return state.get<Record<string, unknown>>(SETTINGS_KEY) ?? {};
       case "save_settings":
@@ -452,4 +492,14 @@ export class EmbeddedPanel {
 
 function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, char => `&#${char.charCodeAt(0)};`);
+}
+
+function requireCount(value: unknown, name: string): number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) throw new Error(`Invalid ${name}.`);
+  return value;
+}
+
+function optionalString(value: unknown, name: string): string | null {
+  if (value === undefined || value === null) return null;
+  return requireString(value, name);
 }

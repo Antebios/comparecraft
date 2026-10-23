@@ -1,11 +1,74 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { mkdtemp, rm, truncate, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import {
-  ConflictError, dialogFilters, DocumentGuard, joinLines, parseSpec, specFromInputs, splitLines, textFileFromBuffer, titleOf, unsupportedCommand
+  ConflictError, dialogFilters, DocumentGuard, joinLines, MAX_READ_BYTES, pairViewKind, parseSpec, readBytes, readDataUrl, specFromInputs, splitLines,
+  textFileFromBuffer, titleOf, unsupportedCommand, VIEW_METHODS
 } from "../src/embeddedCore";
+import { desktopViewArguments } from "../src/process";
 
 const a = path.resolve("a.txt"), b = path.resolve("b.txt");
+
+test("read-only view specs keep their kind, files, titles and options only", () => {
+  const bin = path.resolve("a.bin"), png = path.resolve("b.png");
+  assert.deepEqual(parseSpec({ kind: "hex", paths: [bin, ""], titles: ["L", null], readOnly: [false], options: { x: 1 }, restore: [["ignored"], null], dirty: [true, false] }),
+    { kind: "hex", paths: [bin, ""], titles: ["L", null], readOnly: [true, true], options: { x: 1 } });
+  assert.deepEqual(parseSpec({ kind: "patch", paths: [a] }), { kind: "patch", paths: [a], titles: [], readOnly: [true], options: {} });
+  for (const bad of [{ kind: "hex", paths: [bin, png, bin] }, { kind: "table", paths: ["rel.csv"] }, { kind: "picture", paths: [png], titles: [1] },
+    { kind: "picture", paths: [png], options: [] }, { kind: "patch", paths: [] }, { kind: "patch", paths: [a, b] }, { kind: "patch", paths: [""] },
+    { kind: "folder", paths: [a, b] }, { kind: "edit", paths: [a] }]) {
+    assert.throws(() => parseSpec(bad), Error, JSON.stringify(bad));
+  }
+  assert.equal(titleOf(parseSpec({ kind: "hex", paths: [bin, path.resolve("c.bin")] })), "Hex: a.bin ↔ c.bin");
+  assert.equal(titleOf(parseSpec({ kind: "table", paths: [a, a] })), "Table: a.txt");
+  assert.equal(titleOf(parseSpec({ kind: "picture", paths: [png, ""], titles: [null, "Right"] })), "Picture: b.png ↔ Right");
+  assert.equal(titleOf(parseSpec({ kind: "patch", paths: [path.resolve("fix.patch")] })), "Patch: fix.patch");
+  assert.deepEqual(VIEW_METHODS.patch, []);
+  assert.deepEqual(VIEW_METHODS.picture, ["pix.compare", "pix.image"]);
+});
+
+test("file pairs pick the view of the first existing file; text and folders stay text", () => {
+  const file = (kind: string, exists = true) => ({ exists, isDir: false, kind });
+  assert.equal(pairViewKind([file("hex"), file("text")]), "hex");
+  assert.equal(pairViewKind([file("text", false), file("picture")]), "picture");
+  assert.equal(pairViewKind([file("table"), file("table")]), "table");
+  assert.equal(pairViewKind([file("text"), file("hex")]), undefined);
+  assert.equal(pairViewKind([{ exists: true, isDir: true, kind: "folder" }, file("hex")]), undefined);
+  assert.equal(pairViewKind([file("hex", false), file("hex", false)]), undefined);
+});
+
+test("bytes and pictures are read like the desktop commands", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "cc-view-"));
+  try {
+    const bin = path.join(dir, "data.bin");
+    await writeFile(bin, Buffer.from([0, 1, 2, 3, 4, 5, 6, 7]));
+    assert.deepEqual([...Buffer.from(await readBytes(bin, 2, 3), "base64")], [2, 3, 4]);
+    assert.deepEqual([...Buffer.from(await readBytes(bin, 6, 100), "base64")], [6, 7]);
+    assert.equal(await readBytes(bin, 100, 10), "");
+    await truncate(bin, MAX_READ_BYTES + 10);
+    assert.equal(Buffer.from(await readBytes(bin, 0, MAX_READ_BYTES * 2), "base64").length, MAX_READ_BYTES);
+    await assert.rejects(readBytes(path.join(dir, "missing.bin"), 0, 1));
+
+    const jpg = path.join(dir, "photo.JPEG");
+    await writeFile(jpg, "abc");
+    assert.deepEqual(await readDataUrl(jpg), { url: "data:image/jpeg;base64,YWJj", size: 3 });
+    const other = path.join(dir, "x.tga");
+    await writeFile(other, "abc");
+    assert.match((await readDataUrl(other)).url, /^data:application\/octet-stream;base64,/);
+    await assert.rejects(readDataUrl(jpg, 2), /too large/);
+    await assert.rejects(readDataUrl(dir), /not a file/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("desktop fallbacks request the matching viewer type", () => {
+  assert.deepEqual(desktopViewArguments("hex", [a, b]), ["-fv=hex", "--", a, b]);
+  assert.deepEqual(desktopViewArguments("patch", [a]), ["-fv=patch", "--", a]);
+  assert.deepEqual(desktopViewArguments("bogus", [a, b]), ["--", a, b]);
+});
 
 test("persisted and webview specs are validated before use", () => {
   assert.deepEqual(parseSpec({ paths: [a, b] }), { paths: [a, b], titles: [], readOnly: [], options: {} });

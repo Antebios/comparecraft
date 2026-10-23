@@ -1,10 +1,74 @@
+import { open, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import type { SideInput } from "./contracts";
 
+/** Same cap as the desktop `read_bytes` command. */
+export const MAX_READ_BYTES = 4 << 20;
+/** Pictures are sent to the webview whole as data URLs. */
+export const MAX_DATA_URL_BYTES = 64 << 20;
+
+const MIME: Record<string, string> = {
+  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", jpe: "image/jpeg", jfif: "image/jpeg", gif: "image/gif",
+  bmp: "image/bmp", dib: "image/bmp", webp: "image/webp", ico: "image/x-icon", svg: "image/svg+xml", avif: "image/avif"
+};
+
+/** Reads up to 4 MB at `offset` as base64, like the desktop `read_bytes` command. */
+export async function readBytes(file: string, offset: number, len: number): Promise<string> {
+  const handle = await open(file, "r");
+  try {
+    const buffer = Buffer.alloc(Math.min(len, MAX_READ_BYTES));
+    let filled = 0;
+    while (filled < buffer.length) {
+      const { bytesRead } = await handle.read(buffer, filled, buffer.length - filled, offset + filled);
+      if (bytesRead === 0) break;
+      filled += bytesRead;
+    }
+    return buffer.subarray(0, filled).toString("base64");
+  } finally {
+    await handle.close();
+  }
+}
+
+/** Returns a picture as a data URL using the desktop's extension-to-MIME map. */
+export async function readDataUrl(file: string, limit = MAX_DATA_URL_BYTES): Promise<{ url: string; size: number }> {
+  const info = await stat(file);
+  if (!info.isFile()) throw new Error(`${file} is not a file.`);
+  if (info.size > limit) throw new Error(`${path.basename(file)} is too large to show in VS Code (${info.size} bytes; the limit is ${limit}).`);
+  const bytes = await readFile(file);
+  const mime = MIME[path.extname(file).slice(1).toLowerCase()] ?? "application/octet-stream";
+  return { url: `data:${mime};base64,${bytes.toString("base64")}`, size: bytes.length };
+}
+
+/** Read-only views the embedded panel shows from files on disk. */
+export const FILE_VIEWS = ["hex", "table", "picture", "patch"] as const;
+export type FileView = typeof FILE_VIEWS[number];
+export const isFileView = (kind: unknown): kind is FileView => FILE_VIEWS.includes(kind as FileView);
+
+/**
+ * Picks the view for two files like the desktop's automatic choice: the type of the first file
+ * that exists. Returns undefined for text (and folders), which keep the editable text comparison.
+ */
+export function pairViewKind(infos: readonly { exists: boolean; isDir: boolean; kind: string }[]): "hex" | "table" | "picture" | undefined {
+  if (infos.some(info => info.isDir)) return undefined;
+  const kind = infos.find(info => info.exists)?.kind;
+  return kind === "hex" || kind === "table" || kind === "picture" ? kind : undefined;
+}
+
+/** Helper methods each read-only view needs; older helpers lack them. */
+export const VIEW_METHODS: Record<FileView, readonly string[]> = {
+  hex: ["hex.align"],
+  table: ["table.compare"],
+  picture: ["pix.compare", "pix.image"],
+  patch: [],
+};
+
 /** Initial state of an embedded text comparison; also the persisted webview state. */
 export interface EmbeddedSpec {
-  /** Defaults to a two-sided text comparison. A merge has paths [current, incoming, base, result]. */
-  readonly kind?: "text" | "merge";
+  /**
+   * Defaults to a two-sided text comparison. A merge has paths [current, incoming, base, result].
+   * Hex, table and picture compare two files read-only; a patch shows one file.
+   */
+  readonly kind?: "text" | "merge" | FileView;
   readonly paths: string[];
   readonly titles: (string | null)[];
   readonly readOnly: boolean[];
@@ -36,6 +100,7 @@ const isLines = (value: unknown): value is string[] => Array.isArray(value) && v
 export function parseSpec(value: unknown): EmbeddedSpec {
   if (!isObject(value)) throw new Error("Invalid embedded comparison state.");
   const { paths, titles = [], readOnly = [], options = {}, restore, kind = "text", output } = value;
+  if (isFileView(kind)) return fileViewSpec(kind, paths, titles, options);
   if (kind !== "text" && kind !== "merge") throw new Error("Invalid embedded view kind.");
   const merge = kind === "merge";
   if (!Array.isArray(paths) || paths.length > (merge ? 4 : 2) || !paths.every(item => typeof item === "string" && (item === "" || path.isAbsolute(item)))) {
@@ -62,6 +127,18 @@ export function parseSpec(value: unknown): EmbeddedSpec {
     ...(restored ? { restore: restored } : {}),
     ...(isLines(output) ? { output } : {})
   };
+}
+
+/** Read-only views keep only their files, titles and view options; nothing is ever written. */
+function fileViewSpec(kind: FileView, paths: unknown, titles: unknown, options: unknown): EmbeddedSpec {
+  const count = kind === "patch" ? 1 : 2;
+  if (!Array.isArray(paths) || paths.length > count || !paths.every(item => typeof item === "string" && (item === "" || path.isAbsolute(item)))) {
+    throw new Error(kind === "patch" ? "An embedded patch view needs one absolute file path." : `An embedded ${kind} comparison needs up to two absolute file paths.`);
+  }
+  if (kind === "patch" && !paths[0]) throw new Error("An embedded patch view needs one absolute file path.");
+  if (!Array.isArray(titles) || !titles.every(item => item === null || typeof item === "string")) throw new Error("Invalid comparison titles.");
+  if (!isObject(options)) throw new Error("Invalid comparison options.");
+  return { kind, paths: paths as string[], titles: titles as (string | null)[], readOnly: paths.map(() => true), options };
 }
 
 /** Splits like the desktop loader: a trailing line break does not add an empty last line. */
@@ -178,8 +255,11 @@ export function requireObject(value: unknown, name: string): Record<string, unkn
 /** Panel title: the side names, or one name when both sides show the same file. */
 export function titleOf(spec: EmbeddedSpec): string {
   if (spec.kind === "merge") return `Merge: ${path.basename(spec.paths[3] ?? "") || "result"}`;
+  if (spec.kind === "patch") return `Patch: ${spec.titles[0] || path.basename(spec.paths[0] ?? "") || "Untitled"}`;
   const names = [0, 1].map(side => spec.titles[side] || (spec.paths[side] ? path.basename(spec.paths[side]!) : "Untitled"));
-  return names[0] === names[1] ? names[0]! : `${names[0]} ↔ ${names[1]}`;
+  const pair = names[0] === names[1] ? names[0]! : `${names[0]} ↔ ${names[1]}`;
+  const prefix = { hex: "Hex", table: "Table", picture: "Picture" }[spec.kind as string];
+  return prefix ? `${prefix}: ${pair}` : pair;
 }
 
 type Input = SideInput;

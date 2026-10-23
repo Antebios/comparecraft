@@ -13,6 +13,15 @@ export function comparisonArguments(request: ComparisonRequest): string[] {
   return [...options, "--", ...request.sides.map(side => side.path)];
 }
 
+/** Desktop `-fv` viewer types the extension can request. */
+export const DESKTOP_VIEWS = ["text", "merge", "edit", "patch", "hex", "table", "picture", "folder", "fmerge", "sync"] as const;
+
+/** Opens `paths` in a specific desktop view; unknown kinds let the desktop pick by file type. */
+export function desktopViewArguments(kind: string, paths: readonly string[]): string[] {
+  const viewer = (DESKTOP_VIEWS as readonly string[]).includes(kind) ? [`-fv=${kind}`] : [];
+  return [...viewer, ...comparisonArguments({ sides: paths.map(item => ({ path: item })), solo: false })];
+}
+
 /** Starts the desktop app and resolves with its process ID once spawned. */
 export function launchDesktop(
   executable: string,

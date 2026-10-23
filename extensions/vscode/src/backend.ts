@@ -131,6 +131,11 @@ export class BackendClient {
     this.exitListeners.push(listener);
   }
 
+  /** True when the running helper advertises every listed method. */
+  supports(...methods: readonly string[]): boolean {
+    return methods.every(method => this.info.capabilities.methods.includes(method));
+  }
+
   async request<T>(method: string, params?: unknown, signal?: AbortSignal): Promise<T> {
     if (!this.info.capabilities.methods.includes(method)) {
       throw new BackendError(`The installed CompareCraft backend does not support ${method}. Update CompareCraft.`, ErrorCode.methodNotFound);

@@ -4,7 +4,7 @@
 //! lifecycle) is documented in `docs/vscode-extension/backend-protocol.md`; keep the two in sync.
 //! Every method is read-only: the helper never writes, deletes or executes anything.
 
-use crate::{diff, fileio, merge};
+use crate::{diff, fileio, hex, merge, pix, table};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
@@ -22,7 +22,11 @@ pub const MAX_HEADER_BYTES: usize = 8 << 10;
 pub const MAX_CONCURRENT: usize = 4;
 pub const MAX_QUEUED: usize = 64;
 pub const MAX_LINES_PER_SIDE: usize = 2_000_000;
-pub const METHODS: [&str; 4] = ["path.info", "text.load", "text.diff", "text.merge"];
+/// Table files are parsed whole in memory; larger files get `LIMIT`.
+pub const MAX_TABLE_FILE_BYTES: u64 = 64 << 20;
+/// Picture files are decoded whole and returned as PNG data URLs; larger files get `LIMIT`.
+pub const MAX_PICTURE_FILE_BYTES: u64 = 64 << 20;
+pub const METHODS: [&str; 8] = ["path.info", "text.load", "text.diff", "text.merge", "hex.align", "table.compare", "pix.compare", "pix.image"];
 
 pub mod code {
     pub const PARSE_ERROR: i64 = -32700;
@@ -176,6 +180,38 @@ struct MergeParams {
     rules: Option<Value>,
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct HexParams {
+    left: String,
+    right: String,
+    #[serde(default)]
+    align: hex::HexAlign,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TableParams {
+    left: String,
+    right: String,
+    #[serde(default)]
+    options: table::TableOptions,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct PixParams {
+    left: String,
+    right: String,
+    #[serde(default)]
+    options: pix::PixOptions,
+    /// Already rasterised pictures (base64 or data URL) for formats the decoder does not support.
+    #[serde(default)]
+    left_data: Option<String>,
+    #[serde(default)]
+    right_data: Option<String>,
+}
+
 fn params<T: DeserializeOwned>(value: Value) -> Result<T, RpcError> {
     let value = if value.is_null() { Value::Object(Map::new()) } else { value };
     serde_json::from_value(value).map_err(|e| RpcError::new(code::INVALID_PARAMS, format!("invalid params: {e}")))
@@ -211,6 +247,20 @@ fn limit_lines(sides: &[&[String]]) -> Result<(), RpcError> {
     Ok(())
 }
 
+fn io_error(path: &str, e: &io::Error) -> RpcError {
+    RpcError::new(code::IO, format!("{path}: {e}")).with_data(json!({ "path": path, "kind": format!("{:?}", e.kind()) }))
+}
+
+/// Rejects files above `limit` bytes before an engine reads them whole.
+fn limit_file(path: &str, limit: u64) -> Result<(), RpcError> {
+    let actual = std::fs::metadata(path).map_err(|e| io_error(path, &e))?.len();
+    if actual > limit {
+        return Err(RpcError::new(code::LIMIT, format!("{path} is {actual} bytes; the limit is {limit}"))
+            .with_data(json!({ "limit": limit, "actual": actual })));
+    }
+    Ok(())
+}
+
 fn to_value<T: serde::Serialize>(value: T) -> Result<Value, RpcError> {
     serde_json::to_value(value).map_err(|e| RpcError::new(code::INTERNAL, format!("could not encode result: {e}")))
 }
@@ -226,10 +276,43 @@ pub fn call(method: &str, value: Value) -> Result<Value, RpcError> {
         "text.load" => {
             let p: PathParams = params(value)?;
             absolute(&p.path)?;
-            let file = fileio::load_text(&p.path).map_err(|e| {
-                RpcError::new(code::IO, format!("{}: {e}", p.path)).with_data(json!({ "path": p.path, "kind": format!("{:?}", e.kind()) }))
-            })?;
+            let file = fileio::load_text(&p.path).map_err(|e| io_error(&p.path, &e))?;
             to_value(file)
+        }
+        "hex.align" => {
+            let p: HexParams = params(value)?;
+            absolute(&p.left)?;
+            absolute(&p.right)?;
+            // Files above hex::ALIGN_MEMORY_LIMIT are streamed and compared positionally.
+            let aligned = hex::hex_align(&p.left, &p.right, p.align).map_err(|e| io_error(&format!("{} / {}", p.left, p.right), &e))?;
+            to_value(aligned)
+        }
+        "table.compare" => {
+            let p: TableParams = params(value)?;
+            for path in [&p.left, &p.right] {
+                absolute(path)?;
+                limit_file(path, MAX_TABLE_FILE_BYTES)?;
+            }
+            let result = table::compare_tables(&p.left, &p.right, &p.options).map_err(|e| io_error(&format!("{} / {}", p.left, p.right), &e))?;
+            to_value(result)
+        }
+        "pix.compare" => {
+            let p: PixParams = params(value)?;
+            for (path, data) in [(&p.left, &p.left_data), (&p.right, &p.right_data)] {
+                absolute(path)?;
+                if data.is_none() {
+                    limit_file(path, MAX_PICTURE_FILE_BYTES)?;
+                }
+            }
+            let result = pix::pix_compare(&p.left, &p.right, &p.options, p.left_data.as_deref(), p.right_data.as_deref())
+                .map_err(|e| RpcError::new(code::IO, e))?;
+            to_value(result)
+        }
+        "pix.image" => {
+            let p: PathParams = params(value)?;
+            absolute(&p.path)?;
+            limit_file(&p.path, MAX_PICTURE_FILE_BYTES)?;
+            to_value(pix::pix_image(&p.path).map_err(|e| RpcError::new(code::IO, format!("{}: {e}", p.path)))?)
         }
         "text.diff" => {
             let p: DiffParams = params(value)?;
@@ -732,6 +815,60 @@ mod tests {
         let big = vec![String::new(); MAX_LINES_PER_SIDE + 1];
         let e = call("text.diff", json!({ "left": big, "right": [] })).unwrap_err();
         assert_eq!(e.code, code::LIMIT);
+    }
+
+    #[test]
+    fn view_methods_match_the_desktop_engines() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = |name: &str, bytes: &[u8]| {
+            let p = dir.path().join(name);
+            std::fs::write(&p, bytes).unwrap();
+            p.to_string_lossy().to_string()
+        };
+        let (a, b) = (file("a.bin", b"0123456789abcdef"), file("b.bin", b"0123X56789abcdefZZ"));
+        let got = call("hex.align", json!({ "left": a, "right": b, "align": "none" })).unwrap();
+        assert_eq!(got, serde_json::to_value(hex::hex_align(&a, &b, hex::HexAlign::None).unwrap()).unwrap());
+        assert_eq!(got["rightSize"], json!(18));
+        assert_eq!(call("hex.align", json!({ "left": a, "right": b })).unwrap()["align"], json!("complete"));
+
+        let (l, r) = (file("l.csv", b"id,name\n1,a\n2,b\n"), file("r.csv", b"id,name\n1,a\n2,c\n"));
+        let got = call("table.compare", json!({ "left": l, "right": r, "options": {} })).unwrap();
+        assert_eq!(got, serde_json::to_value(table::compare_tables(&l, &r, &table::TableOptions::default()).unwrap()).unwrap());
+        assert_eq!(got["delimiter"], json!(","));
+
+        let png = |name: &str, px: [u8; 4]| file(name, &pix::encode_png(2, 1, &[px, px].concat()).unwrap());
+        let (p, q) = (png("p.png", [10, 20, 30, 255]), png("q.png", [200, 20, 30, 255]));
+        let got = call("pix.compare", json!({ "left": p, "right": q, "options": {} })).unwrap();
+        assert_eq!(got["counts"]["important"], json!(2));
+        assert!(got["image"].as_str().unwrap().starts_with("data:image/png;base64,"));
+        let raster = call("pix.image", json!({ "path": q })).unwrap();
+        assert!(raster.as_str().unwrap().starts_with("data:image/png;base64,"));
+        let got = call("pix.compare", json!({ "left": p, "right": q, "options": {}, "rightData": raster })).unwrap();
+        assert_eq!(got["counts"]["important"], json!(2));
+    }
+
+    #[test]
+    fn view_methods_validate_paths_and_limits() {
+        let err = |m: &str, p: Value| call(m, p).unwrap_err();
+        let dir = tempfile::tempdir().unwrap();
+        let abs = dir.path().join("x").to_string_lossy().to_string();
+        assert_eq!(err("hex.align", json!({ "left": "rel", "right": abs })).code, code::INVALID_PARAMS);
+        assert_eq!(err("hex.align", json!({ "left": abs, "right": abs, "align": "bogus" })).code, code::INVALID_PARAMS);
+        assert_eq!(err("table.compare", json!({ "left": abs, "right": abs, "extra": 1 })).code, code::INVALID_PARAMS);
+        assert_eq!(err("pix.image", json!({ "path": "rel.png" })).code, code::INVALID_PARAMS);
+        let e = err("hex.align", json!({ "left": abs, "right": abs }));
+        assert_eq!(e.code, code::IO);
+        assert_eq!(e.data.unwrap()["kind"], json!("NotFound"));
+        assert_eq!(err("pix.image", json!({ "path": abs })).code, code::IO);
+
+        let big = dir.path().join("big.csv");
+        std::fs::File::create(&big).unwrap().set_len(MAX_TABLE_FILE_BYTES + 1).unwrap();
+        let big = big.to_string_lossy().to_string();
+        let e = err("table.compare", json!({ "left": big, "right": big }));
+        assert_eq!(e.code, code::LIMIT);
+        assert_eq!(e.data.unwrap()["limit"], json!(MAX_TABLE_FILE_BYTES));
+        assert_eq!(err("pix.compare", json!({ "left": big, "right": big })).code, code::LIMIT);
+        assert_eq!(err("pix.image", json!({ "path": big })).code, code::LIMIT);
     }
 
     #[test]

@@ -826,7 +826,7 @@ fn hex_body(h: &HexCmp, spec: &ReportSpec) -> Vec<String> {
 // Table
 
 fn load_table_cmp(l: &str, r: &str) -> Result<table::TableResult, String> {
-    let opts = view(|v| v.table.clone()).unwrap_or(table::TableOptions { header: false, ..Default::default() });
+    let opts = view(|v| v.table.clone()).unwrap_or(table::TableOptions { header: false, keys: vec![], ..Default::default() });
     table::compare_tables(l, r, &opts).map_err(|e| e.to_string())
 }
 

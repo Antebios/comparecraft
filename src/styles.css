@@ -907,10 +907,23 @@ button.link {
   background: var(--diff-hl);
   color: var(--diff-fg);
 }
-.tgap {
-  width: 12px;
+.tpanes {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+/* Both sides always show a horizontal scrollbar so their rows stay level. */
+.tscroll.tpane2 {
+  min-width: 0;
+  overflow-x: scroll;
+  overflow-y: auto;
+}
+.tsplit {
+  width: 6px;
   flex: none;
+  cursor: col-resize;
   background: var(--border);
+  touch-action: none;
 }
 .trow2.k-changed {
   background: var(--diff-bg);
@@ -930,7 +943,7 @@ button.link {
 .trow2.sel {
   box-shadow: none;
 }
-/* Details pane: the selected row, left over right. */
+/* Details pane: the selected row of the selected side. */
 .tdetails {
   flex: none;
   overflow-x: auto;
