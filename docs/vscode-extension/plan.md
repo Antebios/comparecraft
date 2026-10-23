@@ -169,9 +169,18 @@ desktop text behavior. A rendered webview alone is not evidence of safe editing.
   edits), offers staging only after a marker-free save, and offers unsaved
   merged text as an Untitled document on close/reload. Automated: 47 unit tests
   and the VS Code integration test pass.
-- **T012 [Plan:5.1]:** Extend protocol/host adapters across `src/views/` for folder
+- **T012 [Plan:5.1]:** (done; owner F5 sign-off 2026-10-23) Extend protocol/host adapters across `src/views/` for folder
   compare/sync/merge, hex, table, picture, text edit, and patch. Maintain a per-view
   capability matrix, read-only constraints, and destructive confirmations.
+  Scope B: read-only Hex/Table/Picture (new helper methods `hex.align`,
+  `table.compare`, `pix.compare`, `pix.image`) and Patch in the embedded panel;
+  Text Edit uses VS Code's editor; Folder Compare/Sync/Merge are explicit
+  desktop-only release gaps. Capability matrix in `extensions/vscode/README.md`.
+  Automated: 51 unit tests, 13 helper tests, and the VS Code integration test
+  (with a T012 helper, and the text fallback with an older one) pass.
+  Follow-up (owner request): Table Compare matches Beyond Compare's defaults
+  (key column 1, no header row) and layout (two independently scrolling sides,
+  details for the selected side) in both the desktop app and VS Code.
 
 **Gate:** all existing view kinds work or remain explicitly blocking release
 gaps. Verify format/backup preservation, large-payload boundaries, unsupported

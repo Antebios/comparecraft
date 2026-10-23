@@ -8,9 +8,11 @@
 comparison) is complete**: it passed its automated gate on Windows and the owner
 confirmed it in the Extension Development Host on 2026-10-22 (after the undo and
 Ctrl+Z fixes below); it is committed by the owner after this update.
-**Phase 5 is in progress: T011 (embedded three-way conflict merge) is done**
-and passed the owner's F5 test on 2026-10-23; T012 (remaining views) has not
-been started. Phase 6 has not been started.
+**Phase 5 is complete.** T011 (embedded three-way conflict merge) and T012
+(remaining views) both passed the owner's F5 test on 2026-10-23. T012's
+sign-off also brought a Table Compare follow-up (Beyond Compare parity) that
+changes the shared view in both the desktop app and VS Code; see the Phase 5
+handoff. Phase 6 has not been started.
 No Marketplace publication has been performed. Git configuration is changed
 only by the user-invoked, confirmed setup command; tests use disposable
 repositories and a temporary `GIT_CONFIG_GLOBAL`.
@@ -60,7 +62,7 @@ Planning coverage is not evidence of implementation completion.
 | T009 | 4 | done | T007 | `src/host/` adapters (Tauri + VS Code); 20 shared files import only the host; `npm run build:webview` bundle has 0 Tauri references; desktop typecheck/build pass |
 | T010 | 4 | done | T008, T009 | `embedded.ts` WebviewPanel + serializer, CSP, validated RPC, guarded document writes, external-change events, restore on close/reload; 45 unit tests; real VS Code host test with installed helper passes; owner F5 test passed 2026-10-22 after undo/Ctrl+Z fixes |
 | T011 | 5 | done | T005, T010 | Embedded three-way merge (`gitResolveConflictEmbedded`); 47 unit tests; real VS Code host test incl. merge result-only/CRLF/unsaved-edit refusal; owner F5 test passed 2026-10-23 after three fixes |
-| T012 | 5 | pending | T010 | |
+| T012 | 5 | done | T010 | Scope B: read-only Hex/Table/Picture/Patch panels, Text Edit in VS Code's editor, folder views desktop-only; 4 new helper methods; 51 unit + 13 helper tests; host test passes with a T012 helper and falls back to text with an older one; owner F5 sign-off 2026-10-23. Follow-up: Table Compare defaults to key column 1 with no header row, two independently scrolling sides, details pane for the selected side |
 | T013 | 6 | pending | T006, T011, T012 | |
 | T014 | 6 | pending | T013 | |
 
@@ -380,7 +382,7 @@ Phase 4 checks (Windows x64, VS Code 1.143.0, installed helper 0.1.0, 2026-10-22
   confirm the warning, switch light/dark/high-contrast themes, keyboard focus.
 - Batch evidence: [phase-4-report.yaml](phase-4-report.yaml).
 
-## Phase 5 handoff (in progress)
+## Phase 5 handoff (complete)
 
 - T011 done (owner F5 sign-off 2026-10-23). New command **CompareCraft:
   Resolve Conflict in VS Code** (`comparecraft.gitResolveConflictEmbedded`),
@@ -410,10 +412,58 @@ Phase 4 checks (Windows x64, VS Code 1.143.0, installed helper 0.1.0, 2026-10-22
   unresolved conflict warns, writes markers and does not offer staging;
   unsaved edit in another editor blocks the save and is preserved; recovery
   after reverting and Refresh succeeds.
-- Next: T012 (remaining views). Requires a scope decision: new read-only
-  helper protocol methods for folder/hex/table/picture (with path and size
-  limits) versus recording them as explicit desktop-only release gaps; folder
-  sync/merge writes, text edit and patch need destructive-operation design.
+- T012 done (scope B, chosen by the owner 2026-10-23; owner F5 sign-off
+  2026-10-23: the views look and behave the same in VS Code and the desktop
+  app).
+  - Helper (`src-tauri/src/backend.rs`): read-only `hex.align`,
+    `table.compare`, `pix.compare`, `pix.image` with absolute-path checks and
+    64 MB table/picture file limits (`-32021`). Protocol stays 1; see
+    [backend-protocol.md](backend-protocol.md). The extension does not
+    require them at startup, so older helpers still work.
+  - Extension: `parseSpec` accepts kinds hex/table/picture (two paths) and
+    patch (one path), always read-only. `read_bytes` (4 MB) and
+    `read_data_url` (64 MB) are served with Node file APIs; the other view
+    commands are forwarded to the helper. Explorer file pairs choose the view
+    by `path.info` kind of the first existing file; unsaved VS Code edits,
+    in-memory sides, and helpers without the methods keep the text view.
+    `openTab` from a view: text and the four read-only kinds open a panel (or
+    offer the desktop app with a reason when the helper is too old); `edit`
+    opens VS Code's editor; folder/sync/fmerge/merge offer the desktop app
+    with `-fv=<view>`.
+  - Webview (`src/webview/main.tsx`): renders HexCompare, TableCompare,
+    PictureCompare, PatchView unchanged; read-only views persist their
+    state for reload. Bundle still has 0 `__TAURI` references.
+  - Verification: `cargo test --lib backend::` 13 pass; `npm test` 51 pass;
+    root typecheck and `build:webview` pass; `npm run test:integration` passes
+    with `COMPARECRAFT_BACKEND` = `src-tauri\target\debug\comparecraft-backend.exe`
+    (real hex/picture/table webviews compare through the helper; patch, byte
+    reads, data URLs, Text Edit) and with the installed pre-T012 helper (text
+    fallback, reported as SKIP for the views).
+  - Owner manual journeys passed 2026-10-23.
+- Table Compare follow-up (owner request after T012 sign-off, Beyond Compare
+  parity; shared by the desktop app and VS Code):
+  - Defaults are now key column 1 and no header row (`TableOptions::default`
+    in `src-tauri/src/table.rs` and `src/views/TableCompare.tsx`). Keyed rows
+    are listed in key order, and rows whose key is on one side only are
+    orphans instead of being paired by position. Saved sessions keep their
+    stored options. Script reports without table options keep the old
+    unkeyed, headerless default (`src-tauri/src/report.rs`) so their output
+    is unchanged.
+  - Two panes: each side has its own horizontal scrollbar, vertical
+    scrolling is synced, and a draggable splitter (10-90%, saved in the tab
+    as `tableSplit`) sets the widths.
+  - The details pane shows only the selected side's row.
+  - Verified: new `defaults_key_on_first_column_without_header` test; all
+    lib tests pass (`cargo test -- --test-threads=1`; the settings test can
+    race on its shared config variable in parallel runs); `script_golden`
+    output is byte-identical with and without the change (its 14 failures
+    are pre-existing); typecheck, desktop and webview builds; 51 unit tests;
+    integration test with the debug helper; browser check with the owner's
+    two CSV files gives 20,836 rows (2 same, 12,700 left-only, 8,134
+    right-only), matching Beyond Compare's 20,834 difference rows.
+  - Needs a CompareCraft rebuild (the helper's defaults changed) and a quick
+    owner look in both the desktop app and VS Code.
+- Next: Phase 6 (T013, T014).
 - Batch evidence: [phase-5-report.yaml](phase-5-report.yaml).
 
 ## Per-increment handoff entry

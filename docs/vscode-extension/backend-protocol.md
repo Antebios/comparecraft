@@ -82,7 +82,7 @@ JSON-RPC 2.0. Requests carry `id` (number or string), `method`, and optional
    {
      "protocolVersion": 1,
      "server": { "name": "comparecraft-backend", "version": "0.1.0" },
-     "capabilities": { "methods": ["path.info", "text.load", "text.diff", "text.merge"] },
+     "capabilities": { "methods": ["path.info", "text.load", "text.diff", "text.merge", "hex.align", "table.compare", "pix.compare", "pix.image"] },
      "limits": { "maxMessageBytes": 67108864, "maxConcurrentRequests": 4, "maxQueuedRequests": 64, "maxLinesPerSide": 2000000 }
    }
    ```
@@ -117,6 +117,13 @@ JSON-RPC 2.0. Requests carry `id` (number or string), `method`, and optional
 - Up to `maxQueuedRequests` more are queued. Beyond that the server answers
   `-32022` (busy).
 - Text inputs above `maxLinesPerSide` lines get `-32021`.
+- `table.compare`, `pix.compare` and `pix.image` reject any file above 64 MB
+  with `-32021` and `data: { limit, actual }` (they read whole files into
+  memory). `pix.compare` skips the check for a side whose decoded image is
+  passed as `leftData`/`rightData`.
+- `hex.align` has no size limit. Above 256 MB per side the engine compares
+  positionally instead of aligning.
+- Any response above `maxMessageBytes` becomes `-32021`.
 
 ### Methods (protocol 1, read-only)
 
@@ -129,6 +136,14 @@ document APIs (decision for T010).
 | `text.load` | `{ path }` (absolute file) | `{ path, lines, encoding, bom, eol, finalNewline, size, modified, binary, readOnly }` using the desktop's decoding (BOM, UTF-16, legacy encodings) |
 | `text.diff` | `{ left: string[], right: string[], rules? }` | desktop `DiffResult`: `{ rows, hunks, important, unimportant, sameLines, identical }` |
 | `text.merge` | `{ base, left, right: string[], rules? }` | desktop `MergeResult`: `{ chunks, conflicts, changes }` |
+| `hex.align` | `{ left, right, align? }` (absolute files; `align` is `none`, `fast` or `complete`, default `complete`) | desktop `HexAlignment` (byte alignment rows and sizes) |
+| `table.compare` | `{ left, right, options? }` (absolute files; desktop `TableOptions`) | desktop `TableResult` |
+| `pix.compare` | `{ left, right, options?, leftData?, rightData? }` (absolute files; `*Data` is an already decoded image as base64 or a data URL) | desktop `PixResult` with a PNG difference image as a data URL |
+| `pix.image` | `{ path }` (absolute file) | PNG data URL of the decoded picture (for formats the webview can't show) |
+
+Methods after the first four were added in T012 (Phase 5). They appear in
+`capabilities.methods` only for helpers built from that release onward; the
+extension checks for them and falls back to the text view or the desktop app.
 
 `rules` uses the desktop `Rules` shape (camelCase, every field optional). An
 omitted field takes the engine default. Unknown fields are rejected as

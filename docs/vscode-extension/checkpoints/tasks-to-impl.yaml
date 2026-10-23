@@ -1,12 +1,12 @@
 metadata:
   source_tasks: "../plan.md"
   execution_ledger: "../handoff.md"
-  scope: "Phases 1-4 implementation; later phases are pending"
+  scope: "Phases 1-5 implementation; Phase 6 is pending"
 summary:
   total_tasks: 14
-  completed_tasks: 10
+  completed_tasks: 12
   in_progress_tasks: 0
-  pending_tasks: 4
+  pending_tasks: 2
 tasks:
   - task_id: T001
     status: completed
@@ -196,7 +196,34 @@ tasks:
     verification:
       build_passed: true
       evidence: "47 extension tests; real VS Code host test (26 commands; merge writes only its result, keeps CRLF, refuses with unsaved edits elsewhere); browser check of the merge webview with the installed helper; owner F5 test passed 2026-10-23 after three fixes"
-pending_tasks: [T012, T013, T014]
+  - task_id: T012
+    status: completed
+    implementation:
+      files:
+        - src-tauri/src/backend.rs
+        - src-tauri/src/table.rs
+        - src-tauri/src/report.rs
+        - src/webview/main.tsx
+        - src/views/TableCompare.tsx
+        - src/styles.css
+        - extensions/vscode/src/embeddedCore.ts
+        - extensions/vscode/src/embedded.ts
+        - extensions/vscode/src/extension.ts
+        - extensions/vscode/src/backend.ts
+        - extensions/vscode/src/process.ts
+        - extensions/vscode/test/embedded.test.ts
+        - extensions/vscode/test/host.ts
+        - extensions/vscode/README.md
+        - docs/vscode-extension/backend-protocol.md
+        - docs/manual/table-compare.md
+        - README.md
+    upstream_trace:
+      plan_item: "5.1"
+      requirements: [REQ-008, REQ-009]
+    verification:
+      build_passed: true
+      evidence: "51 extension tests; 13 helper tests; host test with a T012 helper opens real hex/picture/table/patch webviews through the helper, and falls back to text with the installed pre-T012 helper; owner F5 sign-off 2026-10-23. Table Compare follow-up (BC defaults and two-pane layout): new table test, all lib tests, unchanged script_golden output, browser check with the owner's CSVs matching BC's 20,834 difference rows"
+pending_tasks: [T013, T014]
 untracked_changes: []
 validation:
   passed: true
@@ -204,7 +231,7 @@ validation:
   warnings:
     - "Native Linux/macOS, exhaustive menu-location checks, and picker checks remain unexecuted; owner confirmed Windows host startup and context-menu testing."
     - "Phase 2 manual desktop-GUI journeys (conflict save/stage, Compare with Saved, real mergetool) remain unexecuted."
-    - "This checkpoint completes Phases 1-4, not all feature requirements."
+    - "This checkpoint completes Phases 1-5, not all feature requirements (Phase 6 pending)."
     - "Phase 3 is verified on Windows only; native Linux/macOS helper checks remain."
     - "Phase 4 owner F5 test passed (compare, edit, save, undo/redo); close-restore, reload and theme checks were not individually recorded."
   blocking_issues: []

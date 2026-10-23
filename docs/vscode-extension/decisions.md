@@ -111,6 +111,21 @@ Protocol and crate boundary were decided in T007: [backend-protocol.md](backend-
   Panels use `retainContextWhenHidden` so switching tabs keeps choices, undo
   and the loaded baselines. The desktop and embedded commands are both
   offered ("Resolve Conflict in VS Code" / "in Desktop App").
+- T012 scope (owner choice B, 2026-10-23): Hex, Table, Picture and Patch are
+  embedded as **read-only** views. The helper gains read-only methods
+  `hex.align`, `table.compare`, `pix.compare`, `pix.image` (protocol stays 1;
+  clients check capabilities). Table and picture inputs are limited to 64 MB
+  per file; byte reads (`read_bytes`, 4 MB per call) and picture data URLs
+  (64 MB) are served by the extension with Node file APIs. Older helpers keep
+  working: these methods are not required at startup, so the extension falls
+  back to the text view (Explorer pairs) or offers the desktop app (view
+  links). Explorer file pairs pick the view like the desktop (type of the
+  first existing file); a file with unsaved VS Code edits, and any in-memory
+  side, stays in the text view. **Text Edit** opens the file in VS Code's own
+  editor rather than embedding a second editor. **Folder Compare, Folder Sync
+  and Folder Merge stay in the desktop app** (explicit release gap): their
+  copy/delete/sync/execute operations would need a destructive-operation
+  design in the helper. Desktop fallbacks pass `-fv=<view>`.
 - Webviews require restrictive CSP/resource roots and validated message dispatch.
   Never eagerly load Tauri runtime services into the extension webview.
 - Preserve desktop behavior through extraction; no unnecessary module churn.
