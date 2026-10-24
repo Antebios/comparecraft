@@ -12,7 +12,9 @@ Ctrl+Z fixes below); it is committed by the owner after this update.
 (remaining views) both passed the owner's F5 test on 2026-10-23. T012's
 sign-off also brought a Table Compare follow-up (Beyond Compare parity) that
 changes the shared view in both the desktop app and VS Code; see the Phase 5
-handoff. Phase 6 has not been started.
+handoff. **Phase 6 (T013-T014) is implemented and verified on Windows x64**;
+it awaits the owner's manual VSIX check and the first run of the new
+`vscode-extension` workflow on Linux and macOS (see the Phase 6 handoff).
 No Marketplace publication has been performed. Git configuration is changed
 only by the user-invoked, confirmed setup command; tests use disposable
 repositories and a temporary `GIT_CONFIG_GLOBAL`.
@@ -63,29 +65,38 @@ Planning coverage is not evidence of implementation completion.
 | T010 | 4 | done | T008, T009 | `embedded.ts` WebviewPanel + serializer, CSP, validated RPC, guarded document writes, external-change events, restore on close/reload; 45 unit tests; real VS Code host test with installed helper passes; owner F5 test passed 2026-10-22 after undo/Ctrl+Z fixes |
 | T011 | 5 | done | T005, T010 | Embedded three-way merge (`gitResolveConflictEmbedded`); 47 unit tests; real VS Code host test incl. merge result-only/CRLF/unsaved-edit refusal; owner F5 test passed 2026-10-23 after three fixes |
 | T012 | 5 | done | T010 | Scope B: read-only Hex/Table/Picture/Patch panels, Text Edit in VS Code's editor, folder views desktop-only; 4 new helper methods; 51 unit + 13 helper tests; host test passes with a T012 helper and falls back to text with an older one; owner F5 sign-off 2026-10-23. Follow-up: Table Compare defaults to key column 1 with no header row, two independently scrolling sides, details pane for the selected side |
-| T013 | 6 | pending | T006, T011, T012 | |
-| T014 | 6 | pending | T013 | |
+| T013 | 6 | in_progress | T006, T011, T012 | Windows x64 matrix and regressions recorded below (VS Code 1.143.1, CompareCraft 0.1.0 NSIS per-user, protocol 1); Linux/macOS await the first `vscode-extension` workflow run (local WSL/Docker blocked by machine policy) |
+| T014 | 6 | in_progress | T013 | `npm run package` (vsce, no publish) and `npm run test:vsix` (isolated install 0.0.1 -> upgrade 0.1.0 -> content check -> 8 host tests on installed files -> uninstall) pass on Windows; CI workflow, README install/upgrade/removal/troubleshooting added; owner VSIX check pending |
 
 ## Platform/workflow evidence
 
 Replace not run with pass/fail/blocked and evidence. Record OS/architecture,
 VS Code version, app/helper/protocol versions, and installer type.
 
+Windows column: Windows x64, VS Code 1.143.1 (x64 user install), CompareCraft
+0.1.0 NSIS per-user install at `%LOCALAPPDATA%\CompareCraft`, helper protocol 1.
+The MSI package was not tested. Linux/macOS columns: no local machine (WSL and
+Docker cannot start under this machine's policy); "CI" means covered by the
+`vscode-extension` workflow (unit tests, VSIX package, `test:vsix` with host
+tests against a source-built debug helper; Linux under Xvfb), which has not yet
+run. CI does not exercise installed packages, native menus, or the desktop GUI.
+
 | Journey | Windows | Linux | macOS |
 |---|---|---|---|
-| Installed discovery, custom paths, spaces | automated pass; default per-user install and override tested | candidate unit tests only; native not run | candidate unit tests only; native not run |
-| Files/folders, Select Left, pickers | host/unit pass; native picker/menu visual checks not run | not run | not run |
-| Dirty/untitled, selections, clipboard, saved version | unit pass (snapshot content, read-only, release); commands registered in host; manual GUI not run | not run | not run |
-| Snapshot survival after GUI handoff | design: `-solo` dedicated process + PID marker sweep; unit pass; manual GUI not run | not run | not run |
-| HEAD/index/working/revisions and existing diff | real Git fixture pass (content/labels); diff forwarding manual not run | not run | not run |
-| Merge/rebase/cherry-pick/stash resolution | real Git fixture pass for merge, rebase, cherry-pick stage/labels; stash label generic; manual GUI not run | not run | not run |
-| Missing stages, renames, binary conflicts | add/add empty base and modify/delete refusal pass; binary/link/submodule unit pass | not run | not run |
-| Opt-in Git setup, wait/cancel, reversal | local+global (temp) apply/remove pass; real `git mergetool` with fake tool pass; installed `ccomp -solo` waits for GUI | not run | not run |
-| Installed helper, incompatibility, crash | NSIS reinstall puts the helper next to `comparecraft.exe`; default discovery finds it; client contract tests and Check Embedded Backend in real VS Code pass against it; crash/mismatch/timeout/framing via fake helper pass; a pre-helper install gives the explicit "update CompareCraft" error | not run | not run |
-| Embedded text, edits, undo/save/close/reload | host test pass: real webview bundle loads under CSP, two concurrent panels load files and diff via installed helper; saves through VS Code documents keep CRLF, use unsaved buffers, reject stale writes after editor or disk changes; missing backend fails visibly. Manual F5 edit/undo/close-restore/reload not run | not run | not run |
-| Embedded merge and remaining views | not run | not run | not run |
-| Formats/backups, read-only, destructive confirmations | not run | not run | not run |
-| VSIX install/upgrade/removal, desktop regressions | not run | not run | not run |
+| Installed discovery, custom paths, spaces | automated pass; default per-user install and override tested | candidate unit tests (CI); native not run | candidate unit tests (CI); native not run |
+| Files/folders, Select Left, pickers | host/unit pass; owner F5 use in Phases 4-5 | host test (CI); native menus not run | host test (CI); native menus not run |
+| Dirty/untitled, selections, clipboard, saved version | unit pass (snapshot content, read-only, release); commands registered in host; owner F5 use | unit/host (CI) | unit/host (CI) |
+| Snapshot survival after GUI handoff | design: `-solo` dedicated process + PID marker sweep; unit pass; manual GUI not run | unit (CI) | unit (CI) |
+| HEAD/index/working/revisions and existing diff | real Git fixture pass (content/labels); diff forwarding manual not run | Git fixture unit tests (CI) | Git fixture unit tests (CI) |
+| Merge/rebase/cherry-pick/stash resolution | real Git fixture pass; owner manual embedded and desktop merge pass 2026-10-23 | Git fixture unit tests (CI) | Git fixture unit tests (CI) |
+| Missing stages, renames, binary conflicts | add/add empty base and modify/delete refusal pass; binary/link/submodule unit pass | unit (CI) | unit (CI) |
+| Opt-in Git setup, wait/cancel, reversal | local+global (temp `GIT_CONFIG_GLOBAL`) apply/remove restores earlier values and keeps later edits; real `git mergetool` with fake tool pass; installed `ccomp -solo` waits for GUI | unit incl. real `git mergetool` (CI) | unit incl. real `git mergetool` (CI) |
+| Installed helper, incompatibility, crash | installed 0.1.0 helper: contract test, Check Embedded Backend and all host tests pass; crash/mismatch/timeout/framing via fake helper pass | source-built helper contract + host tests (CI); installed deb/rpm/AppImage not run | source-built helper (CI); installed app/signing not run |
+| Embedded text, edits, undo/save/close/reload | host test pass (CSP bundle, concurrent panels, CRLF, unsaved buffers, stale-write refusal); owner F5 pass 2026-10-22 | host test (CI) | host test (CI) |
+| Embedded merge and remaining views | host test pass with installed helper (merge result-only/CRLF/unsaved refusal; hex/table/picture/patch/Text Edit); owner F5 pass 2026-10-23 | host test (CI) | host test (CI) |
+| Formats/backups, read-only, destructive confirmations | line endings preserved and read-only sides refuse writes (host); embedded mode has no backups and no destructive folder operations (desktop only); staging asks for confirmation (unit) | host/unit (CI) | host/unit (CI) |
+| VSIX install/upgrade/removal | `test:vsix` pass 2026-10-23: isolated install 0.0.1, upgrade to 0.1.0, 20-file content check, 8 host tests on the installed files with the installed helper, uninstall; owner install in normal VS Code pending | `test:vsix` (CI) | `test:vsix` (CI) |
+| Desktop regressions | desktop typecheck/build pass; Rust: all suites pass except 14 pre-existing `script_golden` failures ("Unexpected argument(s)"), unchanged by this work | existing `build` workflow | existing `build` workflow |
 
 Distinguish Windows NSIS/MSI, Linux deb/rpm/AppImage, and macOS app/signing.
 One package/architecture result does not implicitly cover another.
@@ -465,6 +476,52 @@ Phase 4 checks (Windows x64, VS Code 1.143.0, installed helper 0.1.0, 2026-10-22
     owner look in both the desktop app and VS Code.
 - Next: Phase 6 (T013, T014).
 - Batch evidence: [phase-5-report.yaml](phase-5-report.yaml).
+
+## Phase 6 handoff (in progress: owner check and first CI run pending)
+
+- T014 packaging: `@vscode/vsce` devDependency; `npm run package` runs
+  `vscode:prepublish` (webview + TypeScript builds) and `vsce package
+  --no-dependencies` to `comparecraft-0.1.0.vsix` (git-ignored; 21 entries,
+  about 110 KB). `.vscodeignore` now also excludes `.gitignore` and `*.vsix`.
+  There is no publish script and no token anywhere.
+- T014 lifecycle: `scripts/test-vsix.cjs` (`npm run test:vsix [vsix]`) uses a
+  temporary `--extensions-dir`/`--user-data-dir`: packages a 0.0.1 copy of the
+  same build, installs it, upgrades to the real VSIX, checks the installed files
+  (required: manifest `main`, webview bundle, README, LICENSE; forbidden:
+  sources, tests, scripts, maps, `node_modules`, lockfile), runs `out/test/host.js`
+  with the installed folder as the extension, uninstalls, and confirms it is no
+  longer listed. `COMPARECRAFT_VSIX_SKIP_HOST=1` skips the host step.
+- T014 CI: `.github/workflows/vscode-extension.yml` (push to main / PRs touching
+  the extension, shared UI, `src-tauri`, or root manifests; manual dispatch);
+  `contents: read`; Windows, macOS, Ubuntu 22.04: builds the debug helper,
+  `npm ci` (root and extension), `npm test`, `npm run package`, `test:vsix`
+  (Xvfb on Linux), and uploads the VSIX artifact from Linux. Not yet run.
+- T014 docs: extension README finalized (install from VSIX, upgrade, removal,
+  Git-setup reversal before uninstalling plus manual `git config` cleanup,
+  package/verify, troubleshooting, release status and known limitations).
+- Git setup reversal: covered by the unit test "applying and removing tool
+  settings restores earlier values and keeps later user edits" (temp global and
+  repo config). Uninstalling does not touch Git configuration; the records
+  needed to restore earlier values live in VS Code's extension state, so the
+  README tells users to run Remove Git Tool Configuration first.
+- T013 regressions on Windows x64 (2026-10-23): extension `npm test` 51/51 with
+  the installed helper (no skips); `npm run test:vsix` PASS (VS Code 1.143.1,
+  installed helper 0.1.0, 8 host tests); root `npm run build` (typecheck +
+  Vite) pass; `tests/macos-signing.test.mjs` pass; `cargo test --no-fail-fast
+  -- --test-threads=1`: lib 87, ccomp 2, backend 3, console 4, engine_golden
+  15, hex_golden 3, pix_golden 1 pass; `script_golden` 4 pass / 14 fail, the
+  same pre-existing failures recorded in Phase 5.
+- Not executed: Linux and macOS (no local machine; WSL/Docker blocked by
+  policy) beyond the pending CI run; installed deb/rpm/AppImage, macOS app and
+  signing, Windows MSI, ARM64; native menu/picker visuals outside the owner's
+  Windows F5 use.
+- Owner checks to close Phase 6: (1) install `comparecraft-0.1.0.vsix` in
+  normal VS Code, run Check Embedded Backend and one embedded comparison;
+  (2) optionally Configure then Remove Git Tool Configuration in a scratch
+  repository and confirm `git config --list --show-origin` is back to before;
+  (3) uninstall or keep the VSIX; (4) push and confirm the `vscode-extension`
+  workflow passes on all three OSes.
+- Batch evidence: [phase-6-report.yaml](phase-6-report.yaml).
 
 ## Per-increment handoff entry
 

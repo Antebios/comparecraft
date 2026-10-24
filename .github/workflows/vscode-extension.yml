@@ -1,0 +1,86 @@
+name: vscode-extension
+
+# Tests and packages the VS Code extension. The VSIX is uploaded as a workflow
+# artifact only; nothing is published to a marketplace or release.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "extensions/vscode/**"
+      - "src/**"
+      - "src-tauri/**"
+      - "package.json"
+      - "package-lock.json"
+      - "vite*.config.*"
+      - ".github/workflows/vscode-extension.yml"
+  pull_request:
+    paths:
+      - "extensions/vscode/**"
+      - "src/**"
+      - "src-tauri/**"
+      - "package.json"
+      - "package-lock.json"
+      - "vite*.config.*"
+      - ".github/workflows/vscode-extension.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  extension:
+    name: Extension (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - name: Linux deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xvfb
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            extensions/vscode/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with: { workspaces: "src-tauri -> target" }
+      - name: Build the embedded backend helper
+        run: cargo build --bin comparecraft-backend
+        working-directory: src-tauri
+      - name: Point tests at the helper
+        run: echo "COMPARECRAFT_BACKEND=$GITHUB_WORKSPACE/src-tauri/target/debug/comparecraft-backend${{ runner.os == 'Windows' && '.exe' || '' }}" >> "$GITHUB_ENV"
+      - run: npm ci
+      - run: npm ci
+        working-directory: extensions/vscode
+      - name: Unit and contract tests
+        run: npm test
+        working-directory: extensions/vscode
+      - name: Package VSIX (no publish)
+        run: npm run package
+        working-directory: extensions/vscode
+      - name: Install, upgrade, host-test and uninstall the VSIX
+        working-directory: extensions/vscode
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            xvfb-run -a npm run test:vsix
+          else
+            npm run test:vsix
+          fi
+      - name: Upload VSIX
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: comparecraft-vscode-vsix
+          path: extensions/vscode/*.vsix
+          if-no-files-found: error

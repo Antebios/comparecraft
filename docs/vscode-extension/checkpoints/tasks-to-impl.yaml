@@ -1,12 +1,12 @@
 metadata:
   source_tasks: "../plan.md"
   execution_ledger: "../handoff.md"
-  scope: "Phases 1-5 implementation; Phase 6 is pending"
+  scope: "Phases 1-6 implementation; Phase 6 awaits owner VSIX check and first CI run"
 summary:
   total_tasks: 14
   completed_tasks: 12
-  in_progress_tasks: 0
-  pending_tasks: 2
+  in_progress_tasks: 2
+  pending_tasks: 0
 tasks:
   - task_id: T001
     status: completed
@@ -223,7 +223,36 @@ tasks:
     verification:
       build_passed: true
       evidence: "51 extension tests; 13 helper tests; host test with a T012 helper opens real hex/picture/table/patch webviews through the helper, and falls back to text with the installed pre-T012 helper; owner F5 sign-off 2026-10-23. Table Compare follow-up (BC defaults and two-pane layout): new table test, all lib tests, unchanged script_golden output, browser check with the owner's CSVs matching BC's 20,834 difference rows"
-pending_tasks: [T013, T014]
+  - task_id: T013
+    status: in_progress
+    implementation:
+      files:
+        - docs/vscode-extension/handoff.md
+        - docs/vscode-extension/phase-6-report.yaml
+    upstream_trace:
+      plan_item: "6.1"
+      requirements: [REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-006, REQ-007, REQ-008, REQ-009, REQ-010]
+    verification:
+      build_passed: true
+      evidence: "Windows x64 matrix filled (VS Code 1.143.1, CompareCraft 0.1.0 NSIS per-user, protocol 1); npm test 51/51 with installed helper; test:vsix PASS; root build pass; Rust all suites pass except 14 pre-existing script_golden failures. Linux/macOS pending first vscode-extension workflow run"
+  - task_id: T014
+    status: in_progress
+    implementation:
+      files:
+        - extensions/vscode/package.json
+        - extensions/vscode/package-lock.json
+        - extensions/vscode/.vscodeignore
+        - extensions/vscode/scripts/test-vsix.cjs
+        - extensions/vscode/README.md
+        - .github/workflows/vscode-extension.yml
+    upstream_trace:
+      plan_item: "6.1"
+      requirements: [REQ-001, REQ-005, REQ-010]
+    verification:
+      build_passed: true
+      evidence: "npm run package builds comparecraft-0.1.0.vsix without publishing; npm run test:vsix installs 0.0.1, upgrades to 0.1.0, checks 20 installed files, runs 8 host tests on the installed files with the installed helper, uninstalls (Windows x64, 2026-10-23). Git-setup reversal unit test passes. Owner VSIX check and first CI run pending"
+pending_tasks: []
+in_progress_tasks: [T013, T014]
 untracked_changes: []
 validation:
   passed: true
@@ -231,7 +260,8 @@ validation:
   warnings:
     - "Native Linux/macOS, exhaustive menu-location checks, and picker checks remain unexecuted; owner confirmed Windows host startup and context-menu testing."
     - "Phase 2 manual desktop-GUI journeys (conflict save/stage, Compare with Saved, real mergetool) remain unexecuted."
-    - "This checkpoint completes Phases 1-5, not all feature requirements (Phase 6 pending)."
+    - "This checkpoint completes Phases 1-5; Phase 6 is implemented and verified on Windows x64 and awaits the owner VSIX check and the first vscode-extension workflow run."
+    - "Linux and macOS have no local verification (WSL/Docker blocked by machine policy); installed deb/rpm/AppImage, macOS app/signing, Windows MSI and ARM64 are not run."
     - "Phase 3 is verified on Windows only; native Linux/macOS helper checks remain."
     - "Phase 4 owner F5 test passed (compare, edit, save, undo/redo); close-restore, reload and theme checks were not individually recorded."
   blocking_issues: []

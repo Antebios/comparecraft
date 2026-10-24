@@ -13,8 +13,13 @@ including against an installed build. Phase 4 (T009-T010, host adapters,
 webview bundle, embedded text-comparison panels) is complete: it passed its
 automated gate on Windows against the installed helper, and on 2026-10-22 the
 owner confirmed it in the Extension Development Host (after the undo/Ctrl+Z
-fixes recorded in [handoff.md](handoff.md)). Phases 5-6 remain pending. Native Linux/macOS
-validation is still required.
+fixes recorded in [handoff.md](handoff.md)). Phase 5 (T011-T012, embedded
+merge and remaining views) is complete with owner sign-off on 2026-10-23.
+Phase 6 (T013-T014) is implemented and verified on Windows x64 (VSIX package,
+isolated install/upgrade/host-test/uninstall, regressions); it awaits the
+owner's VSIX check and the first run of the `vscode-extension` workflow, which
+is the only Linux/macOS coverage. Native Linux/macOS installer validation is
+still required.
 This directory is the portable source of truth: no prior chat or session database
 is required to resume. Read [decisions.md](decisions.md) and
 [handoff.md](handoff.md) before working.
@@ -196,6 +201,14 @@ conflicts, and destructive folder behavior; no placeholder successes.
 - **T014 [Plan:6.1]:** Finalize README/configuration/Git setup/troubleshooting and
   reproducible VSIX/CI artifacts in `extensions/vscode/` and `.github/workflows/`.
   Verify upgrade/removal and reversible Git setup. Do not publish automatically.
+
+**Status (in progress):** `npm run package` builds the VSIX with `vsce
+--no-dependencies` (no publish script); `npm run test:vsix` installs an older
+build, upgrades, checks installed contents, runs the host tests on the installed
+files, and uninstalls, in an isolated profile; `.github/workflows/vscode-extension.yml`
+runs these on Windows, macOS, and Linux and uploads the VSIX artifact. Windows
+x64 results and remaining gaps are in [handoff.md](handoff.md) and
+[phase-6-report.yaml](phase-6-report.yaml).
 
 **Gate:** installable VSIX and compatible installers are verified on supported
 platforms; remaining unsupported environments and gaps are documented.

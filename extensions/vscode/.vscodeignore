@@ -8,3 +8,5 @@ tsconfig.json
 package-lock.json
 dev.code-workspace
 .vscode-test/**
+.gitignore
+*.vsix

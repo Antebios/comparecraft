@@ -1,22 +1,68 @@
-# CompareCraft for VS Code (Phase 4)
+# CompareCraft for VS Code
 
 Compare files, folders, editor text, and Git revisions, and resolve Git merge or
-rebase conflicts, using CompareCraft. Two-sided text comparisons can open in a
-**CompareCraft tab inside VS Code** (embedded mode, the default) or in the
-installed desktop app. Folder comparisons and three-way conflict merges still
+rebase conflicts, using CompareCraft. Two-sided comparisons and three-way
+conflict merges can open in a **CompareCraft tab inside VS Code** (embedded
+mode, the default) or in the installed desktop app. Folder comparisons always
 use the desktop app. Both modes require an installed CompareCraft: embedded mode
 uses its windowless `comparecraft-backend` helper.
 
 ## Requirements
 
 - VS Code 1.95 or newer on local Windows, macOS, or Linux desktop.
-- An installed [CompareCraft desktop app](https://github.com/Antebios/comparecraft/releases).
+- An installed [CompareCraft desktop app](https://github.com/Antebios/comparecraft/releases)
+  from the same release line (embedded mode needs its `comparecraft-backend`
+  helper, protocol version 1).
 - A trusted local workspace. Remote SSH, WSL, Dev Containers, browser-only hosts,
-  and virtual workspaces are not supported in this increment.
+  and virtual workspaces are not supported.
 - Git on `PATH` (or VS Code's configured Git) for the Git commands.
 
 The extension does not modify PATH or download an engine. It changes Git settings
 only when you run **Configure as Git Merge/Diff Tool...** and confirm.
+
+## Install, upgrade, and remove
+
+The extension is distributed as a `.vsix` file; it is not published to the
+Visual Studio Marketplace or Open VSX.
+
+1. Install CompareCraft itself first (Windows installer, macOS app, or Linux
+   package). The extension finds standard installations automatically.
+2. Install the VSIX, either from **Extensions > ... > Install from VSIX...** or:
+
+   ```text
+   code --install-extension comparecraft-0.1.0.vsix
+   ```
+
+3. Run **CompareCraft: Check Embedded Backend** from the Command Palette. It
+   reports the helper's version and protocol.
+
+**Upgrade:** install the newer VSIX the same way and reload the window when VS
+Code asks. Settings and Git tool records are kept. Upgrade the desktop app with
+its own installer; close CompareCraft tabs first so the old helper is stopped
+(the extension restarts it on the next request).
+
+**Remove:** if you used **Configure as Git Merge/Diff Tool...**, run **Remove Git
+Tool Configuration...** *before* uninstalling. The extension records the earlier
+values in VS Code and cannot restore them once it is uninstalled. Then
+uninstall from the Extensions view or with:
+
+```text
+code --uninstall-extension antebios.comparecraft
+```
+
+Uninstalling the extension leaves the desktop app, your files, and your
+`comparecraft.*` user settings untouched. If Git still points at CompareCraft
+after uninstalling, remove the entries yourself (add `--global` if you chose
+the global scope):
+
+```text
+git config --unset merge.tool
+git config --unset diff.tool
+git config --remove-section mergetool.comparecraft
+git config --remove-section difftool.comparecraft
+```
+
+Only unset `merge.tool`/`diff.tool` if their value is `comparecraft`.
 
 ## Develop and run
 
@@ -70,6 +116,29 @@ npm run test:integration
 
 The same variable makes `npm test` run the client contract test against that
 helper instead of the repository's debug build.
+
+### Package and verify the VSIX
+
+```text
+npm run package
+npm run test:vsix
+```
+
+`package` runs the webview and TypeScript builds and writes
+`comparecraft-<version>.vsix` (git-ignored) with `vsce package
+--no-dependencies`; there is no publish script. `test:vsix` uses a temporary
+extensions directory and profile: it installs an older build of the same
+package, upgrades to the new VSIX, checks the installed files (compiled code,
+webview bundle, README, license; no sources, tests, source maps, or
+`node_modules`), runs the host tests against the installed files, and
+uninstalls it. It honors `VSCODE_EXECUTABLE_PATH` and `COMPARECRAFT_BACKEND`
+like `test:integration`. On Linux without a display, run it under
+`xvfb-run -a`. Pass a VSIX path to test a different file.
+
+The [vscode-extension workflow](../../.github/workflows/vscode-extension.yml)
+runs the unit tests, packaging, and `test:vsix` on Windows, macOS, and Linux
+against a helper built from source, and uploads the VSIX as a workflow
+artifact. It never publishes.
 
 ## Commands
 
@@ -301,9 +370,29 @@ reported explicitly rather than replaced by another installation. Set
 in the Output channel. The protocol is documented in
 [backend-protocol.md](../../docs/vscode-extension/backend-protocol.md).
 
-## Next increments
+## Troubleshooting
 
-See the repository's [implementation plan](../../docs/vscode-extension/plan.md)
-and [portable handoff](../../docs/vscode-extension/handoff.md). Phase 5 adds
-embedded three-way conflict resolution and the remaining views. Marketplace
-publication is not part of this increment.
+Open **View > Output** and pick **CompareCraft** for launch commands, helper
+start-up, and errors.
+
+| Symptom | What to do |
+|---|---|
+| "CompareCraft is not installed" | Install the desktop app, or run **Locate Desktop Executable...** for portable/AppImage/custom installs. |
+| Embedded tab shows a helper error or Check Embedded Backend fails | Update CompareCraft so `comparecraft-backend` sits next to the desktop executable, or set `comparecraft.backendPath`. A protocol mismatch means the extension and app are from different release lines. |
+| A view offers to open in the desktop app | The installed helper predates that view; update CompareCraft. |
+| Commands are missing or disabled | Trust the workspace; remote and virtual workspaces are not supported. |
+| Save in a CompareCraft tab is refused | The file changed in an editor or on disk after the tab loaded it, or (merge tabs) the result file has unsaved edits elsewhere. Save or revert, click **Refresh**, then save. |
+| Resolve Conflict is refused | Binary, symbolic link, submodule, and modify/delete conflicts must be resolved with Git directly. |
+| `git mergetool` does not use CompareCraft | Check `git config --show-origin merge.tool`; a repository value overrides the global one. Rerun **Configure as Git Merge/Diff Tool...** after moving the app. |
+| Slow embedded comparisons | Start VS Code with `COMPARECRAFT_BACKEND_LOG=debug` for per-request timing in the Output channel. |
+
+## Release status and known limitations
+
+Version 0.1.0 is distributed as a VSIX only. It is verified on Windows x64 with
+the per-user CompareCraft installer; macOS and Linux are covered by the
+automated workflow but have no manual verification yet. Not supported: remote
+and virtual workspaces, embedded folder compare/sync/merge, editing in hex,
+table, or picture views, sessions, reports, backups, and Marketplace
+installation. See the [implementation plan](../../docs/vscode-extension/plan.md)
+and [handoff](../../docs/vscode-extension/handoff.md) for the verification
+matrix.
