@@ -55,7 +55,7 @@ function checkInstalledFiles(installed) {
   const missing = required.filter(file => !lower.has(file.toLowerCase()));
   const forbidden = files.filter(file => /^(src|test|scripts|node_modules|out\/test)\//.test(file)
     || /\.(map|vsix)$/.test(file) || (/\.ts$/.test(file) && !/\.d\.ts$/.test(file))
-    || /^(\.gitignore|tsconfig\.json|package-lock\.json|dev\.code-workspace)$/.test(file));
+    || /^(\.gitignore|tsconfig\.json|package-lock\.json|dev\.code-workspace|development\.md)$/i.test(file));
   if (missing.length || forbidden.length) {
     throw new Error(`Installed VSIX content check failed. Missing: ${missing.join(", ") || "none"}. Unexpected: ${forbidden.join(", ") || "none"}.`);
   }

@@ -7,6 +7,20 @@ mode, the default) or in the installed desktop app. Folder comparisons always
 use the desktop app. Both modes require an installed CompareCraft: embedded mode
 uses its windowless `comparecraft-backend` helper.
 
+## Screenshots
+
+### Compare and edit files without leaving VS Code
+
+![Embedded text comparison with highlighted changes and copy controls](media/screenshots/01-text-comparison.png)
+
+### Resolve three-way conflicts in an embedded merge tab
+
+![Three-way merge showing current, base, incoming, and the editable result](media/screenshots/02-three-way-merge.png)
+
+### Compare CSV data side by side
+
+![Read-only CSV comparison with keyed rows, highlighted cells, and selected-row details](media/screenshots/03-csv-comparison.png)
+
 ## Requirements
 
 - VS Code 1.95 or newer on local Windows, macOS, or Linux desktop.
@@ -63,82 +77,6 @@ git config --remove-section difftool.comparecraft
 ```
 
 Only unset `merge.tool`/`diff.tool` if their value is `comparecraft`.
-
-## Develop and run
-
-From this directory (the embedded view is built from the repository root's
-shared UI, so run `npm ci` in the repository root as well):
-
-Use Node.js 22 or newer for development and tests.
-
-```text
-npm ci
-npm run build:all
-npm test
-```
-
-`build:all` runs `build:webview` (the root Vite build that writes
-`media/webview/`, which is git-ignored) and then `build` (extension TypeScript).
-
-Open [dev.code-workspace](dev.code-workspace) in VS Code and press F5 using
-**Run CompareCraft Extension**. Its pre-launch task runs `npm run build:all`.
-This uses a separate workspace configuration,
-without editing the repository's existing workspace settings. In the Extension
-Development Host, open a trusted local folder.
-
-For real-host integration tests:
-
-```text
-npm run test:integration
-```
-
-By default the VS Code test runner downloads a test build. To use an existing
-installation instead, set `VSCODE_EXECUTABLE_PATH` to its executable before running
-the command. For example, in Windows PowerShell:
-
-```powershell
-$env:VSCODE_EXECUTABLE_PATH = "$env:LOCALAPPDATA\Programs\Microsoft VS Code\Code.exe"
-npm run test:integration
-```
-
-Tests use a temporary profile/workspace and a harmless Node launcher to verify
-commands and arguments without changing your normal VS Code settings or opening
-the desktop GUI. They do not substitute for manual installer/GUI verification.
-
-To also run **Check Embedded Backend** and the embedded-panel tests in that VS
-Code instance against a real helper, set `COMPARECRAFT_BACKEND` first; without
-it, those steps are skipped:
-
-```powershell
-$env:COMPARECRAFT_BACKEND = "$env:LOCALAPPDATA\CompareCraft\comparecraft-backend.exe"
-npm run test:integration
-```
-
-The same variable makes `npm test` run the client contract test against that
-helper instead of the repository's debug build.
-
-### Package and verify the VSIX
-
-```text
-npm run package
-npm run test:vsix
-```
-
-`package` runs the webview and TypeScript builds and writes
-`comparecraft-<version>.vsix` (git-ignored) with `vsce package
---no-dependencies`; there is no publish script. `test:vsix` uses a temporary
-extensions directory and profile: it installs an older build of the same
-package, upgrades to the new VSIX, checks the installed files (compiled code,
-webview bundle, README, license; no sources, tests, source maps, or
-`node_modules`), runs the host tests against the installed files, and
-uninstalls it. It honors `VSCODE_EXECUTABLE_PATH` and `COMPARECRAFT_BACKEND`
-like `test:integration`. On Linux without a display, run it under
-`xvfb-run -a`. Pass a VSIX path to test a different file.
-
-The [vscode-extension workflow](../../.github/workflows/vscode-extension.yml)
-runs the unit tests, packaging, and `test:vsix` on Windows, macOS, and Linux
-against a helper built from source, and uploads the VSIX as a workflow
-artifact. It never publishes.
 
 ## Commands
 
@@ -284,9 +222,9 @@ Compare**, or **Text Compare** from a view's menu) open as another tab:
 |---|---|---|
 | Text Compare | Yes, editable | Saves through VS Code documents |
 | Text Merge | Yes, result editable | Resolve Conflict in VS Code |
-| Hex Compare | Yes, read-only | Helper method `hex.align` |
-| Table Compare | Yes, read-only | Helper method `table.compare`; files up to 64 MB |
-| Picture Compare | Yes, read-only | Helper methods `pix.compare`, `pix.image`; files up to 64 MB |
+| Hex Compare | Yes, read-only | Compare binary files |
+| Table Compare | Yes, read-only | Compare CSV/TSV files up to 64 MB |
+| Picture Compare | Yes, read-only | Compare images up to 64 MB |
 | Text Patch | Yes, read-only | Shows a `.patch`/`.diff` file |
 | Text Edit | Opens the file in VS Code's own editor | VS Code already is a full text editor |
 | Folder Compare, Folder Sync, Folder Merge | Desktop app (asks first) | Not embedded: copy, delete, and sync operations stay in the desktop app |
@@ -367,8 +305,7 @@ CompareCraft predates the helper, the command says so; update CompareCraft. An
 older or newer helper with an incompatible protocol, or one that crashes, is
 reported explicitly rather than replaced by another installation. Set
 `COMPARECRAFT_BACKEND_LOG=debug` before starting VS Code for per-request timing
-in the Output channel. The protocol is documented in
-[backend-protocol.md](../../docs/vscode-extension/backend-protocol.md).
+in the Output channel.
 
 ## Troubleshooting
 
@@ -386,13 +323,16 @@ start-up, and errors.
 | `git mergetool` does not use CompareCraft | Check `git config --show-origin merge.tool`; a repository value overrides the global one. Rerun **Configure as Git Merge/Diff Tool...** after moving the app. |
 | Slow embedded comparisons | Start VS Code with `COMPARECRAFT_BACKEND_LOG=debug` for per-request timing in the Output channel. |
 
-## Release status and known limitations
+## Known limitations
 
-Version 0.1.0 is distributed as a VSIX only. It is verified on Windows x64 with
-the per-user CompareCraft installer; macOS and Linux are covered by the
-automated workflow but have no manual verification yet. Not supported: remote
-and virtual workspaces, embedded folder compare/sync/merge, editing in hex,
-table, or picture views, sessions, reports, backups, and Marketplace
-installation. See the [implementation plan](../../docs/vscode-extension/plan.md)
-and [handoff](../../docs/vscode-extension/handoff.md) for the verification
-matrix.
+Remote and virtual workspaces are not supported. Folder compare, sync, and merge
+open in the desktop app. Embedded hex, table, picture, and patch views are
+read-only. Embedded sessions, reports, and backups are not supported.
+
+## Support
+
+Report problems or request features in the
+[CompareCraft issue tracker](https://github.com/Antebios/comparecraft/issues).
+Include your operating system, VS Code version, CompareCraft version, and the
+relevant error from the **CompareCraft** Output channel. Review logs for private
+file paths or content before sharing them.
