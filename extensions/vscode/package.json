@@ -11,6 +11,10 @@
     "url": "https://github.com/Antebios/comparecraft.git",
     "directory": "extensions/vscode"
   },
+  "vsce": {
+    "baseContentUrl": "https://github.com/Antebios/comparecraft/blob/main/extensions/vscode",
+    "baseImagesUrl": "https://raw.githubusercontent.com/Antebios/comparecraft/main/extensions/vscode"
+  },
   "engines": {
     "vscode": "^1.95.0"
   },

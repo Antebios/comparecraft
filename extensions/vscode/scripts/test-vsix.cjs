@@ -60,6 +60,9 @@ function listFiles(directory, prefix = "") {
 function checkInstalledFiles(installed) {
   const files = listFiles(installed);
   const lower = new Set(files.map(file => file.toLowerCase()));
+  const screenshots = readdirSync(path.join(root, "media", "screenshots"))
+    .filter(file => file.endsWith(".png"))
+    .map(file => `media/screenshots/${file}`);
   const required = [
     "package.json",
     "readme.md",
@@ -68,6 +71,7 @@ function checkInstalledFiles(installed) {
     manifest.main.replace(/^\.\//, ""),
     "media/webview/webview.js",
     "media/webview/webview.css",
+    ...screenshots,
   ];
   const missing = required.filter(file => !lower.has(file.toLowerCase()));
   const forbidden = files.filter(file => /^(src|test|scripts|node_modules|out\/test)\//.test(file)
@@ -75,6 +79,12 @@ function checkInstalledFiles(installed) {
     || /^(\.gitignore|tsconfig\.json|package-lock\.json|dev\.code-workspace|development\.md)$/i.test(file));
   if (missing.length || forbidden.length) {
     throw new Error(`Installed VSIX content check failed. Missing: ${missing.join(", ") || "none"}. Unexpected: ${forbidden.join(", ") || "none"}.`);
+  }
+  const readme = readFileSync(path.join(installed, files.find(file => file.toLowerCase() === "readme.md")), "utf8");
+  for (const screenshot of screenshots) {
+    if (!readme.includes(`](${manifest.vsce.baseImagesUrl}/${screenshot})`)) {
+      throw new Error(`Packaged README must link to the repository subdirectory for ${screenshot}.`);
+    }
   }
   const installedManifest = JSON.parse(readFileSync(path.join(installed, "package.json"), "utf8"));
   if (installedManifest.version !== manifest.version || installedManifest.contributes.commands.length !== manifest.contributes.commands.length) {

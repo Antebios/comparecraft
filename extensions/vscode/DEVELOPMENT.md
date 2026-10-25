@@ -201,6 +201,13 @@ cannot be overwritten.
   release-process, and implementation details here.
 - Put Marketplace screenshots in [media/screenshots](media/screenshots) and use
   relative image links in the README so they are included in the VSIX.
+- The manifest's `vsce.baseContentUrl` and `vsce.baseImagesUrl` point to
+  `extensions/vscode` on GitHub's `main` branch. VSCE otherwise rewrites links
+  relative to the repository root, ignoring `repository.directory`. The packaged
+  README loads screenshots over HTTPS, not from its bundled copies: merge/push
+  the images to `main` and ensure they are publicly accessible before release.
+  Check that the image URLs return HTTP 200; private or unpublished files return
+  404. The VSIX test verifies URL structure and bundled files, not remote access.
 - The extension icon is [media/icon.png](media/icon.png), copied from the desktop
   app's [256-pixel icon](../../src-tauri/icons/128x128@2x.png). Keep it in sync
   when the app branding changes.
