@@ -429,13 +429,17 @@ test("git mergetool runs the configured command with LOCAL REMOTE BASE MERGED", 
       "const fs = require('fs');",
       "const args = process.argv.slice(2);",
       `fs.writeFileSync(${JSON.stringify(record)}, JSON.stringify({ args, contents: args.slice(2, 5).map(f => fs.readFileSync(f, 'utf8')) }));`,
-      "fs.writeFileSync(args[5], 'one\\nresolved\\nthree\\n');"
+      "const original = fs.statSync(args[5]);",
+      "fs.writeFileSync(args[5], 'one\\nresolved\\nthree\\n');",
+      "fs.utimesSync(args[5], original.atime, original.mtime);"
     ].join("\n"));
     const settings = proposedSettings(process.execPath, "merge");
     settings["mergetool.comparecraft.cmd"] = toolCommand(process.execPath, ["LOCAL", "REMOTE", "BASE", "MERGED"], process.platform, [script]);
+    settings["mergetool.comparecraft.trustExitCode"] = "true";
     await applySettings(f.git, f.repo, "local", settings);
     await f.run("config", "mergetool.keepBackup", "false");
-    await f.run("mergetool", "--no-prompt");
+    const result = await f.git.run(f.repo, ["mergetool", "--no-prompt"]);
+    assert.equal(result.code, 0, `${result.stdout.toString("utf8")}\n${result.stderr}`);
     const { args, contents } = JSON.parse(await readFile(record, "utf8")) as { args: string[]; contents: string[] };
     assert.deepEqual(args.slice(0, 2), ["-solo", "--"]);
     assert.equal(args.length, 6);

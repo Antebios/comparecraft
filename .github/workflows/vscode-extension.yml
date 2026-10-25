@@ -83,6 +83,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: swatinem/rust-cache@v2
         with: { workspaces: "src-tauri -> target" }
+      - name: Build Windows shell-extension resources
+        if: runner.os == 'Windows'
+        run: node scripts/build-windows-shell-extension.mjs
       - name: Build the embedded backend helper
         run: cargo build --bin comparecraft-backend
         working-directory: src-tauri

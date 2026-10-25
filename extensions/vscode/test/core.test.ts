@@ -261,8 +261,9 @@ test("dirty-buffer guard protects files and folder descendants without rejecting
   }
 });
 
-test("desktop process launch uses a real argument array and surfaces spawn and exit failures", async () => {
+test("desktop process launch uses a real argument array and surfaces spawn and exit failures", { timeout: 10_000 }, async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "comparecraft-launch-"));
+  const keepAlive = setInterval(() => {}, 1000);
   try {
     const output = path.join(dir, "arguments.json");
     const script = path.join(dir, "left file.cjs");
@@ -280,6 +281,7 @@ test("desktop process launch uses a real argument array and surfaces spawn and e
       }).catch(reject);
     });
   } finally {
+    clearInterval(keepAlive);
     await rm(dir, { recursive: true });
   }
 });
