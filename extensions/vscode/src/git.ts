@@ -60,12 +60,21 @@ export class Git {
         else chunks.push(chunk);
       });
       child.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString("utf8"); });
+      child.stdin.on("error", (error: NodeJS.ErrnoException) => {
+        if (error.code !== "EPIPE")
+          reject(
+            new GitError(
+              `Could not write to Git (${this.executable}): ${error.message}`,
+            ),
+          );
+      });
       child.once("error", error => reject(new GitError(`Could not run Git (${this.executable}): ${error.message}`)));
       child.once("close", code => {
         if (size > MAX_OUTPUT) reject(new GitError("Git output exceeded the supported size."));
         else resolve({ code: code ?? 1, stdout: Buffer.concat(chunks), stderr: stderr.trim() });
       });
-      child.stdin.end(input ?? "");
+      if (input === undefined) child.stdin.end();
+      else child.stdin.end(input);
     });
   }
 

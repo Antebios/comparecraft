@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
+import { PassThrough } from "node:stream";
 import { test } from "node:test";
 import { access, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -93,6 +95,44 @@ test("binary detection and conflict marker detection", () => {
 });
 
 // ---------------------------------------------------------------- real Git fixtures
+
+test("Git preserves exit results when the child closes stdin early", async (context) => {
+  const childProcess: typeof import("node:child_process") = require("node:child_process");
+  let exitCode = 0;
+  let errorCode = "EPIPE";
+  context.mock.method(childProcess, "spawn", () => {
+    const child = Object.assign(new EventEmitter(), {
+      stdin: new PassThrough(),
+      stdout: new PassThrough(),
+      stderr: new PassThrough(),
+    });
+    process.nextTick(() => {
+      child.stdin.emit(
+        "error",
+        Object.assign(new Error(`write ${errorCode}`), { code: errorCode }),
+      );
+      child.stdout.end("output\n");
+      child.stderr.end("diagnostic\n");
+      child.emit("close", exitCode);
+    });
+    return child;
+  });
+  const git = new Git();
+  const success = await git.run(process.cwd(), ["status"]);
+  assert.equal(success.code, 0);
+  assert.equal(success.stdout.toString("utf8"), "output\n");
+  assert.equal(success.stderr, "diagnostic");
+  exitCode = 1;
+  const failure = await git.run(process.cwd(), ["rebase"], "input");
+  assert.equal(failure.code, 1);
+  assert.equal(failure.stderr, "diagnostic");
+  await assert.rejects(git.text(process.cwd(), ["rebase"]), /diagnostic/);
+  errorCode = "EIO";
+  await assert.rejects(
+    git.run(process.cwd(), ["status"]),
+    /Could not write to Git.*EIO/,
+  );
+});
 
 interface Fixture {
   readonly dir: string;
