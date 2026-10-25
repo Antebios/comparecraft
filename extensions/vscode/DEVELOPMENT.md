@@ -1,8 +1,54 @@
 # Developing the CompareCraft VS Code extension
 
-This guide is for contributors and maintainers. The [README](README.md) is the
-user-facing documentation displayed on the extension's Marketplace page.
-This guide is excluded from the VSIX.
+This guide is for contributors, maintainers, and advanced troubleshooting. The
+[README](README.md) is the user-facing documentation intended for the extension's
+Marketplace page. This guide is excluded from the VSIX.
+
+## Install, upgrade, and remove
+
+The extension is currently distributed as a `.vsix` file; it is not published to
+the Visual Studio Marketplace or Open VSX. Update this distribution status when
+publishing.
+
+1. Install CompareCraft itself first (Windows installer, macOS app, or Linux
+  package). The extension finds standard installations automatically.
+2. Install the VSIX from **Extensions > ... > Install from VSIX...**.
+3. Run **CompareCraft: Check Embedded Backend** from the Command Palette. It
+  reports the helper's version and protocol.
+
+For command-line installation, use:
+
+```text
+code --install-extension comparecraft-0.1.0.vsix
+```
+
+**Upgrade:** install the newer VSIX the same way and reload the window when VS
+Code asks. Settings and Git tool records are kept. Upgrade the desktop app with
+its own installer; close CompareCraft tabs first so the old helper is stopped
+(the extension restarts it on the next request).
+
+**Remove:** if you used **Configure as Git Merge/Diff Tool...**, run **Remove Git
+Tool Configuration...** *before* uninstalling. The extension records the earlier
+values in VS Code and cannot restore them once it is uninstalled. Then
+uninstall from the Extensions view or with:
+
+```text
+code --uninstall-extension antebios.comparecraft
+```
+
+Uninstalling the extension leaves the desktop app, your files, and your
+`comparecraft.*` user settings untouched. If Git still points at CompareCraft
+after uninstalling, remove the entries yourself (add `--global` if you chose
+the global scope):
+
+```text
+git config --unset merge.tool
+git config --unset diff.tool
+git config --remove-section mergetool.comparecraft
+git config --remove-section difftool.comparecraft
+```
+
+Only unset `merge.tool`/`diff.tool` if their value is `comparecraft`.
 
 ## Prerequisites
 
@@ -110,15 +156,131 @@ separate from CI.
 
 ## Documentation and screenshots
 
-- Keep [README.md](README.md) focused on installation, commands, settings,
+- Keep [README.md](README.md) focused on getting started, commands, settings,
   screenshots, safety, limitations, and troubleshooting for users.
-- Keep build, test, CI, release-process, and implementation details here.
+- Keep manual VSIX installation, upgrade/removal procedures, build, test, CI,
+  release-process, and implementation details here.
 - Put Marketplace screenshots in [media/screenshots](media/screenshots) and use
   relative image links in the README so they are included in the VSIX.
 - After changing packaging rules or documentation, rebuild the VSIX and verify
   that the README and images are included and this guide is excluded.
-- Update the public installation instructions when Marketplace distribution
-  becomes available; do not advertise an unpublished listing.
+- Update the distribution status and manual installation instructions here when
+  Marketplace distribution becomes available; do not advertise an unpublished listing.
+
+## Advanced Git tool configuration
+
+**Configure as Git Merge/Diff Tool...** asks for:
+
+1. **Scope**: *This repository* (recommended, writes `.git/config`) or *Global*
+   (`~/.gitconfig`, requires a second confirmation).
+2. **Tools**: merge and diff, merge only, or diff only.
+3. Confirmation of the exact values, including any values they replace.
+
+It sets `merge.tool`/`diff.tool` to `comparecraft` and defines
+`mergetool.comparecraft.cmd` and `difftool.comparecraft.cmd` to run the installed
+console launcher (`ccomp`, next to the desktop app; the desktop executable is used
+if it is absent). `mergetool.comparecraft.trustExitCode` is `false`, so Git decides
+success from whether the merged file changed and asks when it did not. The window
+must be closed before Git continues to the next file.
+
+Previous values are recorded in VS Code. **Remove Git Tool Configuration...**
+restores each setting only while it still has CompareCraft's value; settings you
+changed afterwards are left alone and reported. Multi-valued settings are never
+replaced. Then run, for example:
+
+```text
+git mergetool
+git difftool HEAD~1 -- path/to/file
+```
+
+If the terminal does not use CompareCraft, check
+`git config --show-origin merge.tool`; a repository value overrides the global
+one. Rerun configuration after moving the app.
+
+## Installation discovery and helper diagnostics
+
+The extension does not modify `PATH` or download an engine. Without an override,
+it checks these desktop executable locations:
+
+- Windows: `%LOCALAPPDATA%\CompareCraft\comparecraft.exe`, then CompareCraft
+  directories under available Program Files locations.
+- macOS: `/Applications/CompareCraft.app/Contents/MacOS/comparecraft`, then the
+  equivalent app under `~/Applications`.
+- Linux: `/usr/bin/comparecraft`, `/usr/local/bin/comparecraft`,
+  `~/.local/bin/comparecraft`.
+
+For an AppImage or custom/portable installation, select its absolute executable
+path, not a directory or shell command. On Unix it must have execute permission;
+Windows requires an `.exe`. Invalid explicit paths are errors, not permission to
+use another installation. Workspace-controlled executable settings are ignored.
+
+CompareCraft installs `comparecraft-backend` (`comparecraft-backend.exe` on
+Windows) next to the desktop executable, for example
+`%LOCALAPPDATA%\CompareCraft\comparecraft-backend.exe`,
+`CompareCraft.app/Contents/MacOS/comparecraft-backend`, or
+`/usr/bin/comparecraft-backend`. The extension starts it only when needed, talks
+to it over stdin/stdout (no network port), and stops it when VS Code closes or
+the executable settings change. It only reads files; it never writes them.
+
+Run **CompareCraft: Check Embedded Backend** from the Command Palette to confirm
+the helper starts and compares text. Its version and protocol appear in a
+notification and in the **CompareCraft** Output channel. Embedded mode requires
+protocol version 1 and a helper from the same release line. An incompatible
+protocol or a crash is reported explicitly rather than replaced by another
+installation. If the helper is missing or too old, update the desktop app or
+set `comparecraft.backendPath` to the correct helper.
+
+Set `COMPARECRAFT_BACKEND_LOG=debug` before starting VS Code for per-request
+timing in the Output channel. After a crash, reopen the comparison; the helper
+is restarted on the next request.
+
+## Comparison implementation notes
+
+### Desktop snapshots and process lifecycle
+
+In desktop mode, unsaved editor content is written to private, read-only
+snapshots in the extension's global storage. Snapshots are never write-back
+targets. They are deleted when the desktop window that uses them closes, or,
+if VS Code closed first, on a later start once that desktop process has ended.
+Abandoned snapshots are removed after 7 days.
+
+Snapshot comparisons start a dedicated desktop window (`-solo`) so the extension
+knows when it closes. Folder comparisons refuse folders containing dirty open
+files because a folder cannot be snapshotted reliably.
+
+The desktop app remains open when VS Code or the extension closes. Plain
+file/folder comparisons may be handed to an existing CompareCraft instance
+through its normal single-instance behavior. Launching or closing the app is
+not reported as a successful merge. When a merge window closes, staging is
+offered only if the result changed and the Git conflict state is unchanged.
+
+### Embedded views and document handling
+
+The initial view is selected by the type of the first file that exists. Files
+with unsaved edits, Git revisions, clipboard content, and other in-memory sides
+always use text comparison. Older helpers without binary, picture, or table
+comparison methods fall back to text for initial comparisons; explicit views
+unsupported by the helper offer the desktop app instead.
+
+Switching views inside a CompareCraft tab opens another tab. Text Edit opens
+VS Code's normal editor. Folder Compare, Folder Sync, and Folder Merge ask
+before opening the desktop app. Embedded view settings are stored by VS Code,
+separately from the desktop app's settings.
+
+Editable text sides use the current VS Code buffer. Saving writes through VS
+Code documents, preserving existing encoding and line endings and supporting
+Undo, Local History, and format-on-save. Saves are refused if the file changed
+in an editor or on disk after loading. Merge results do not use the result
+file's buffer, so saves are also refused while that buffer is dirty.
+
+Hidden tabs retain their state. Extensions cannot cancel closing an unsaved
+webview tab; a notification offers **Restore Comparison** or **Open as Untitled**.
+Window reload restores open tabs, including unsaved text.
+
+Git comparisons offer the file's last 50 commits when choosing a revision.
+Missing Git sides are empty documents labeled with their absence; add/add
+conflicts use an empty base. Current, Base, and Incoming come read-only from
+Git's index stages, and only the result can be saved.
 
 ## Architecture and release handoff
 
