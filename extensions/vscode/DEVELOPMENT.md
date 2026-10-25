@@ -150,9 +150,48 @@ release verification.
 
 The [vscode-extension workflow](../../.github/workflows/vscode-extension.yml)
 runs unit tests, packaging, and `test:vsix` on Windows, macOS, and Linux against a
-helper built from source, then uploads the VSIX as a workflow artifact. It never
-publishes. Native installer, signing, menus, and desktop GUI checks remain
-separate from CI.
+helper built from source, then uploads the VSIX as a workflow artifact. Pushes
+and pull requests never publish. A manual run can publish that tested artifact
+after every platform passes. Native installer, signing, menus, and desktop GUI
+checks remain separate from CI.
+
+## Publish to the Visual Studio Marketplace
+
+### One-time setup
+
+1. Create or verify the Marketplace publisher **antebios**, matching `publisher`
+  in the extension manifest. The account used to publish must have access to it.
+2. Follow the [VS Code publishing guide](https://code.visualstudio.com/api/working-with-extensions/publishing-extension)
+  to create a Personal Access Token with **Marketplace > Manage** scope and
+  **All accessible organizations**. Use a limited lifetime and rotate it before
+  expiry. A GitHub token cannot replace this Marketplace token.
+3. In the repository's **Settings > Environments**, create **vscode-marketplace**.
+  Restrict deployment branches to **main** and add required reviewers where your
+  GitHub plan supports them.
+4. Add the token as an environment secret named **VSCE_PAT**. Do not put it in
+  source files, workflow inputs, or logs.
+
+### Release an extension version
+
+1. Complete the pending platform/sign-off checks in the release handoff. Confirm
+  the desktop app and helper for the extension's release line are available.
+2. Set a new version in the extension manifest and keep its lockfile version in
+  sync. Merge the release changes into **main**. Do not reuse a published version.
+3. In **Actions > vscode-extension > Run workflow**, select **main**, enable
+  **Publish the tested VSIX to the Visual Studio Marketplace**, and enter the
+  exact extension version, such as `0.1.0`.
+4. Wait for the Linux, Windows, and macOS tests, then approve the
+  **vscode-marketplace** deployment if required. The publish job downloads the
+  tested Linux VSIX and publishes it without rebuilding or changing its version.
+5. Verify the listing, icon, screenshots, and installation from the Marketplace.
+  After the first successful publication, update the distribution status at the
+  top of this guide. This workflow does not publish to Open VSX or GitHub Releases.
+
+Leaving the publish checkbox off runs verification only. Publishing is serialized
+to avoid concurrent uploads, and the job only receives the Marketplace token
+after the platform checks and environment protection rules pass. If an upload
+fails, check the Marketplace before retrying: a version already accepted there
+cannot be overwritten.
 
 ## Documentation and screenshots
 
@@ -162,6 +201,9 @@ separate from CI.
   release-process, and implementation details here.
 - Put Marketplace screenshots in [media/screenshots](media/screenshots) and use
   relative image links in the README so they are included in the VSIX.
+- The extension icon is [media/icon.png](media/icon.png), copied from the desktop
+  app's [256-pixel icon](../../src-tauri/icons/128x128@2x.png). Keep it in sync
+  when the app branding changes.
 - After changing packaging rules or documentation, rebuild the VSIX and verify
   that the README and images are included and this guide is excluded.
 - Update the distribution status and manual installation instructions here when

@@ -12,9 +12,10 @@ Ctrl+Z fixes below); it is committed by the owner after this update.
 (remaining views) both passed the owner's F5 test on 2026-10-23. T012's
 sign-off also brought a Table Compare follow-up (Beyond Compare parity) that
 changes the shared view in both the desktop app and VS Code; see the Phase 5
-handoff. **Phase 6 (T013-T014) is implemented and verified on Windows x64**;
-it awaits the owner's manual VSIX check and the first run of the new
-`vscode-extension` workflow on Linux and macOS (see the Phase 6 handoff).
+handoff. **Phase 6 (T013-T014) is complete**, closed on 2026-10-24 after the
+owner confirmed successful Linux use. Windows verification and local Linux
+VSIX lifecycle checks are recorded below. Native macOS, untested installer
+variants, and remote CI remain explicit verification gaps, not claimed passes.
 No Marketplace publication has been performed. Git configuration is changed
 only by the user-invoked, confirmed setup command; tests use disposable
 repositories and a temporary `GIT_CONFIG_GLOBAL`.
@@ -65,8 +66,8 @@ Planning coverage is not evidence of implementation completion.
 | T010 | 4 | done | T008, T009 | `embedded.ts` WebviewPanel + serializer, CSP, validated RPC, guarded document writes, external-change events, restore on close/reload; 45 unit tests; real VS Code host test with installed helper passes; owner F5 test passed 2026-10-22 after undo/Ctrl+Z fixes |
 | T011 | 5 | done | T005, T010 | Embedded three-way merge (`gitResolveConflictEmbedded`); 47 unit tests; real VS Code host test incl. merge result-only/CRLF/unsaved-edit refusal; owner F5 test passed 2026-10-23 after three fixes |
 | T012 | 5 | done | T010 | Scope B: read-only Hex/Table/Picture/Patch panels, Text Edit in VS Code's editor, folder views desktop-only; 4 new helper methods; 51 unit + 13 helper tests; host test passes with a T012 helper and falls back to text with an older one; owner F5 sign-off 2026-10-23. Follow-up: Table Compare defaults to key column 1 with no header row, two independently scrolling sides, details pane for the selected side |
-| T013 | 6 | in_progress | T006, T011, T012 | Windows x64 matrix and regressions recorded below (VS Code 1.143.1, CompareCraft 0.1.0 NSIS per-user, protocol 1); Linux/macOS await the first `vscode-extension` workflow run (local WSL/Docker blocked by machine policy) |
-| T014 | 6 | in_progress | T013 | `npm run package` (vsce, no publish) and `npm run test:vsix` (isolated install 0.0.1 -> upgrade 0.1.0 -> content check -> 8 host tests on installed files -> uninstall) pass on Windows; CI workflow, README install/upgrade/removal/troubleshooting added; owner VSIX check pending |
+| T013 | 6 | done | T006, T011, T012 | Windows x64 matrix and regressions recorded below; owner confirmed Linux success and requested closeout on 2026-10-24; remaining platform/package gaps retained |
+| T014 | 6 | done | T013 | VSIX build and isolated install/upgrade/content/host-test/uninstall pass on Windows and Linux; Linux helper-specific steps skipped; docs, icon, and opt-in Marketplace workflow complete; owner Linux sign-off 2026-10-24 |
 
 ## Platform/workflow evidence
 
@@ -75,16 +76,21 @@ VS Code version, app/helper/protocol versions, and installer type.
 
 Windows column: Windows x64, VS Code 1.143.1 (x64 user install), CompareCraft
 0.1.0 NSIS per-user install at `%LOCALAPPDATA%\CompareCraft`, helper protocol 1.
-The MSI package was not tested. Linux/macOS columns: no local machine (WSL and
-Docker cannot start under this machine's policy); "CI" means covered by the
+The MSI package was not tested. Linux: owner confirmed successful extension use
+on 2026-10-24; local automated lifecycle checks used Linux x64 and VS Code 1.139.1,
+without a built helper. The owner did not report a distribution, installer format,
+or per-journey breakdown, so this is not blanket coverage of the Linux column.
+macOS has no native verification recorded. "CI" means configured coverage in the
 `vscode-extension` workflow (unit tests, VSIX package, `test:vsix` with host
 tests against a source-built debug helper; Linux under Xvfb), which has not yet
-run. CI does not exercise installed packages, native menus, or the desktop GUI.
+run as far as the recorded evidence shows. CI does not exercise installed
+packages, native menus, or the desktop GUI.
 
 | Journey | Windows | Linux | macOS |
 |---|---|---|---|
+| Overall extension use / owner sign-off | owner F5 sign-off in Phases 4-5 | owner confirmed success and requested Phase 6 closeout on 2026-10-24; individual journeys not specified | not recorded |
 | Installed discovery, custom paths, spaces | automated pass; default per-user install and override tested | candidate unit tests (CI); native not run | candidate unit tests (CI); native not run |
-| Files/folders, Select Left, pickers | host/unit pass; owner F5 use in Phases 4-5 | host test (CI); native menus not run | host test (CI); native menus not run |
+| Files/folders, Select Left, pickers | host/unit pass; owner F5 use in Phases 4-5 | local host pass for file/folder dispatch, Explorer multi-selection, independent left selections; native picker visuals not recorded | host test (CI); native menus not run |
 | Dirty/untitled, selections, clipboard, saved version | unit pass (snapshot content, read-only, release); commands registered in host; owner F5 use | unit/host (CI) | unit/host (CI) |
 | Snapshot survival after GUI handoff | design: `-solo` dedicated process + PID marker sweep; unit pass; manual GUI not run | unit (CI) | unit (CI) |
 | HEAD/index/working/revisions and existing diff | real Git fixture pass (content/labels); diff forwarding manual not run | Git fixture unit tests (CI) | Git fixture unit tests (CI) |
@@ -95,7 +101,7 @@ run. CI does not exercise installed packages, native menus, or the desktop GUI.
 | Embedded text, edits, undo/save/close/reload | host test pass (CSP bundle, concurrent panels, CRLF, unsaved buffers, stale-write refusal); owner F5 pass 2026-10-22 | host test (CI) | host test (CI) |
 | Embedded merge and remaining views | host test pass with installed helper (merge result-only/CRLF/unsaved refusal; hex/table/picture/patch/Text Edit); owner F5 pass 2026-10-23 | host test (CI) | host test (CI) |
 | Formats/backups, read-only, destructive confirmations | line endings preserved and read-only sides refuse writes (host); embedded mode has no backups and no destructive folder operations (desktop only); staging asks for confirmation (unit) | host/unit (CI) | host/unit (CI) |
-| VSIX install/upgrade/removal | `test:vsix` pass 2026-10-23: isolated install 0.0.1, upgrade to 0.1.0, 20-file content check, 8 host tests on the installed files with the installed helper, uninstall; owner install in normal VS Code pending | `test:vsix` (CI) | `test:vsix` (CI) |
+| VSIX install/upgrade/removal | `test:vsix` pass 2026-10-23: isolated install 0.0.1, upgrade to 0.1.0, 20-file content check, 8 host tests on the installed files with the installed helper, uninstall; separate owner install in normal Windows VS Code not recorded | local `test:vsix` PASS 2026-10-24: install 0.0.1, upgrade 0.1.0, 24-file content check including icon, host tests, uninstall; helper steps skipped | `test:vsix` (CI) |
 | Desktop regressions | desktop typecheck/build pass; Rust: all suites pass except 14 pre-existing `script_golden` failures ("Unexpected argument(s)"), unchanged by this work | existing `build` workflow | existing `build` workflow |
 
 Distinguish Windows NSIS/MSI, Linux deb/rpm/AppImage, and macOS app/signing.
@@ -477,17 +483,23 @@ Phase 4 checks (Windows x64, VS Code 1.143.0, installed helper 0.1.0, 2026-10-22
 - Next: Phase 6 (T013, T014).
 - Batch evidence: [phase-5-report.yaml](phase-5-report.yaml).
 
-## Phase 6 handoff (in progress: owner check and first CI run pending)
+## Phase 6 handoff (complete: owner Linux sign-off 2026-10-24)
+
+- Closeout: the owner confirmed that the extension is working successfully on
+  Linux and requested Phase 6 completion on 2026-10-24. T013 and T014 are done.
+  This closes the implementation phase, not every platform/package release check.
 
 - T014 packaging: `@vscode/vsce` devDependency; `npm run package` runs
   `vscode:prepublish` (webview + TypeScript builds) and `vsce package
   --no-dependencies` to `comparecraft-0.1.0.vsix` (git-ignored; 21 entries,
-  about 110 KB). `.vscodeignore` now also excludes `.gitignore` and `*.vsix`.
-  There is no publish script and no token anywhere.
+  about 110 KB at the original Windows checkpoint). The latest Linux package
+  includes the 256x256 app icon and screenshots. `.vscodeignore` also excludes
+  `.gitignore`, `*.vsix`, and the development guide. Publishing uses an environment
+  secret, not a token stored in the repository.
 - T014 lifecycle: `scripts/test-vsix.cjs` (`npm run test:vsix [vsix]`) uses a
   temporary `--extensions-dir`/`--user-data-dir`: packages a 0.0.1 copy of the
   same build, installs it, upgrades to the real VSIX, checks the installed files
-  (required: manifest `main`, webview bundle, README, LICENSE; forbidden:
+  (required: manifest `main`, icon, webview bundle, README, LICENSE; forbidden:
   sources, tests, scripts, maps, `node_modules`, lockfile), runs `out/test/host.js`
   with the installed folder as the extension, uninstalls, and confirms it is no
   longer listed. `COMPARECRAFT_VSIX_SKIP_HOST=1` skips the host step.
@@ -495,10 +507,13 @@ Phase 4 checks (Windows x64, VS Code 1.143.0, installed helper 0.1.0, 2026-10-22
   the extension, shared UI, `src-tauri`, or root manifests; manual dispatch);
   `contents: read`; Windows, macOS, Ubuntu 22.04: builds the debug helper,
   `npm ci` (root and extension), `npm test`, `npm run package`, `test:vsix`
-  (Xvfb on Linux), and uploads the VSIX artifact from Linux. Not yet run.
-- T014 docs: extension README finalized (install from VSIX, upgrade, removal,
-  Git-setup reversal before uninstalling plus manual `git config` cleanup,
-  package/verify, troubleshooting, release status and known limitations).
+  (Xvfb on Linux), and uploads the VSIX artifact from Linux. A completed remote
+  run is not recorded. Optional Marketplace publishing requires manual dispatch
+  from main, an exact-version confirmation, all platform checks, and the
+  `vscode-marketplace` environment's `VSCE_PAT` secret. No publication performed.
+- T014 docs: user-focused README with quick start, commands, screenshots, safety,
+  settings, troubleshooting, and limitations. Manual VSIX installation, upgrade,
+  removal, Git cleanup, diagnostics, and publishing setup are in DEVELOPMENT.md.
 - Git setup reversal: covered by the unit test "applying and removing tool
   settings restores earlier values and keeps later user edits" (temp global and
   repo config). Uninstalling does not touch Git configuration; the records
@@ -511,16 +526,20 @@ Phase 4 checks (Windows x64, VS Code 1.143.0, installed helper 0.1.0, 2026-10-22
   -- --test-threads=1`: lib 87, ccomp 2, backend 3, console 4, engine_golden
   15, hex_golden 3, pix_golden 1 pass; `script_golden` 4 pass / 14 fail, the
   same pre-existing failures recorded in Phase 5.
-- Not executed: Linux and macOS (no local machine; WSL/Docker blocked by
-  policy) beyond the pending CI run; installed deb/rpm/AppImage, macOS app and
-  signing, Windows MSI, ARM64; native menu/picker visuals outside the owner's
-  Windows F5 use.
-- Owner checks to close Phase 6: (1) install `comparecraft-0.1.0.vsix` in
-  normal VS Code, run Check Embedded Backend and one embedded comparison;
-  (2) optionally Configure then Remove Git Tool Configuration in a scratch
-  repository and confirm `git config --list --show-origin` is back to before;
-  (3) uninstall or keep the VSIX; (4) push and confirm the `vscode-extension`
-  workflow passes on all three OSes.
+- Linux verification (2026-10-24): `npm --prefix extensions/vscode run package`
+  passed; `VSCODE_EXECUTABLE_PATH=/usr/share/code/code xvfb-run -a npm --prefix
+  extensions/vscode run test:vsix` passed on Linux x64 / VS Code 1.139.1:
+  install 0.0.1, upgrade 0.1.0, 24 installed files including the icon, host tests
+  (26 commands, file/folder dispatch, multi-selection, left selections), uninstall.
+  Backend-specific host steps were skipped because no local debug helper was
+  built. Workflow YAML, release version/branch guards, icon bytes/dimensions,
+  and VSIX icon metadata passed local checks. Owner success is recorded separately
+  from these automated results; no additional manual journeys are inferred.
+- Remaining release checks: native macOS app/signing; individual Linux
+  deb/rpm/AppImage variants (owner's format not recorded); Windows MSI and ARM64;
+  exhaustive native menu/picker visuals; optional owner Git setup/remove in a
+  scratch repository; completed three-platform CI. These remain follow-up
+  verification gaps rather than reasons to leave Phase 6 in progress.
 - Batch evidence: [phase-6-report.yaml](phase-6-report.yaml).
 
 ## Per-increment handoff entry

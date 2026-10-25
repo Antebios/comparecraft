@@ -15,11 +15,12 @@ automated gate on Windows against the installed helper, and on 2026-10-22 the
 owner confirmed it in the Extension Development Host (after the undo/Ctrl+Z
 fixes recorded in [handoff.md](handoff.md)). Phase 5 (T011-T012, embedded
 merge and remaining views) is complete with owner sign-off on 2026-10-23.
-Phase 6 (T013-T014) is implemented and verified on Windows x64 (VSIX package,
-isolated install/upgrade/host-test/uninstall, regressions); it awaits the
-owner's VSIX check and the first run of the `vscode-extension` workflow, which
-is the only Linux/macOS coverage. Native Linux/macOS installer validation is
-still required.
+Phase 6 (T013-T014) is complete as of 2026-10-24, following the owner's
+confirmation that the extension works successfully on Linux. Windows x64
+verification and local Linux x64 VSIX lifecycle checks are recorded in the
+handoff. Native macOS, untested installer variants, and a completed three-platform
+CI run remain documented release-validation gaps, not phase-completion blockers
+or checks claimed as passed.
 This directory is the portable source of truth: no prior chat or session database
 is required to resume. Read [decisions.md](decisions.md) and
 [handoff.md](handoff.md) before working.
@@ -202,12 +203,14 @@ conflicts, and destructive folder behavior; no placeholder successes.
   reproducible VSIX/CI artifacts in `extensions/vscode/` and `.github/workflows/`.
   Verify upgrade/removal and reversible Git setup. Do not publish automatically.
 
-**Status (in progress):** `npm run package` builds the VSIX with `vsce
+**Status (complete, owner sign-off 2026-10-24):** `npm run package` builds the VSIX with `vsce
 --no-dependencies` (no publish script); `npm run test:vsix` installs an older
 build, upgrades, checks installed contents, runs the host tests on the installed
 files, and uninstalls, in an isolated profile; `.github/workflows/vscode-extension.yml`
-runs these on Windows, macOS, and Linux and uploads the VSIX artifact. Windows
-x64 results and remaining gaps are in [handoff.md](handoff.md) and
+runs these on Windows, macOS, and Linux and uploads the VSIX artifact. Optional
+Marketplace publishing requires a manual run from main, an exact-version
+confirmation, passing platform checks, and the publishing environment. Windows
+x64 results, Linux owner sign-off and local lifecycle checks, and remaining gaps are in [handoff.md](handoff.md) and
 [phase-6-report.yaml](phase-6-report.yaml).
 
 **Gate:** installable VSIX and compatible installers are verified on supported

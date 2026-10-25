@@ -30,8 +30,17 @@ function run(command, args, options = {}) {
 
 function packageOlderVsix(directory) {
   const staging = path.join(directory, "older");
-  for (const item of ["README.md", "LICENSE", ".vscodeignore", path.join("out", "src"), path.join("media", "webview")]) {
-    cpSync(path.join(root, item), path.join(staging, item), { recursive: true });
+  for (const item of [
+    "README.md",
+    "LICENSE",
+    ".vscodeignore",
+    manifest.icon,
+    path.join("out", "src"),
+    path.join("media", "webview"),
+  ]) {
+    cpSync(path.join(root, item), path.join(staging, item), {
+      recursive: true,
+    });
   }
   const older = { ...manifest, version: olderVersion, scripts: {}, devDependencies: {} };
   writeFileSync(path.join(staging, "package.json"), JSON.stringify(older, null, 2));
@@ -50,8 +59,15 @@ function listFiles(directory, prefix = "") {
 function checkInstalledFiles(installed) {
   const files = listFiles(installed);
   const lower = new Set(files.map(file => file.toLowerCase()));
-  const required = ["package.json", "readme.md", "license.txt", manifest.main.replace(/^\.\//, ""),
-    "media/webview/webview.js", "media/webview/webview.css"];
+  const required = [
+    "package.json",
+    "readme.md",
+    "license.txt",
+    manifest.icon,
+    manifest.main.replace(/^\.\//, ""),
+    "media/webview/webview.js",
+    "media/webview/webview.css",
+  ];
   const missing = required.filter(file => !lower.has(file.toLowerCase()));
   const forbidden = files.filter(file => /^(src|test|scripts|node_modules|out\/test)\//.test(file)
     || /\.(map|vsix)$/.test(file) || (/\.ts$/.test(file) && !/\.d\.ts$/.test(file))
