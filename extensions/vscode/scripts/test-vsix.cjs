@@ -6,6 +6,7 @@ const { spawnSync } = require("node:child_process");
 const { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { resolveVSCodeExecutable } = require("./vscode-executable.cjs");
 
 const root = path.resolve(__dirname, "..");
 const manifest = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
@@ -85,7 +86,7 @@ function checkInstalledFiles(installed) {
 async function main() {
   const vsix = path.resolve(process.argv[2] ?? path.join(root, `${manifest.name}-${manifest.version}.vsix`));
   if (!existsSync(vsix)) throw new Error(`${vsix} not found. Run npm run package first.`);
-  const executable = process.env.VSCODE_EXECUTABLE_PATH ?? await downloadAndUnzipVSCode();
+  const executable = process.env.VSCODE_EXECUTABLE_PATH ?? resolveVSCodeExecutable(await downloadAndUnzipVSCode());
   const [cli, ...cliArgs] = resolveCliArgsFromVSCodeExecutablePath(executable, { reuseMachineInstall: true });
   const directory = mkdtempSync(path.join(os.tmpdir(), "comparecraft-vsix-"));
   const extensionsDir = path.join(directory, "extensions");

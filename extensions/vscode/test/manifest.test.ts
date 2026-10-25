@@ -1,9 +1,73 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
 const manifest = JSON.parse(readFileSync(path.resolve(__dirname, "..", "..", "package.json"), "utf8"));
+const { resolveVSCodeExecutable } =
+  require("../../scripts/vscode-executable.cjs") as {
+    resolveVSCodeExecutable: (executable: string, platform?: string) => string;
+  };
+const childProcess: typeof import("node:child_process") = require("node:child_process");
+
+test("VS Code executable resolution preserves existing paths and non-macOS platforms", () => {
+  assert.equal(
+    resolveVSCodeExecutable(process.execPath, "darwin"),
+    process.execPath,
+  );
+  assert.equal(
+    resolveVSCodeExecutable("/missing/code", "linux"),
+    "/missing/code",
+  );
+  assert.equal(
+    resolveVSCodeExecutable("C:\\missing\\Code.exe", "win32"),
+    "C:\\missing\\Code.exe",
+  );
+});
+
+test("VS Code executable resolution reads a renamed macOS binary from the bundle manifest", (context) => {
+  const directory = mkdtempSync(
+    path.join(tmpdir(), "comparecraft-vscode-bundle-"),
+  );
+  try {
+    const contents = path.join(directory, "Visual Studio Code.app", "Contents");
+    const executable = path.join(contents, "MacOS", "Electron");
+    const resolved = path.join(contents, "MacOS", "Code");
+    mkdirSync(path.dirname(resolved), { recursive: true });
+    writeFileSync(resolved, "");
+    context.mock.method(
+      childProcess,
+      "execFileSync",
+      (command: string, args: string[]) => {
+        assert.equal(command, "/usr/bin/plutil");
+        assert.deepEqual(args, [
+          "-extract",
+          "CFBundleExecutable",
+          "raw",
+          "-o",
+          "-",
+          path.join(contents, "Info.plist"),
+        ]);
+        return "Code\n";
+      },
+    );
+    assert.equal(resolveVSCodeExecutable(executable, "darwin"), resolved);
+    rmSync(resolved);
+    assert.throws(
+      () => resolveVSCodeExecutable(executable, "darwin"),
+      /bundle executable not found/,
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
 
 test("manifest declares the isolated build/test scripts and local trusted extension", () => {
   assert.ok(manifest.scripts.build);
