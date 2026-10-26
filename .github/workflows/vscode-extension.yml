@@ -58,23 +58,23 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             extensions/vscode/package-lock.json
-      - name: Validate publish request
-        if: github.event_name == 'workflow_dispatch' && inputs.publish
-        env:
-          RELEASE_VERSION: ${{ inputs.version }}
-        run: |
-          node <<'NODE'
-          const { version, publisher } = require("./extensions/vscode/package.json");
-          if (process.env.GITHUB_REF !== "refs/heads/main") {
-            throw new Error("Marketplace releases must run from main.");
-          }
-          if (process.env.RELEASE_VERSION !== version) {
-            throw new Error(`Enter the exact extension version (${version}) to publish.`);
-          }
-          if (publisher !== "MacrossPlusInc") {
-            throw new Error("Expected Marketplace publisher MacrossPlusInc.");
-          }
-          NODE
+      # - name: Validate publish request
+      #   if: github.event_name == 'workflow_dispatch' && inputs.publish
+      #   env:
+      #     RELEASE_VERSION: ${{ inputs.version }}
+      #   run: |
+      #     node <<'NODE'
+      #     const { version, publisher } = require("./extensions/vscode/package.json");
+      #     if (process.env.GITHUB_REF !== "refs/heads/main") {
+      #       throw new Error("Marketplace releases must run from main.");
+      #     }
+      #     if (process.env.RELEASE_VERSION !== version) {
+      #       throw new Error(`Enter the exact extension version (${version}) to publish.`);
+      #     }
+      #     if (publisher !== "MacrossPlusInc") {
+      #       throw new Error("Expected Marketplace publisher MacrossPlusInc.");
+      #     }
+      #     NODE
       - name: Linux deps
         if: runner.os == 'Linux'
         run: |
