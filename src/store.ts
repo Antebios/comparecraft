@@ -1,6 +1,6 @@
 import { createSignal } from "solid-js";
 import { createStore, produce } from "solid-js/store";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrentWindow } from "./host";
 import { api, basename, type LaunchSpec, type Session, type ViewKind } from "./api";
 import { setSetting, settings, type WorkspaceTab } from "./settings";
 

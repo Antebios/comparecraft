@@ -13,3 +13,4 @@ packaging/arch/*.pkg.tar.*
 # MkDocs output
 site/
 .venv-docs/
+.vscode/settings.json

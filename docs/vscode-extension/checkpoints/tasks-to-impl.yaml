@@ -1,0 +1,269 @@
+metadata:
+  source_tasks: "../plan.md"
+  execution_ledger: "../handoff.md"
+  scope: "Phases 1-6 complete; Phase 6 closed with Linux owner sign-off on 2026-10-24; remaining release-validation gaps documented"
+summary:
+  total_tasks: 14
+  completed_tasks: 14
+  in_progress_tasks: 0
+  pending_tasks: 0
+tasks:
+  - task_id: T001
+    status: completed
+    implementation:
+      files:
+        - extensions/vscode/package.json
+        - extensions/vscode/package-lock.json
+        - extensions/vscode/tsconfig.json
+        - extensions/vscode/dev.code-workspace
+        - extensions/vscode/src/contracts.ts
+        - extensions/vscode/test/manifest.test.ts
+        - extensions/vscode/scripts/test-integration.cjs
+    upstream_trace:
+      plan_item: "1.1"
+      requirements: [REQ-001, REQ-009, REQ-010]
+    verification:
+      build_passed: true
+      evidence: "15 unit/manifest tests and actual VS Code host activation passed"
+  - task_id: T002
+    status: completed
+    implementation:
+      files:
+        - extensions/vscode/src/discovery.ts
+        - extensions/vscode/src/process.ts
+        - extensions/vscode/test/core.test.ts
+    upstream_trace:
+      plan_item: "1.1"
+      requirements: [REQ-002, REQ-009]
+    verification:
+      build_passed: true
+      evidence: "Discovery/process tests, Windows installed discovery, CLI and responsive GUI smoke passed"
+  - task_id: T003
+    status: completed
+    implementation:
+      files:
+        - extensions/vscode/src/controller.ts
+        - extensions/vscode/src/resources.ts
+        - extensions/vscode/src/extension.ts
+        - extensions/vscode/test/host.ts
+        - extensions/vscode/README.md
+        - README.md
+    upstream_trace:
+      plan_item: "1.1"
+      requirements: [REQ-001, REQ-003, REQ-006, REQ-009]
+    verification:
+      build_passed: true
+      evidence: "Controller and dirty-resource tests plus actual host command dispatch passed; owner confirmed Extension Development Host startup and context-menu testing on Windows on 2026-10-21"
+  - task_id: T004
+    status: completed
+    implementation:
+      files:
+        - extensions/vscode/src/snapshots.ts
+        - extensions/vscode/src/contracts.ts
+        - extensions/vscode/src/process.ts
+        - extensions/vscode/src/controller.ts
+        - extensions/vscode/src/resources.ts
+        - extensions/vscode/src/extension.ts
+        - extensions/vscode/test/core.test.ts
+    upstream_trace:
+      plan_item: "2.1"
+      requirements: [REQ-003, REQ-006, REQ-009]
+    verification:
+      build_passed: true
+      evidence: "Snapshot and dirty-file routing unit tests; host registers text commands"
+  - task_id: T005
+    status: completed
+    implementation:
+      files:
+        - extensions/vscode/src/git.ts
+        - extensions/vscode/src/conflicts.ts
+        - extensions/vscode/src/gitWorkflows.ts
+        - extensions/vscode/package.json
+        - extensions/vscode/test/git.test.ts
+        - extensions/vscode/test/manifest.test.ts
+        - extensions/vscode/test/host.ts
+    upstream_trace:
+      plan_item: "2.2"
+      requirements: [REQ-003, REQ-004, REQ-009]
+    verification:
+      build_passed: true
+      evidence: "Real disposable Git repositories for merge, rebase, add/add, modify/delete, cherry-pick stale-state refusal and revision content"
+  - task_id: T006
+    status: completed
+    implementation:
+      files:
+        - extensions/vscode/src/gitTools.ts
+        - extensions/vscode/README.md
+    upstream_trace:
+      plan_item: "2.3"
+      requirements: [REQ-005, REQ-009, REQ-010]
+    verification:
+      build_passed: true
+      evidence: "Local/temp-global apply and remove tests, real git mergetool run with fake tool, installed ccomp -solo wait smoke"
+  - task_id: T007
+    status: completed
+    implementation:
+      files:
+        - docs/vscode-extension/backend-protocol.md
+        - src-tauri/src/backend.rs
+        - src-tauri/src/backend_main.rs
+        - src-tauri/src/lib.rs
+        - src-tauri/Cargo.toml
+        - src-tauri/tests/backend.rs
+        - src-tauri/tests/console.rs
+    upstream_trace:
+      plan_item: "3.1"
+      requirements: [REQ-007, REQ-009, REQ-010]
+    verification:
+      build_passed: true
+      evidence: "11 backend unit tests and 3 stdio integration tests; engine parity with direct calls"
+  - task_id: T008
+    status: completed
+    implementation:
+      files:
+        - extensions/vscode/src/backend.ts
+        - extensions/vscode/src/discovery.ts
+        - extensions/vscode/src/extension.ts
+        - extensions/vscode/package.json
+        - extensions/vscode/test/backend.test.ts
+        - scripts/sign-macos-binaries.mjs
+        - tests/macos-signing.test.mjs
+        - .github/workflows/build.yml
+        - packaging/arch/PKGBUILD
+    upstream_trace:
+      plan_item: "3.1"
+      requirements: [REQ-007, REQ-009, REQ-010]
+    verification:
+      build_passed: true
+      evidence: "38 extension tests incl. real helper; host 25 commands; installed helper passes the contract test and Check Embedded Backend in real VS Code"
+  - task_id: T009
+    status: completed
+    implementation:
+      files:
+        - src/host/index.ts
+        - src/host/tauri.ts
+        - src/webview/main.tsx
+        - src/webview/host.ts
+        - src/webview/vscode.css
+        - vite.webview.config.ts
+        - src/views/TextCompare.tsx
+        - package.json
+    upstream_trace:
+      plan_item: "4.1"
+      requirements: [REQ-007, REQ-008]
+    verification:
+      build_passed: true
+      evidence: "Root typecheck, desktop build and webview build pass; webview bundle has 0 Tauri references"
+  - task_id: T010
+    status: completed
+    implementation:
+      files:
+        - extensions/vscode/src/embedded.ts
+        - extensions/vscode/src/embeddedCore.ts
+        - extensions/vscode/src/controller.ts
+        - extensions/vscode/src/extension.ts
+        - extensions/vscode/src/gitWorkflows.ts
+        - extensions/vscode/package.json
+        - extensions/vscode/test/embedded.test.ts
+        - extensions/vscode/test/host.ts
+    upstream_trace:
+      plan_item: "4.1"
+      requirements: [REQ-001, REQ-006, REQ-007, REQ-008, REQ-009]
+    verification:
+      build_passed: true
+      evidence: "45 extension tests; real VS Code panels with the installed helper: concurrent panels, guarded saves, stale-write refusal, backend failure and recovery; owner F5 confirmation 2026-10-22 after undo/Ctrl+Z fixes"
+  - task_id: T011
+    status: completed
+    implementation:
+      files:
+        - src/views/TextMerge.tsx
+        - src/webview/main.tsx
+        - src/webview/host.ts
+        - extensions/vscode/src/embedded.ts
+        - extensions/vscode/src/embeddedCore.ts
+        - extensions/vscode/src/controller.ts
+        - extensions/vscode/src/extension.ts
+        - extensions/vscode/src/gitWorkflows.ts
+        - extensions/vscode/package.json
+        - extensions/vscode/test/embedded.test.ts
+        - extensions/vscode/test/core.test.ts
+        - extensions/vscode/test/git.test.ts
+        - extensions/vscode/test/manifest.test.ts
+        - extensions/vscode/test/host.ts
+    upstream_trace:
+      plan_item: "5.1"
+      requirements: [REQ-004, REQ-005, REQ-006, REQ-008, REQ-009]
+    verification:
+      build_passed: true
+      evidence: "47 extension tests; real VS Code host test (26 commands; merge writes only its result, keeps CRLF, refuses with unsaved edits elsewhere); browser check of the merge webview with the installed helper; owner F5 test passed 2026-10-23 after three fixes"
+  - task_id: T012
+    status: completed
+    implementation:
+      files:
+        - src-tauri/src/backend.rs
+        - src-tauri/src/table.rs
+        - src-tauri/src/report.rs
+        - src/webview/main.tsx
+        - src/views/TableCompare.tsx
+        - src/styles.css
+        - extensions/vscode/src/embeddedCore.ts
+        - extensions/vscode/src/embedded.ts
+        - extensions/vscode/src/extension.ts
+        - extensions/vscode/src/backend.ts
+        - extensions/vscode/src/process.ts
+        - extensions/vscode/test/embedded.test.ts
+        - extensions/vscode/test/host.ts
+        - extensions/vscode/README.md
+        - docs/vscode-extension/backend-protocol.md
+        - docs/manual/table-compare.md
+        - README.md
+    upstream_trace:
+      plan_item: "5.1"
+      requirements: [REQ-008, REQ-009]
+    verification:
+      build_passed: true
+      evidence: "51 extension tests; 13 helper tests; host test with a T012 helper opens real hex/picture/table/patch webviews through the helper, and falls back to text with the installed pre-T012 helper; owner F5 sign-off 2026-10-23. Table Compare follow-up (BC defaults and two-pane layout): new table test, all lib tests, unchanged script_golden output, browser check with the owner's CSVs matching BC's 20,834 difference rows"
+  - task_id: T013
+    status: completed
+    implementation:
+      files:
+        - docs/vscode-extension/handoff.md
+        - docs/vscode-extension/phase-6-report.yaml
+    upstream_trace:
+      plan_item: "6.1"
+      requirements: [REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-006, REQ-007, REQ-008, REQ-009, REQ-010]
+    verification:
+      build_passed: true
+      evidence: "Windows x64 verification recorded (VS Code 1.143.1, CompareCraft 0.1.0 NSIS per-user, protocol 1); Linux owner sign-off 2026-10-24 and local Linux x64 VSIX lifecycle PASS on VS Code 1.139.1. Native macOS and untested installer variants remain documented gaps, not claimed passes"
+  - task_id: T014
+    status: completed
+    implementation:
+      files:
+        - extensions/vscode/package.json
+        - extensions/vscode/package-lock.json
+        - extensions/vscode/.vscodeignore
+        - extensions/vscode/scripts/test-vsix.cjs
+        - extensions/vscode/README.md
+        - extensions/vscode/DEVELOPMENT.md
+        - extensions/vscode/media/icon.png
+        - .github/workflows/vscode-extension.yml
+    upstream_trace:
+      plan_item: "6.1"
+      requirements: [REQ-001, REQ-005, REQ-010]
+    verification:
+      build_passed: true
+      evidence: "VSIX package and lifecycle PASS on Windows x64 (2026-10-23) and Linux x64 (2026-10-24, 24 installed files including icon; helper-specific steps skipped). Git-setup reversal unit test passes. User/developer docs separated; manual main-only Marketplace publishing and version guards validated locally. Owner Linux sign-off closes the phase; no publication or completed remote CI run claimed"
+pending_tasks: []
+in_progress_tasks: []
+untracked_changes: []
+validation:
+  passed: true
+  errors: []
+  warnings:
+    - "Owner confirmed Linux success on 2026-10-24 and earlier Windows host startup/context menus; exhaustive Linux menu/picker journeys and native macOS verification are not separately recorded."
+    - "Phase 2 manual desktop-GUI journeys (conflict save/stage, Compare with Saved, real mergetool) remain unexecuted."
+    - "This checkpoint completes Phases 1-6 with Linux owner sign-off; a completed three-platform vscode-extension workflow run is not recorded."
+    - "Linux installer format was not reported; installed deb/rpm/AppImage coverage, macOS app/signing, Windows MSI and ARM64 remain unverified."
+    - "Phase 3 is verified on Windows only; native Linux/macOS helper checks remain."
+    - "Phase 4 owner F5 test passed (compare, edit, save, undo/redo); close-restore, reload and theme checks were not individually recorded."
+  blocking_issues: []

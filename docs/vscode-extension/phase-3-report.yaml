@@ -1,0 +1,82 @@
+batch_id: phase-3
+completed_tasks: [T007, T008]
+blocked_tasks: []
+files_changed:
+  T007:
+    - {file: docs/vscode-extension/backend-protocol.md, change_type: created, description: "Crate boundary decision and protocol v1 contract"}
+    - {file: src-tauri/src/backend.rs, change_type: created, description: "JSON-RPC/Content-Length server, worker pool, limits, cancellation, read-only engine methods, unit tests"}
+    - {file: src-tauri/src/backend_main.rs, change_type: created, description: "comparecraft-backend --stdio / --version entry point"}
+    - {file: src-tauri/src/lib.rs, change_type: modified, description: "Export backend module"}
+    - {file: src-tauri/Cargo.toml, change_type: modified, description: "Third [[bin]] comparecraft-backend"}
+    - {file: src-tauri/tests/backend.rs, change_type: created, description: "Real binary over stdio pipes"}
+    - {file: src-tauri/tests/console.rs, change_type: modified, description: "Expect -solo first after the ccomp fix (Unix CI)"}
+  T008:
+    - {file: extensions/vscode/src/backend.ts, change_type: created, description: "BackendClient and BackendManager"}
+    - {file: extensions/vscode/src/discovery.ts, change_type: modified, description: "Shared override validation; discoverBackend"}
+    - {file: extensions/vscode/src/extension.ts, change_type: modified, description: "Backend manager lifecycle, settings reset, Check Embedded Backend command"}
+    - {file: extensions/vscode/package.json, change_type: modified, description: "25 commands; backendPath description"}
+    - {file: extensions/vscode/test/backend.test.ts, change_type: created, description: "Fake-helper failure modes and real-helper contract test"}
+    - {file: extensions/vscode/test/manifest.test.ts, change_type: modified, description: "25 commands"}
+    - {file: extensions/vscode/test/host.ts, change_type: modified, description: "checkBackend registered; optional real-helper Check Embedded Backend run via COMPARECRAFT_BACKEND"}
+    - {file: extensions/vscode/scripts/test-integration.cjs, change_type: modified, description: "Pass COMPARECRAFT_BACKEND to the host test"}
+    - {file: scripts/sign-macos-binaries.mjs, change_type: modified, description: "Sign ccomp and comparecraft-backend; fail if either is missing"}
+    - {file: tests/macos-signing.test.mjs, change_type: modified, description: "Both helpers signed and required"}
+    - {file: .github/workflows/build.yml, change_type: modified, description: "Portable ZIP contains comparecraft-backend.exe"}
+    - {file: packaging/arch/PKGBUILD, change_type: modified, description: "Install /usr/bin/comparecraft-backend"}
+    - {file: packaging/windows/README-portable.txt, change_type: modified, description: "Explain the helper"}
+    - {file: packaging/macos/README.md, change_type: modified, description: "Signing covers the helper"}
+    - {file: extensions/vscode/README.md, change_type: modified, description: "Check Embedded Backend and backendPath"}
+upstream_artifacts_consumed:
+  all_tasks:
+    - {artifact: docs/vscode-extension/plan.md, used_for: "Phase 3 scope and gate"}
+    - {artifact: docs/vscode-extension/decisions.md, used_for: "Required installed app, explicit failures, read-only helper"}
+evidence_mapping:
+  T007: {output: src-tauri/src/backend.rs, evidence: "11 unit tests, 3 stdio integration tests, engine parity, clippy clean for new files"}
+  T008: {output: extensions/vscode/src/backend.ts, evidence: "8 client tests (crash, mismatch, missing capability, timeout, framing, cancellation, kill-on-hang, restart, discovery, real helper); host registration; release helper outside repo passes contract"}
+traceability:
+  - {requirement: REQ-007, plan_item: "3.1", tasks: [T007, T008], status: "Shared engine served by headless helper; embedded views follow in Phase 4"}
+  - {requirement: REQ-009, plan_item: "3.1", tasks: [T007, T008], status: "No shell/TCP; trusted local workspace; global-only paths; read-only helper; bounded inputs"}
+  - {requirement: REQ-010, plan_item: "3.1", tasks: [T008], status: "Bundling updated for Windows ZIP, Arch, macOS signing; Tauri bundles bins automatically"}
+protocol_violation: false
+errors: []
+warnings:
+  - "tests/script_golden.rs fails 14 tests on Windows with and without these changes (pre-existing)."
+  - "Linux helper may require WebKitGTK shared libraries like ccomp; native Linux/macOS builds and macOS signing not run."
+test_results:
+  rust:
+    command: "cargo test (src-tauri)"
+    passed: "all except pre-existing script_golden failures"
+    backend_unit: 11
+    backend_integration: 3
+  unit:
+    command: "npm test (extensions/vscode)"
+    passed: 38
+    failed: 0
+    skipped: 0
+  host:
+    command: "npm run test:integration"
+    result: PASS
+  signing:
+    command: "node --test tests/macos-signing.test.mjs"
+    passed: 7
+  desktop_types:
+    command: "npm run typecheck (repository root)"
+    result: PASS
+  outside_tree_helper:
+    result: PASS
+    checks:
+      - "Release comparecraft-backend.exe (2.2 MB) copied to %TEMP% printed 'comparecraft-backend 0.1.0 (protocol 1)' and passed the real contract test"
+    cleanup: "Temporary copy removed"
+  installer:
+    command: "npx tauri build --bundles nsis"
+    result: PASS
+    checks:
+      - "Generated installer.nsi installs and uninstalls comparecraft-backend.exe beside ccomp.exe"
+  installed_helper:
+    result: PASS
+    checks:
+      - "Reinstalled %LOCALAPPDATA%\\CompareCraft contains comparecraft-backend.exe; --version prints 0.1.0 (protocol 1); no args exit 2"
+      - "discoverBackend() with no override returns the installed helper"
+      - "backend.test.js with COMPARECRAFT_BACKEND=<installed>: 8 passed, 0 skipped"
+      - "test:integration runs Check Embedded Backend in real VS Code against the installed helper: PASS; a nonexistent path fails as expected"
+      - "No comparecraft-backend processes left running"

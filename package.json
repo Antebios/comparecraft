@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:webview": "vite build --config vite.webview.config.ts",
     "typecheck": "tsc --noEmit",
     "tauri": "tauri",
     "app:dev": "tauri dev",

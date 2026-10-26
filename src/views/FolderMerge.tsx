@@ -1,4 +1,4 @@
-import { ask } from "@tauri-apps/plugin-dialog";
+import { ask } from "../host";
 import { batch, createMemo, createSignal, For, onMount, Show } from "solid-js";
 import { api, errText, fmtSize, fmtTime, joinPath, type Action, type FolderMergeResult, type FolderOptions, type MergeItem, type MergeStatus, type Side } from "../api";
 import { Btn, PathBar } from "../components/common";

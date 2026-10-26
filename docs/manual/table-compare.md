@@ -1,6 +1,6 @@
 # Table Compare
 
-Table Compare compares two files of delimited data, such as CSV and TSV files, cell by cell. Rows are matched by content or by key columns, and differing cells are highlighted.
+Table Compare compares two files of delimited data, such as CSV and TSV files, cell by cell. Rows are matched by key columns (column 1 by default) or by content, and differing cells are highlighted.
 
 ![Table Compare of two CSV files with differing cells highlighted](images/table-compare.jpg)
 
@@ -14,8 +14,8 @@ Table Compare compares two files of delimited data, such as CSV and TSV files, c
 
 - The **toolbar** with filter, rules, format, copy, navigation, swap and reload buttons.
 - The **path bars** for the two files.
-- The **two tables**, side by side. The column headers are taken from the first line of the file (or numbered "Col 1", "Col 2" and so on).
-- The **details pane**, which shows the cells of the selected row from both sides.
+- The **two tables**, side by side. Each side scrolls left and right on its own, and both sides scroll up and down together. Drag the bar between them to resize the sides. The columns are numbered "Col 1", "Col 2" and so on, or take their names from the first line of the file when **First Line Contains Column Names** is on.
+- The **details pane**, which shows every cell of the selected row on the side you clicked.
 - The **status bar**, with the number of rows, how many are same, changed, unimportant, left-only and right-only, and the delimiter in use.
 
 Use **View > Row Numbers** and **View > Details** to show or hide the row numbers and the details pane.
@@ -46,21 +46,22 @@ Use **View > Row Numbers** and **View > Details** to show or hide the row number
 Click **▦ Format ▾** to set how the files are read:
 
 - The delimiter: **Auto-detect** (default), **Comma**, **Tab**, **Semicolon** or **Pipe**.
-- **First Line Contains Column Names** (on by default): use the first line as the column headers instead of comparing it as data.
+- **First Line Contains Column Names** (off by default): use the first line as the column headers instead of comparing it as data.
 
 ## Key columns
 
-By default, rows are aligned by their content. If your data has an identifying column, such as an ID or a code, make it a key column: rows with the same key are then compared with each other, wherever they are in the file.
+By default, column 1 is the key column: rows with the same value in column 1 are compared with each other, wherever they are in the file, and rows are listed in key order. Rows whose key exists in one file only are shown as left-only or right-only.
 
 - Click a column header to make it a key column (it shows 🔑). Click it again to remove the key.
 - Or right-click a column header and choose **Key Column**.
 - Or enter the column numbers in **Key columns:** in the rules panel.
+- Remove every key to align rows by their content instead.
 
 ## Comparison rules
 
 Click **⚙ Rules** (or **Session > Session Settings (Rules)…**) to show the rules panel:
 
-- **Key columns:** the columns used to match rows between the files, as a comma-separated list of column numbers starting at 1. Leave it empty to align rows by content.
+- **Key columns:** the columns used to match rows between the files, as a comma-separated list of column numbers starting at 1 (default `1`). Leave it empty to align rows by content.
 - **Unimportant columns:** columns whose differences are unimportant, as a comma-separated list of column numbers. Key columns are always important. You can also right-click a column header and choose **Unimportant Column**.
 - **Unimportant text differences:** **Character case** (off by default) and **Whitespace** (on by default). When checked, differences of that kind are unimportant.
 - **Numeric tolerance:** numbers that differ by no more than this are unimportant differences (0 means exact). Choose **absolute** for a fixed amount or **relative (%)** for a percentage.

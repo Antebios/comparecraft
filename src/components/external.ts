@@ -1,5 +1,4 @@
-import { message } from "@tauri-apps/plugin-dialog";
-import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
+import { message, openPath, revealItemInDir } from "../host";
 import { errText } from "../api";
 import { IS_MAC, type Command } from "../commands";
 

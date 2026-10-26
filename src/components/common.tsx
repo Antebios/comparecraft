@@ -1,4 +1,4 @@
-import { open, save } from "@tauri-apps/plugin-dialog";
+import { open, save } from "../host";
 import { createEffect, createSignal, onCleanup, onMount, type JSX } from "solid-js";
 
 export function PathBar(props: {

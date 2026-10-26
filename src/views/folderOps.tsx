@@ -4,7 +4,7 @@
  * side choices, an "Action:" description and Start/Cancel buttons); see
  * docs/REVERSE_ENGINEERING.md §9.
  */
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { open as openDialog } from "../host";
 import { setSetting, settings } from "../settings";
 import { createEffect, createMemo, createSignal, For, type JSX, Show } from "solid-js";
 import { errText, fmtSize, fmtTime } from "../api";

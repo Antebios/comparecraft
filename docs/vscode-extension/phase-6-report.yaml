@@ -1,0 +1,58 @@
+batch_id: phase-6
+status: completed
+completed_tasks: [T013, T014]
+in_progress_tasks: []
+pending_tasks: []
+blocked_tasks: []
+closed_on: "2026-10-24"
+owner_signoff: "Owner confirmed the extension is working successfully on Linux and requested Phase 6 closeout. This does not certify every Linux package format or macOS."
+environment:
+  os: "Windows x64"
+  vscode: "1.143.1 (x64 user install)"
+  comparecraft: "0.1.0, NSIS per-user install at %LOCALAPPDATA%\\CompareCraft"
+  helper_protocol: 1
+  node: "24.14.1"
+  vsce: "3.9.2"
+  linux: "Owner-confirmed success on 2026-10-24; local VSIX lifecycle verified on Linux x64 with VS Code 1.139.1. Helper-specific host steps were skipped because no local debug helper was built. Distribution and installed package format were not recorded."
+  macos: "No native verification or completed CI run recorded; remains a documented release-validation gap."
+files_changed:
+  T014:
+    - {file: extensions/vscode/package.json, change_type: modified, description: "@vscode/vsce devDependency; package (vsce package --no-dependencies) and test:vsix scripts; no publish script"}
+    - {file: extensions/vscode/package-lock.json, change_type: modified, description: "vsce dependency tree"}
+    - {file: extensions/vscode/.vscodeignore, change_type: modified, description: "Exclude .gitignore and *.vsix from the package"}
+    - {file: extensions/vscode/scripts/test-vsix.cjs, change_type: added, description: "Isolated install of an older build, upgrade to the VSIX, installed-content check, host tests on the installed files, uninstall"}
+    - {file: .github/workflows/vscode-extension.yml, change_type: added, description: "Windows/macOS/Ubuntu checks and VSIX artifact; optional manual Marketplace publishing from main after all checks, with exact-version confirmation and a protected environment"}
+    - {file: extensions/vscode/README.md, change_type: modified, description: "User-focused quick start, commands, screenshots, settings, safety, limitations, and troubleshooting"}
+    - {file: extensions/vscode/DEVELOPMENT.md, change_type: modified, description: "Manual VSIX installation/upgrade/removal, advanced diagnostics, packaging, and Marketplace publishing setup"}
+    - {file: extensions/vscode/media/icon.png, change_type: added, description: "256x256 desktop app icon included in the extension manifest and VSIX checks"}
+  T013:
+    - {file: docs/vscode-extension/handoff.md, change_type: modified, description: "Platform/workflow matrix with Windows evidence and explicit Linux/macOS/CI status; Phase 6 handoff"}
+    - {file: docs/vscode-extension/plan.md, change_type: modified, description: "Status and Phase 6 progress"}
+    - {file: docs/vscode-extension/checkpoints/tasks-to-impl.yaml, change_type: modified, description: "T013/T014 completed with Windows evidence, Linux owner sign-off, and remaining verification gaps"}
+validation_commands:
+  - {command: "npm run package (extensions/vscode)", result: "pass: comparecraft-0.1.0.vsix, 21 entries, about 110 KB"}
+  - {command: "npm run test:vsix with VSCODE_EXECUTABLE_PATH and COMPARECRAFT_BACKEND = installed helper", result: "PASS: install 0.0.1, upgrade 0.1.0, 20 installed files pass the content check, 8 host PASS lines (including Check Embedded Backend with helper 0.1.0, embedded text/merge/views), uninstall"}
+  - {command: "npm test (extensions/vscode) with COMPARECRAFT_BACKEND = installed helper", result: "51 pass, 0 fail, 0 skipped"}
+  - {command: "npm run build (root)", result: "pass (tsc --noEmit + vite build)"}
+  - {command: "node --test tests/macos-signing.test.mjs", result: "pass"}
+  - {command: "cargo test --no-fail-fast -- --test-threads=1 (src-tauri)", result: "lib 87, ccomp 2, backend 3, console 4, engine_golden 15, hex_golden 3, pix_golden 1 pass; script_golden 4 pass / 14 fail (pre-existing, unchanged)"}
+  - {command: "npx js-yaml .github/workflows/vscode-extension.yml", result: "valid YAML"}
+  - {command: "npm --prefix extensions/vscode run package (Linux, 2026-10-24)", result: "pass: comparecraft-0.1.0.vsix includes the 256x256 app icon, README, screenshots, and webview; DEVELOPMENT.md excluded"}
+  - {command: "VSCODE_EXECUTABLE_PATH=/usr/share/code/code xvfb-run -a npm --prefix extensions/vscode run test:vsix (Linux, 2026-10-24)", result: "PASS: install 0.0.1, upgrade 0.1.0, 24 installed files pass content checks including the icon, extension-host tests pass, uninstall; backend-specific steps skipped without COMPARECRAFT_BACKEND"}
+  - {command: "Local workflow validation (Linux, 2026-10-24)", result: "pass: YAML parses; release guard accepts main with matching version and rejects missing/wrong versions and other branches; no Marketplace upload performed"}
+evidence_mapping:
+  T013: {output: docs/vscode-extension/handoff.md, evidence: "Windows verification plus owner-confirmed Linux success on 2026-10-24; native macOS and untested installer variants remain explicit gaps"}
+  T014: {output: "extensions/vscode/scripts/test-vsix.cjs, .github/workflows/vscode-extension.yml", evidence: "test:vsix PASS on Windows x64 and Linux x64; Linux helper-specific steps skipped; Git-setup reversal unit test passes; manual publish workflow validated locally, not executed remotely"}
+traceability:
+  - {requirement: REQ-001, plan_item: "6.1", tasks: [T014], status: "Installed desktop app still required; README quick start and troubleshooting"}
+  - {requirement: REQ-005, plan_item: "6.1", tasks: [T014], status: "Git setup reversal tested; README retains Remove-before-uninstall warning; DEVELOPMENT.md contains manual cleanup"}
+  - {requirement: REQ-010, plan_item: "6.1", tasks: [T013, T014], status: "Complete with owner Linux sign-off and Windows verification; remaining platform/package checks documented, not claimed as passed"}
+protocol_violation: false
+errors: []
+warnings:
+  - "Linux success is owner-reported without a detailed journey or installer-format breakdown; local automated helper-specific host steps were skipped."
+  - "Native macOS verification and a completed three-platform vscode-extension workflow run are not recorded. Phase closeout does not certify those checks."
+  - "Not run: Windows MSI, ARM64, Linux deb/rpm/AppImage, macOS app/signing with the extension."
+  - "script_golden has 14 pre-existing Windows failures ('Unexpected argument(s)'), unrelated to the extension."
+  - "Optional owner Git setup/remove in a scratch repository was not separately reported; automated reversal coverage is recorded above."
+  - "The upgrade test uses a 0.0.1 build of the same code, so it proves the install/upgrade mechanics, not migration from a real earlier release (none exists)."

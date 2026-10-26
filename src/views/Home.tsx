@@ -1,4 +1,4 @@
-import { ask } from "@tauri-apps/plugin-dialog";
+import { ask } from "../host";
 import { createResource, createSignal, For, Show } from "solid-js";
 import { api, fmtTime, type Session, type ViewKind } from "../api";
 import { PathBar } from "../components/common";

@@ -1,0 +1,73 @@
+batch_id: phase-4
+completed_tasks: [T009, T010]
+blocked_tasks: []
+files_changed:
+  T009:
+    - {file: src/host/index.ts, change_type: created, description: "Host interface and delegating wrappers named like the Tauri APIs; setHost/isEmbedded"}
+    - {file: src/host/tauri.ts, change_type: created, description: "Desktop Host implementation over @tauri-apps packages"}
+    - {file: src/index.tsx, change_type: modified, description: "Desktop entry installs tauriHost"}
+    - {file: src/api.ts, change_type: modified, description: "invoke via host"}
+    - {file: src/store.ts, change_type: modified, description: "Platform calls via host"}
+    - {file: src/App.tsx, change_type: modified, description: "Platform calls via host"}
+    - {file: "src/components/{common.tsx,external.ts,HelpViewer.tsx,OptionsDialog.tsx,ReportDialog.tsx,ToolsDialogs.tsx,WorkspacesDialog.tsx}", change_type: modified, description: "Dialogs, clipboard, opener, window calls via host"}
+    - {file: "src/views/{FolderCompare,FolderMerge,Home,TableCompare,TextEdit,TextMerge}.tsx", change_type: modified, description: "Platform calls via host"}
+    - {file: "src/views/{folderOps,folderSettings,sessionMenu}.tsx", change_type: modified, description: "Platform calls via host"}
+    - {file: src/views/TextCompare.tsx, change_type: modified, description: "Platform calls via host; embedded-only restore option, file-changed listener, text-state emit; undo/redo across a save or load marks the side dirty"}
+    - {file: src/webview/main.tsx, change_type: created, description: "Webview entry: one text comparison per panel, forwards other views as openTab, claims chords the VS Code wrapper prevents (capture phase)"}
+    - {file: src/webview/host.ts, change_type: created, description: "VS Code Host: request/response RPC, events, debounced state"}
+    - {file: src/webview/vscode.css, change_type: created, description: "Maps CompareCraft theme variables to VS Code theme tokens"}
+    - {file: vite.webview.config.ts, change_type: created, description: "Webview bundle into extensions/vscode/media/webview"}
+    - {file: package.json, change_type: modified, description: "build:webview script"}
+  T010:
+    - {file: extensions/vscode/src/embeddedCore.ts, change_type: created, description: "Spec validation, exact line split/join, DocumentGuard, titles, SideInput conversion (no vscode import)"}
+    - {file: extensions/vscode/src/embedded.ts, change_type: created, description: "EmbeddedPanels/EmbeddedPanel: serializer, nonce CSP, validated RPC, guarded document load/save, backend calls, dialogs, watchers, restore on close"}
+    - {file: extensions/vscode/src/controller.ts, change_type: modified, description: "Embedded mode opens two-sided comparisons in panels; folders and tracked merges ask before desktop"}
+    - {file: extensions/vscode/src/extension.ts, change_type: modified, description: "Create EmbeddedPanels, openEmbedded host adapter, active diff explicitly desktop, Test-mode API"}
+    - {file: extensions/vscode/src/gitWorkflows.ts, change_type: modified, description: "Resolve Conflict in Desktop App passes mode desktop explicitly"}
+    - {file: extensions/vscode/package.json, change_type: modified, description: "onWebviewPanel activation, descriptions, build:webview/build:all/prepublish/integration scripts"}
+    - {file: extensions/vscode/dev.code-workspace, change_type: modified, description: "F5 pre-launch task runs build:all"}
+    - {file: extensions/vscode/.gitignore, change_type: modified, description: "Ignore media/webview build output"}
+    - {file: extensions/vscode/test/embedded.test.ts, change_type: created, description: "Spec, line round trip, guard, filters, unsupported commands, input conversion"}
+    - {file: extensions/vscode/test/core.test.ts, change_type: modified, description: "Embedded routing for files, folders, content, merges"}
+    - {file: extensions/vscode/test/git.test.ts, change_type: modified, description: "Resolve conflict requests desktop mode"}
+    - {file: extensions/vscode/test/host.ts, change_type: modified, description: "Real panels with the installed helper; guarded saves, conflicts, recovery"}
+    - {file: extensions/vscode/README.md, change_type: modified, description: "Embedded comparisons, build:all, defaultMode"}
+upstream_artifacts_consumed:
+  all_tasks:
+    - {artifact: docs/vscode-extension/plan.md, used_for: "Phase 4 scope and gate"}
+    - {artifact: docs/vscode-extension/decisions.md, used_for: "No eager Tauri runtime in webview, CSP, lossless editing before writes"}
+    - {artifact: docs/vscode-extension/backend-protocol.md, used_for: "text.load/text.diff/text.merge/path.info calls"}
+evidence_mapping:
+  T009: {output: src/host/index.ts, evidence: "Root typecheck and desktop build pass; webview bundle (100 KB JS, 33 KB CSS) contains 0 __TAURI references"}
+  T010: {output: extensions/vscode/src/embedded.ts, evidence: "45 unit tests; real VS Code host test with installed helper: two concurrent panels, CRLF save, stale-save refusal after editor and disk changes, unsaved buffer as source, new file, unsupported command, URL refusal, backend failure and recovery; exit 0 on three runs"}
+traceability:
+  - {requirement: REQ-001, plan_item: "4.1", tasks: [T010], status: "Embedded and desktop experiences selectable by defaultMode and explicit commands"}
+  - {requirement: REQ-006, plan_item: "4.1", tasks: [T010], status: "Current VS Code buffers used; intervening edits rejected; close/reload restore offered"}
+  - {requirement: REQ-007, plan_item: "4.1", tasks: [T009, T010], status: "Shared SolidJS text view and Rust engine via helper"}
+  - {requirement: REQ-008, plan_item: "4.1", tasks: [T009, T010], status: "VS Code theme tokens; keyboard handled inside the webview (including chords the VS Code wrapper prevents); owner F5 check passed"}
+  - {requirement: REQ-009, plan_item: "4.1", tasks: [T010], status: "Nonce CSP, local resource roots, validated message dispatch, URL allow-list, trusted local workspace"}
+protocol_violation: false
+errors: []
+warnings:
+  - "Owner F5 test passed 2026-10-22 (compare, edit, save, Ctrl+Z/Ctrl+Y after the fixes); close-with-unsaved prompt, window reload restore and themes were not individually recorded."
+  - "Webview state is debounced 250 ms; a reload within that window can lose the last keystroke."
+  - "Extension-host stdout capture is flaky on this machine; integration exit code is authoritative."
+  - "Windows only; native Linux/macOS not run. No Rust changes, so cargo test was not rerun."
+test_results:
+  unit:
+    command: "npm test (extensions/vscode)"
+    passed: 45
+    failed: 0
+    skipped: 0
+  host:
+    command: "npm run test:integration with COMPARECRAFT_BACKEND=%LOCALAPPDATA%\\CompareCraft\\comparecraft-backend.exe"
+    result: PASS
+  desktop_types:
+    command: "npm run typecheck (repository root)"
+    result: PASS
+  desktop_build:
+    command: "npm run build (repository root)"
+    result: PASS
+  webview_build:
+    command: "npm run build:webview (repository root)"
+    result: PASS

@@ -1,7 +1,4 @@
-import { listen } from "@tauri-apps/api/event";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { ask, open as openDialog } from "@tauri-apps/plugin-dialog";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { listen, getCurrentWindow, ask, open as openDialog, openUrl } from "./host";
 import { createEffect, createSignal, For, Match, onCleanup, onMount, Show, Switch } from "solid-js";
 import { api, type LaunchSpec } from "./api";
 import { dispatchKey, IS_MAC, registerCommands } from "./commands";

@@ -1,4 +1,4 @@
-import { ask, open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { ask, open as openDialog, save as saveDialog } from "../host";
 import { createResource, createSignal, For, Show } from "solid-js";
 import { api, errText, type FolderOptions, type Session } from "../api";
 import { DEFAULT_SETTINGS, replaceSettings, settings, snapshotSettings, type Settings } from "../settings";

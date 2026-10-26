@@ -42,6 +42,14 @@
 
 ## Features
 
+### VS Code extension
+
+Use the [CompareCraft VS Code extension](extensions/vscode/README.md) to open file,
+folder, unsaved-text, clipboard and Git comparisons (including merge/rebase
+conflict resolution and optional `git mergetool`/`difftool` setup) in the
+installed desktop app. Embedded views are planned in
+[incremental phases](docs/vscode-extension/plan.md).
+
 CompareCraft opens the right view for whatever you give it: two files, two folders, three files to merge, or a saved session.
 
 <table>
@@ -106,8 +114,8 @@ Offsets, bytes and an ASCII column with difference navigation. **Alignment** (Co
 matching data across inserted and deleted bytes, so an insertion shows as a gap instead of a run of differences.
 
 ### 📊 Table Compare
-CSV/TSV with delimiter auto-detection, a header row, **key columns** for matching rows, and differences
-shown cell by cell. Numbers compare by value (`0.10` = `0.1`). **Rules** can make columns, case or whitespace
+CSV/TSV with delimiter auto-detection, an optional header row, **key columns** for matching rows (column 1 by
+default), two independently scrolling sides, and differences shown cell by cell. Numbers compare by value (`0.10` = `0.1`). **Rules** can make columns, case or whitespace
 changes, or numbers within a tolerance *unimportant* (blue); **Minor** treats those as same. All / Diffs /
 Same filters, a details pane for the selected row, and copy rows to the clipboard.
 

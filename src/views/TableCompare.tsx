@@ -1,4 +1,4 @@
-import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { writeText } from "../host";
 import { batch, createEffect, createMemo, createSignal, For, Index, on, onMount, Show } from "solid-js";
 import { createStore } from "solid-js/store";
 import { api, errText, type TableOptions, type TableResult, type TableRow } from "../api";
@@ -36,8 +36,8 @@ export default function TableCompare(props: { tab: Tab; active: boolean }) {
   const right = () => tab().paths[1] ?? "";
   const [opts, setOpts] = createStore<TableOptions>({
     delimiter: "",
-    header: true,
-    keys: [],
+    header: false,
+    keys: [0],
     ignoreCase: false,
     trim: true,
     unimportant: [],
@@ -56,16 +56,40 @@ export default function TableCompare(props: { tab: Tab; active: boolean }) {
   const [sel, setSel] = createSignal(-1);
   const [anchor, setAnchor] = createSignal(-1);
   const [selSide, setSelSide] = createSignal<0 | 1>(0);
+  const [split, setSplit] = createSignal((tab().options.tableSplit as number) ?? 50);
 
   createEffect(
-    on([filter, minor, showDetails, showRowNums], ([f, m, d, n]) =>
-      updateTab(tab().id, { options: { ...tab().options, tableFilter: f, ignoreUnimportant: m, tableDetails: d, tableRowNums: n } }),
+    on([filter, minor, showDetails, showRowNums, split], ([f, m, d, n, sp]) =>
+      updateTab(tab().id, { options: { ...tab().options, tableFilter: f, ignoreUnimportant: m, tableDetails: d, tableRowNums: n, tableSplit: sp } }),
       { defer: true },
     ),
   );
 
   let scroller!: HTMLDivElement;
+  let rightPane!: HTMLDivElement;
+  let panes!: HTMLDivElement;
   const vp = useViewport(() => scroller);
+
+  /** Each side scrolls horizontally on its own; vertical scrolling stays in step. */
+  function onPaneScroll(from: HTMLDivElement, to: HTMLDivElement) {
+    if (to.scrollTop !== from.scrollTop) to.scrollTop = from.scrollTop;
+    vp.setScrollTop(from.scrollTop);
+  }
+
+  function startSplit(e: PointerEvent) {
+    const bar = e.currentTarget as HTMLElement;
+    bar.setPointerCapture(e.pointerId);
+    const move = (ev: PointerEvent) => {
+      const r = panes.getBoundingClientRect();
+      if (r.width > 0) setSplit(Math.min(90, Math.max(10, ((ev.clientX - r.left) / r.width) * 100)));
+    };
+    const up = () => {
+      bar.removeEventListener("pointermove", move);
+      bar.removeEventListener("pointerup", up);
+    };
+    bar.addEventListener("pointermove", move);
+    bar.addEventListener("pointerup", up);
+  }
 
   async function refresh() {
     if (!left() || !right()) return;
@@ -324,26 +348,13 @@ export default function TableCompare(props: { tab: Tab; active: boolean }) {
     </div>
   );
 
-  /** The selected row, one line per side, with every column (BC's Details pane). */
+  /** The selected row of the selected side, with every column (BC's Details pane). */
   const details = () => {
     const r = result();
     const row = r?.rows[sel()];
-    const line = (s: 0 | 1) => {
-      const n = row ? (s === 0 ? row.l : row.r) : undefined;
-      const cells = n !== undefined ? (s === 0 ? r!.left : r!.right)[n] : undefined;
-      return (
-        <div class="tdrow" classList={{ [`k-${row ? kindOf(row) : "same"}`]: true }}>
-          <span class="tdlab">{s === 0 ? "Left" : "Right"}{n !== undefined ? ` ${n + 1}` : ""}</span>
-          <For each={cols()}>
-            {(c) => (
-              <span class="tcell" classList={cellClass(row, c, !cells)} style={{ width: `${COL_W}px` }} title={cells?.[c] ?? ""}>
-                {cells?.[c] ?? ""}
-              </span>
-            )}
-          </For>
-        </div>
-      );
-    };
+    const s = selSide();
+    const n = row ? (s === 0 ? row.l : row.r) : undefined;
+    const cells = n !== undefined ? (s === 0 ? r!.left : r!.right)[n] : undefined;
     return (
       <div class="tdetails">
         <div class="tdrow th">
@@ -356,8 +367,16 @@ export default function TableCompare(props: { tab: Tab; active: boolean }) {
             )}
           </For>
         </div>
-        {line(0)}
-        {line(1)}
+        <div class="tdrow" classList={{ [`k-${row ? kindOf(row) : "same"}`]: true }}>
+          <span class="tdlab">{s === 0 ? "Left" : "Right"}{n !== undefined ? ` ${n + 1}` : ""}</span>
+          <For each={cols()}>
+            {(c) => (
+              <span class="tcell" classList={cellClass(row, c, !cells)} style={{ width: `${COL_W}px` }} title={cells?.[c] ?? ""}>
+                {cells?.[c] ?? ""}
+              </span>
+            )}
+          </For>
+        </div>
       </div>
     );
   };
@@ -422,26 +441,38 @@ export default function TableCompare(props: { tab: Tab; active: boolean }) {
       <Show when={error()}>
         <div class="banner err">{error()}</div>
       </Show>
-      <div class="tscroll" ref={scroller} onContextMenu={onContext} onScroll={(e) => vp.setScrollTop(e.currentTarget.scrollTop)}>
-        <div class="theader" style={{ width: `${gridWidth() * 2 + 12}px` }}>
-          {headerSide()}
-          <span class="tgap" />
-          {headerSide()}
-        </div>
-        <div style={{ height: `${rows().length * ROW_H}px`, position: "relative", width: `${gridWidth() * 2 + 12}px` }}>
-          <Index each={win()}>
-            {(it) => {
-              const r = () => result()!.rows[it().ri];
-              return (
-                <div class="trow2" classList={{ [`k-${r().k}`]: true, sel: selSet().has(it().ri) }} style={{ top: `${it().i * ROW_H}px` }}>
-                  {side(0, it().ri)}
-                  <span class="tgap" />
-                  {side(1, it().ri)}
+      <div class="tpanes" ref={panes} onContextMenu={onContext}>
+        <For each={[0, 1] as const}>
+          {(s) => (
+            <>
+              <Show when={s === 1}>
+                <div class="tsplit" title="Drag to resize the sides" onPointerDown={startSplit} />
+              </Show>
+              <div
+                class="tscroll tpane2"
+                style={s === 0 ? { flex: `0 0 calc(${split()}% - 3px)` } : undefined}
+                ref={(el) => (s === 0 ? (scroller = el) : (rightPane = el))}
+                onScroll={(e) => onPaneScroll(e.currentTarget, s === 0 ? rightPane : scroller)}
+              >
+                <div class="theader" style={{ width: `${gridWidth()}px` }}>
+                  {headerSide()}
                 </div>
-              );
-            }}
-          </Index>
-        </div>
+                <div style={{ height: `${rows().length * ROW_H}px`, position: "relative", width: `${gridWidth()}px` }}>
+                  <Index each={win()}>
+                    {(it) => {
+                      const r = () => result()!.rows[it().ri];
+                      return (
+                        <div class="trow2" classList={{ [`k-${r().k}`]: true, sel: selSet().has(it().ri) }} style={{ top: `${it().i * ROW_H}px` }}>
+                          {side(s, it().ri)}
+                        </div>
+                      );
+                    }}
+                  </Index>
+                </div>
+              </div>
+            </>
+          )}
+        </For>
       </div>
       <Show when={showDetails() && result()}>{details()}</Show>
       <div class="statusbar">

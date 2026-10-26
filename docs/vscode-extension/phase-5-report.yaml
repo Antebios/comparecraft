@@ -1,0 +1,89 @@
+batch_id: phase-5
+status: completed
+completed_tasks: [T011, T012]
+in_progress_tasks: []
+pending_tasks: []
+blocked_tasks: []
+files_changed:
+  T012:
+    - {file: src-tauri/src/table.rs, change_type: modified, description: "Follow-up: TableOptions default is key column 1 and no header row (Beyond Compare parity); new defaults test"}
+    - {file: src-tauri/src/report.rs, change_type: modified, description: "Follow-up: script table reports without options keep the old unkeyed, headerless default"}
+    - {file: src/views/TableCompare.tsx, change_type: modified, description: "Follow-up: same defaults; two panes with their own horizontal scroll, synced vertical scroll and a splitter; details pane shows the selected side only"}
+    - {file: src/styles.css, change_type: modified, description: "Follow-up: pane and splitter styles"}
+    - {file: docs/manual/table-compare.md, change_type: modified, description: "Follow-up: defaults, panes, details pane"}
+    - {file: README.md, change_type: modified, description: "Follow-up: Table Compare summary"}
+    - {file: src-tauri/src/backend.rs, change_type: modified, description: "Read-only helper methods hex.align, table.compare, pix.compare, pix.image; absolute paths; 64 MB table/picture file limits; 2 new tests"}
+    - {file: src/webview/main.tsx, change_type: modified, description: "Panel kinds hex/table/picture/patch render the shared views; read-only views persist state for reload"}
+    - {file: extensions/vscode/src/embeddedCore.ts, change_type: modified, description: "Read-only view specs and titles, VIEW_METHODS, pairViewKind, readBytes/readDataUrl with desktop limits and MIME map"}
+    - {file: extensions/vscode/src/embedded.ts, change_type: modified, description: "read_bytes/read_data_url/hex_align/compare_tables/pix_compare/pix_image invoke cases; openTab routing (read-only panels, Text Edit in VS Code, desktop with reason)"}
+    - {file: extensions/vscode/src/extension.ts, change_type: modified, description: "Explorer pairs open hex/picture/table by file type with dirty-buffer and helper-capability fallbacks; desktop fallbacks use -fv"}
+    - {file: extensions/vscode/src/backend.ts, change_type: modified, description: "BackendClient.supports()"}
+    - {file: extensions/vscode/src/process.ts, change_type: modified, description: "desktopViewArguments (-fv=<view>)"}
+    - {file: extensions/vscode/test/embedded.test.ts, change_type: modified, description: "View specs/titles, pair detection, byte/data-URL reads, desktop arguments"}
+    - {file: extensions/vscode/test/host.ts, change_type: modified, description: "Real hex/picture/table/patch panels through the helper; text fallback with older helpers"}
+    - {file: extensions/vscode/README.md, change_type: modified, description: "Per-view capability matrix and routing rules"}
+    - {file: docs/vscode-extension/backend-protocol.md, change_type: modified, description: "New methods and limits"}
+  T011:
+    - {file: src/views/TextMerge.tsx, change_type: modified, description: "Embedded: read-only content sides (unwrapped from the store), result file loaded to prime the host guard, file-changed message, text-state emit with unsaved merged lines"}
+    - {file: src/webview/main.tsx, change_type: modified, description: "Panel spec kind merge opens TextMerge with the result as output"}
+    - {file: src/webview/host.ts, change_type: modified, description: "Requests that cannot be structured-cloned are retried as plain JSON or rejected with a readable error"}
+    - {file: extensions/vscode/src/embeddedCore.ts, change_type: modified, description: "Merge specs (four paths, result required), merge titles, four-input conversion to three content sides plus writable result"}
+    - {file: extensions/vscode/src/embedded.ts, change_type: modified, description: "Merge saves limited to the result file and refused while it has unsaved edits elsewhere; afterMergeSaved hook; unsaved merged text offered as Untitled; retainContextWhenHidden"}
+    - {file: extensions/vscode/src/controller.ts, change_type: modified, description: "Embedded mode opens four-input merges in a panel"}
+    - {file: extensions/vscode/src/gitWorkflows.ts, change_type: modified, description: "resolveConflict desktop/embedded mode; afterEmbeddedSave warns on markers or offers confirmed staging"}
+    - {file: extensions/vscode/src/extension.ts, change_type: modified, description: "gitResolveConflictEmbedded command; afterMergeSaved host hook"}
+    - {file: extensions/vscode/package.json, change_type: modified, description: "Resolve Conflict in VS Code command; Source Control entries under a CompareCraft submenu"}
+    - {file: "extensions/vscode/test/{embedded,core,git,manifest}.test.ts", change_type: modified, description: "Merge spec/conversion, routing, embedded resolve/save/stage, menus"}
+    - {file: extensions/vscode/test/host.ts, change_type: modified, description: "26 commands; real merge panel write limits, CRLF, unsaved-edit refusal"}
+    - {file: extensions/vscode/README.md, change_type: modified, description: "Resolve Conflict in VS Code, SCM submenu, merge save rules, hidden tabs keep state"}
+upstream_artifacts_consumed:
+  all_tasks:
+    - {artifact: docs/vscode-extension/plan.md, used_for: "Phase 5 scope and gate"}
+    - {artifact: docs/vscode-extension/decisions.md, used_for: "Explicit staging, guarded writes, lossless close"}
+evidence_mapping:
+  T011: {output: extensions/vscode/src/embedded.ts, evidence: "47 unit tests; real VS Code host test exit 0 with all PASS lines; browser webview check with installed helper; owner F5 journeys passed 2026-10-23"}
+  T012: {output: "extensions/vscode/src/embedded.ts, src-tauri/src/backend.rs, src/views/TableCompare.tsx", evidence: "51 unit tests; 13 helper tests; host test PASS with a T012 helper (real hex/picture/table/patch webviews) and text fallback with an older helper; owner F5 sign-off 2026-10-23; Table Compare follow-up checked in a browser with the owner's CSVs (20,836 rows, 2 same, matching BC's 20,834 difference rows)"}
+traceability:
+  - {requirement: REQ-008, plan_item: "5.1", tasks: [T012], status: "Hex, Table, Picture, Patch views in VS Code panels (read-only); per-view capability matrix in README"}
+  - {requirement: REQ-009, plan_item: "5.1", tasks: [T012], status: "New helper methods are read-only with path and size limits; folder sync/merge writes stay desktop-only"}
+  - {requirement: REQ-004, plan_item: "5.1", tasks: [T011], status: "Three-way conflict resolution inside VS Code with operation-aware labels"}
+  - {requirement: REQ-005, plan_item: "5.1", tasks: [T011], status: "Explicit confirmed staging; never commits, continues or aborts"}
+  - {requirement: REQ-006, plan_item: "5.1", tasks: [T011], status: "Result written through VS Code documents; stale and unsaved-elsewhere writes refused; unsaved merge offered as Untitled"}
+  - {requirement: REQ-008, plan_item: "5.1", tasks: [T011], status: "Shared merge view in a VS Code panel; state kept while hidden"}
+  - {requirement: REQ-009, plan_item: "5.1", tasks: [T011], status: "Merge panel can write only its result path"}
+protocol_violation: false
+errors: []
+warnings:
+  - "Table Compare follow-up needs a CompareCraft rebuild (helper defaults changed) and a quick owner look in the desktop app and VS Code."
+  - "script_golden has 14 pre-existing failures; its output is identical with and without the Table Compare follow-up."
+  - "Release gap (explicit): Folder Compare, Folder Sync and Folder Merge open in the desktop app; Hex/Table/Picture/Patch are read-only; Text Edit uses VS Code's editor."
+  - "Explorer pairs with an unsaved VS Code buffer, and in-memory sides (Git revisions, clipboard), are always compared as text."
+  - "Merge resolution choices are not persisted across window reload; unsaved merged text is offered as Untitled instead."
+  - "retainContextWhenHidden keeps hidden panels in memory; acceptable for a small number of comparison tabs."
+  - "Windows only; native Linux/macOS not run."
+test_results:
+  unit:
+    command: "npm test (extensions/vscode)"
+    passed: 51
+    failed: 0
+    skipped: 0
+  helper:
+    command: "cargo test --lib backend:: (src-tauri)"
+    passed: 13
+    failed: 0
+  rust_lib:
+    command: "cargo test --lib -- --test-threads=1 (src-tauri)"
+    passed: 87
+    failed: 0
+  host:
+    command: "npm run test:integration with COMPARECRAFT_BACKEND=src-tauri\\target\\debug\\comparecraft-backend.exe, and again with %LOCALAPPDATA%\\CompareCraft\\comparecraft-backend.exe"
+    result: PASS
+  desktop_types:
+    command: "npm run typecheck (repository root)"
+    result: PASS
+  webview_build:
+    command: "npm run build:webview (repository root)"
+    result: PASS
+  manual:
+    owner: "Extension Development Host, Windows, 2026-10-23 (T011 and T012)"
+    result: PASS

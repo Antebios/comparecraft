@@ -1,8 +1,7 @@
-import { ask, open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { ask, emit, isEmbedded, listen, open as openDialog, save as saveDialog, readText, writeText } from "../host";
 import { settings } from "../settings";
-import { batch, createEffect, createMemo, createSignal, For, Index, on, onMount, Show } from "solid-js";
-import { api, defaultRules, errText, fmtSize, fmtTime, type DiffResult, type Row, type Rules, type TextFile } from "../api";
+import { batch, createEffect, createMemo, createSignal, For, Index, on, onCleanup, onMount, Show } from "solid-js";
+import { api, basename, defaultRules, errText, fmtSize, fmtTime, type DiffResult, type Row, type Rules, type TextFile } from "../api";
 import { Btn, Highlighted, Modal, PathBar, ROW_H, useViewport } from "../components/common";
 import { showContextMenu } from "../components/ContextMenu";
 import { externalCommands, shellWords } from "../components/external";
@@ -132,8 +131,16 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
   const [backup, setBackup] = createSignal(settings.backupOnSave);
   const [busy, setBusy] = createSignal(false);
   const [message, setMessage] = createSignal("");
-  const history: { l: string[]; r: string[]; d: [boolean, boolean] }[] = [];
-  const future: { l: string[]; r: string[]; d: [boolean, boolean] }[] = [];
+  // `b` is each side's disk baseline id when the entry was taken: undoing or redoing across a load
+  // or save leaves text that differs from the file, so that side is dirty whatever `d` says.
+  const history: { l: string[]; r: string[]; d: [boolean, boolean]; b: [number, number] }[] = [];
+  const future: typeof history = [];
+  let baseSeq = 0;
+  let base: [number, number] = [0, 0];
+  const newBase = (s: Side) => {
+    base = [...base] as [number, number];
+    base[s] = ++baseSeq;
+  };
   const [findOpen, setFindOpen] = createSignal(false);
   const [findQuery, setFindQuery] = createSignal("");
   const [findCase, setFindCase] = createSignal(false);
@@ -172,6 +179,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
       const d = [...dirty()] as [boolean, boolean];
       d[s] = false;
       setDirty(d);
+      newBase(s);
     });
   }
 
@@ -224,15 +232,61 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
     const [lp, rp] = [tab().paths[0] ?? "", tab().paths[1] ?? ""];
     // Text handed over by "Compare Selection to Clipboard" (not persisted).
     const content = tab().options.content as [string[] | null, string[] | null] | undefined;
-    if (content) {
-      const { content: _, ...rest } = tab().options;
+    // Unsaved side text restored by an embedding host; loaded over the file and kept dirty.
+    const restore = tab().options.restore as [string[] | null, string[] | null] | undefined;
+    if (content || restore) {
+      const { content: _, restore: __, ...rest } = tab().options;
       updateTab(tab().id, { options: rest });
     }
     await Promise.all([loadSide(0, lp, content?.[0] ?? undefined), loadSide(1, rp, content?.[1] ?? undefined)]);
+    if (restore) {
+      batch(() => {
+        if (restore[0]) setL(restore[0]);
+        if (restore[1]) setR(restore[1]);
+        setDirty([!!restore[0], !!restore[1]]);
+      });
+    }
     recompute(true);
 
     if (lp || rp) void persistSession(tab());
   });
+
+  if (isEmbedded()) {
+    // The embedding host reports edits to a side's source document made outside this view.
+    let unlisten: (() => void) | undefined;
+    let disposed = false;
+    void listen<string>("file-changed", (e) => void externalChange(e.payload)).then((u) => (disposed ? u() : (unlisten = u)));
+    onCleanup(() => {
+      disposed = true;
+      unlisten?.();
+    });
+    createEffect(() => {
+      const d = dirty();
+      const paths = [tab().paths[0] ?? "", tab().paths[1] ?? ""];
+      // Sides without a file (revisions, clipboard) are persisted by value so a reload restores them.
+      const content = [paths[0] ? null : L(), paths[1] ? null : R()];
+      emit("text-state", {
+        paths,
+        titles: [...tab().titles],
+        readOnly: [...tab().readOnly],
+        options: content[0] || content[1] ? { ...tab().options, content } : tab().options,
+        dirty: d,
+        restore: [d[0] ? L() : null, d[1] ? R() : null],
+      });
+    });
+  }
+
+  async function externalChange(path: string) {
+    for (const s of [0, 1] as Side[]) {
+      if (!path || tab().paths[s] !== path) continue;
+      if (dirty()[s]) {
+        setMessage(`${basename(path)} changed outside this comparison. Reload before saving this side.`);
+        continue;
+      }
+      await loadSide(s, path);
+      recompute(true);
+    }
+  }
 
   createEffect(on(rules, (r) => {
     updateTab(tab().id, { options: { ...tab().options, rules: r } });
@@ -354,18 +408,18 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
   }
 
   function snapshot() {
-    history.push({ l: L(), r: R(), d: dirty() });
+    history.push({ l: L(), r: R(), d: dirty(), b: base });
     if (history.length > 200) history.shift();
     future.length = 0;
   }
   function restore(from: typeof history, to: typeof history) {
     const s = from.pop();
     if (!s) return;
-    to.push({ l: L(), r: R(), d: dirty() });
+    to.push({ l: L(), r: R(), d: dirty(), b: base });
     batch(() => {
       setL(s.l);
       setR(s.r);
-      setDirty(s.d);
+      setDirty([s.d[0] || s.b[0] !== base[0], s.d[1] || s.b[1] !== base[1]]);
     });
     recompute();
   }
@@ -555,6 +609,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
       const d = [...dirty()] as [boolean, boolean];
       d[s] = false;
       setDirty(d);
+      newBase(s);
       setMessage(`Saved ${path}`);
       return true;
     } catch (e) {
@@ -601,6 +656,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
       setR(l);
       setMeta([meta()[1], meta()[0]]);
       setDirty([dirty()[1], dirty()[0]]);
+      base = [base[1], base[0]];
       setErrors([errors()[1], errors()[0]]);
       setCuts(cuts().map((c) => ({ l: c.r, r: c.l })));
       setAlignFrom(null);

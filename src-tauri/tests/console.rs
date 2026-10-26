@@ -79,7 +79,7 @@ fn gui_requests_start_a_new_instance_and_wait() {
     let status = ccomp().current_dir(d.path()).env("COMPARECRAFT_GUI", &gui).args(["L", "R", "-ro"]).status().unwrap();
     // The fake GUI's exit code proves ccomp waited for it.
     assert_eq!(status.code(), Some(7));
-    assert_eq!(fs::read_to_string(&log).unwrap().trim(), "L R -ro -solo");
+    assert_eq!(fs::read_to_string(&log).unwrap().trim(), "-solo L R -ro");
 
     let status = ccomp().current_dir(d.path()).env("COMPARECRAFT_GUI", d.path().join("nope")).args(["L", "R"]).status().unwrap();
     assert_eq!(status.code(), Some(103));
