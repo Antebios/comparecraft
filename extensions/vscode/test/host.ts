@@ -9,7 +9,9 @@ export async function run(): Promise<void> {
   const directory = process.env.COMPARECRAFT_TEST_DIRECTORY;
   const node = process.env.COMPARECRAFT_TEST_NODE;
   assert.ok(directory && node, "Integration runner must provide an isolated directory and Node executable");
-  const extension = vscode.extensions.getExtension("antebios.comparecraft");
+  const extension = vscode.extensions.all.find(
+    (candidate) => candidate.packageJSON.name === "comparecraft",
+  );
   assert.ok(extension, "Development extension must be installed");
   await extension.activate();
   const commands = await vscode.commands.getCommands(true);
