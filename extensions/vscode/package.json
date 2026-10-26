@@ -3,7 +3,7 @@
   "displayName": "CompareCraft",
   "description": "Compare files, folders, editor text, and Git revisions in VS Code or your installed CompareCraft desktop app, and resolve Git conflicts with CompareCraft.",
   "version": "0.1.0",
-  "publisher": "antebios",
+  "publisher": "MacrossPlusInc",
   "license": "MIT",
   "icon": "media/icon.png",
   "repository": {
