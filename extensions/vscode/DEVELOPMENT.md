@@ -33,7 +33,7 @@ values in VS Code and cannot restore them once it is uninstalled. Then
 uninstall from the Extensions view or with:
 
 ```text
-code --uninstall-extension antebios.comparecraft
+code --uninstall-extension macrossplusinc.comparecraft
 ```
 
 Uninstalling the extension leaves the desktop app, your files, and your
@@ -159,7 +159,7 @@ checks remain separate from CI.
 
 ### One-time setup
 
-1. Create or verify the Marketplace publisher **antebios**, matching `publisher`
+1. Create or verify the Marketplace publisher **MacrossPlusInc**, matching `publisher`
   in the extension manifest. The account used to publish must have access to it.
 2. Follow the [VS Code publishing guide](https://code.visualstudio.com/api/working-with-extensions/publishing-extension)
   to create a Personal Access Token with **Marketplace > Manage** scope and

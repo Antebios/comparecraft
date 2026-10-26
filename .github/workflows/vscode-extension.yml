@@ -71,8 +71,8 @@ jobs:
           if (process.env.RELEASE_VERSION !== version) {
             throw new Error(`Enter the exact extension version (${version}) to publish.`);
           }
-          if (publisher !== "antebios") {
-            throw new Error("Expected Marketplace publisher antebios.");
+          if (publisher !== "MacrossPlusInc") {
+            throw new Error("Expected Marketplace publisher MacrossPlusInc.");
           }
           NODE
       - name: Linux deps
