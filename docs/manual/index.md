@@ -24,6 +24,7 @@ CompareCraft also includes a plain text editor and a patch viewer, described in 
 ## Where to go next
 
 - New to CompareCraft? Start with [Getting Started](getting-started.md).
+- Use CompareCraft from your editor with the [VS Code Extension](vscode-extension.md).
 - Save and reopen your comparisons with [Sessions](sessions.md).
 - Limit a folder comparison to the files you care about with [Filters](filters.md).
 - Adjust colors, fonts, confirmations, backups and more in [Options](options.md).
