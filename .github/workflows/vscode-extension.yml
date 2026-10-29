@@ -1,7 +1,7 @@
 name: vscode-extension
 
-# Tests and packages the VS Code extension. Marketplace publishing is opt-in
-# through a manual run on main, after all platform checks pass.
+# Tests and packages the VS Code extension on CI and release runs.
+# Only release creation publishes, after all platform checks pass.
 on:
   push:
     branches: [main]
@@ -23,15 +23,8 @@ on:
       - "vite*.config.*"
       - ".github/workflows/vscode-extension.yml"
   workflow_dispatch:
-    inputs:
-      publish:
-        description: Publish the tested VSIX to the Visual Studio Marketplace
-        type: boolean
-        default: false
-      version:
-        description: Exact extension version to publish (must match extensions/vscode/package.json)
-        type: string
-        required: false
+  release:
+    types: [created]
 
 permissions:
   contents: read
@@ -39,6 +32,8 @@ permissions:
 jobs:
   extension:
     name: Extension (${{ matrix.os }})
+    outputs:
+      version: ${{ steps.release-version.outputs.version }}
     strategy:
       fail-fast: false
       matrix:
@@ -50,6 +45,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref }}
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -58,23 +54,20 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             extensions/vscode/package-lock.json
-      # - name: Validate publish request
-      #   if: github.event_name == 'workflow_dispatch' && inputs.publish
-      #   env:
-      #     RELEASE_VERSION: ${{ inputs.version }}
-      #   run: |
-      #     node <<'NODE'
-      #     const { version, publisher } = require("./extensions/vscode/package.json");
-      #     if (process.env.GITHUB_REF !== "refs/heads/main") {
-      #       throw new Error("Marketplace releases must run from main.");
-      #     }
-      #     if (process.env.RELEASE_VERSION !== version) {
-      #       throw new Error(`Enter the exact extension version (${version}) to publish.`);
-      #     }
-      #     if (publisher !== "MacrossPlusInc") {
-      #       throw new Error("Expected Marketplace publisher MacrossPlusInc.");
-      #     }
-      #     NODE
+      - name: Set extension version from release tag
+        id: release-version
+        if: github.event_name == 'release'
+        working-directory: extensions/vscode
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::Release tag must use the format vN.N.N (for example, v1.2.3)."
+            exit 1
+          fi
+          version="${RELEASE_TAG#v}"
+          npm version "$version" --no-git-tag-version --allow-same-version --ignore-scripts
+          echo "version=$version" >> "$GITHUB_OUTPUT"
       - name: Linux deps
         if: runner.os == 'Linux'
         run: |
@@ -119,7 +112,7 @@ jobs:
   publish:
     name: Publish to VS Code Marketplace
     needs: extension
-    if: github.event_name == 'workflow_dispatch' && inputs.publish && github.ref == 'refs/heads/main'
+    if: github.event_name == 'release' && github.event.action == 'created'
     runs-on: ubuntu-22.04
     environment: vscode-marketplace
     concurrency:
@@ -131,6 +124,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.release.tag_name }}
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -145,7 +139,7 @@ jobs:
       - name: Publish the tested VSIX
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
-          RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_VERSION: ${{ needs.extension.outputs.version }}
         run: |
           if [ -z "$VSCE_PAT" ]; then
             echo "Set the VSCE_PAT secret in the vscode-marketplace environment."

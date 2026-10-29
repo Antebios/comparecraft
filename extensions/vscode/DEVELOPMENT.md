@@ -150,10 +150,14 @@ release verification.
 
 The [vscode-extension workflow](../../.github/workflows/vscode-extension.yml)
 runs unit tests, packaging, and `test:vsix` on Windows, macOS, and Linux against a
-helper built from source, then uploads the VSIX as a workflow artifact. Pushes
-and pull requests never publish. A manual run can publish that tested artifact
-after every platform passes. Native installer, signing, menus, and desktop GUI
-checks remain separate from CI.
+helper built from source, then uploads the VSIX as a workflow artifact. Relevant
+pushes to `main`, pull requests, and manual dispatch run all these checks without
+publishing, using the checked-in extension version. When a GitHub release is
+created, the workflow uses the release's tagged source. The tag must use `vN.N.N`
+(for example, `v1.2.3`); CI sets the extension manifest and lockfile version to
+`N.N.N` before testing and packaging, without committing those changes. Only
+release creation publishes the tested artifact, after every platform passes.
+Native installer, signing, menus, and desktop GUI checks remain separate from CI.
 
 ## Publish to the Visual Studio Marketplace
 
@@ -166,8 +170,8 @@ checks remain separate from CI.
   **All accessible organizations**. Use a limited lifetime and rotate it before
   expiry. A GitHub token cannot replace this Marketplace token.
 3. In the repository's **Settings > Environments**, create **vscode-marketplace**.
-  Restrict deployment branches to **main** and add required reviewers where your
-  GitHub plan supports them.
+  Allow release tags matching **v*** in the deployment branch/tag rules and add
+  required reviewers where your GitHub plan supports them.
 4. Add the token as an environment secret named **VSCE_PAT**. Do not put it in
   source files, workflow inputs, or logs.
 
@@ -175,11 +179,12 @@ checks remain separate from CI.
 
 1. Complete the pending platform/sign-off checks in the release handoff. Confirm
   the desktop app and helper for the extension's release line are available.
-2. Set a new version in the extension manifest and keep its lockfile version in
-  sync. Merge the release changes into **main**. Do not reuse a published version.
-3. In **Actions > vscode-extension > Run workflow**, select **main**, enable
-  **Publish the tested VSIX to the Visual Studio Marketplace**, and enter the
-  exact extension version, such as `0.1.0`.
+2. Merge the release changes into **main** and tag the release commit with a new
+  version such as `v1.2.3`. Do not reuse a published version.
+3. Create a GitHub release for that tag directly, without saving a draft first.
+  The `release.created` event starts the workflow; draft releases do not trigger
+  that event. CI derives version `1.2.3` from `v1.2.3`, so no manual manifest or
+  lockfile version update is required.
 4. Wait for the Linux, Windows, and macOS tests, then approve the
   **vscode-marketplace** deployment if required. The publish job downloads the
   tested Linux VSIX and publishes it without rebuilding or changing its version.
@@ -187,8 +192,7 @@ checks remain separate from CI.
   After the first successful publication, update the distribution status at the
   top of this guide. This workflow does not publish to Open VSX or GitHub Releases.
 
-Leaving the publish checkbox off runs verification only. Publishing is serialized
-to avoid concurrent uploads, and the job only receives the Marketplace token
+Publishing is serialized to avoid concurrent uploads, and the job only receives the Marketplace token
 after the platform checks and environment protection rules pass. If an upload
 fails, check the Marketplace before retrying: a version already accepted there
 cannot be overwritten.
