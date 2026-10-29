@@ -24,6 +24,9 @@ or checks claimed as passed.
 This directory is the portable source of truth: no prior chat or session database
 is required to resume. Read [decisions.md](decisions.md) and
 [handoff.md](handoff.md) before working.
+The follow-on roadmap for untrusted, remote, virtual and browser-only workspaces
+is [host-support-plan.md](host-support-plan.md); task status and the Windows
+continuation procedure are in [handoff-host-support.md](handoff-host-support.md).
 
 Build one extension with two experiences: embedded CompareCraft editor tabs and
 commands that launch the installed desktop app. Share SolidJS views and the Rust
@@ -72,8 +75,10 @@ protocol design is a prerequisite task, not an already completed artifact.
 - `src-tauri/`: retain desktop host and add the headless helper entry point.
 - Existing installers distribute the helper. No native engine in the VSIX,
   automatic engine download, TCP listener, or OS service.
-- Support local desktop Windows/macOS/Linux first. Explicitly defer SSH, WSL,
-  Dev Containers, browser-only hosts, and unsupported virtual filesystem resources.
+- The completed initial scope supports local desktop Windows/macOS/Linux and
+  explicitly deferred SSH, WSL, Dev Containers, browser-only hosts, and
+  unsupported virtual filesystem resources. The follow-on scope and its
+  evidence gates are defined in [host-support-plan.md](host-support-plan.md).
 - Preserve standalone app behavior, settings, backup, encoding, BOM, and EOL rules.
 - Follow repository instructions and existing patterns; no migration-specific
   transformation guidelines apply to this additive feature.
