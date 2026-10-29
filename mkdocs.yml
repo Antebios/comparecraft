@@ -69,6 +69,8 @@ nav:
       - Hex Compare: hex-compare.md
       - Picture Compare: picture-compare.md
       - Editing and patches: editing-and-patches.md
+  - Integrations:
+      - VS Code Extension: vscode-extension.md
   - Working with CompareCraft:
       - Sessions: sessions.md
       - Filters: filters.md
