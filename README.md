@@ -242,7 +242,9 @@ npm install
 npm run app:dev                      # hot-reloading app
 npm run typecheck                    # TypeScript
 npm run test:rust                    # Rust unit tests + text, hex and picture golden suites
-npm test                             # typecheck + Rust tests
+npm exec playwright install chromium # install the browser for UI regressions
+npm run test:ui                       # browser regressions + verdict unit tests (builds the backend)
+npm test                             # typecheck + UI + Rust tests
 npm run parity                       # command-line exit-code and merge-output checks (needs a release build)
 npm run ccomp -- @script.txt a b     # run the console version (ccomp) from source
 ```

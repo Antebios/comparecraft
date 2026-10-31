@@ -1,4 +1,4 @@
-import { createMemo, createResource, createSignal, Index, onMount, Show } from "solid-js";
+import { createMemo, createResource, createSignal, Index, onCleanup, onMount, Show } from "solid-js";
 import { api, errText, fmtSize, type HexAlign, type HexAlignment } from "../api";
 import { Btn, PathBar, ROW_H, useViewport } from "../components/common";
 import { promptText } from "../components/Prompt";
@@ -6,7 +6,8 @@ import { displayKeys, registerCommands } from "../commands";
 import { showContextMenu } from "../components/ContextMenu";
 import { externalCommands, sideOf } from "../components/external";
 import { SessionButtons } from "../components/SessionTools";
-import { persistSession, updateTab, type Tab } from "../store";
+import { persistSession, reportComparison, updateTab, type Tab } from "../store";
+import { hexStatus } from "../comparisonStatus";
 import { hexInfo } from "../components/InfoDialog";
 import { sessionCommands } from "./sessionMenu";
 
@@ -124,13 +125,19 @@ export default function HexCompare(props: { tab: Tab; active: boolean }) {
   };
   const lc = pageCache(left);
   const rc = pageCache(right);
+  let comparisonSeq = 0;
+  onCleanup(() => { comparisonSeq++; });
   const [diff, { refetch }] = createResource(
     () => [left(), right(), align()] as const,
     async ([l, r, a]): Promise<HexAlignment | { error: string } | null> => {
+      const seq = ++comparisonSeq;
       if (!l || !r) return null;
       try {
-        return await api.hexAlign(l, r, a);
+        const result = await api.hexAlign(l, r, a);
+        if (seq === comparisonSeq) reportComparison(tab(), [l, r], hexStatus(result));
+        return result;
       } catch (e) {
+        if (seq === comparisonSeq) reportComparison(tab(), [l, r], { status: "error", error: errText(e) });
         return { error: errText(e) };
       }
     },

@@ -8,7 +8,8 @@ import { externalCommands, shellWords } from "../components/external";
 import FindBar from "../components/FindBar";
 import { promptText } from "../components/Prompt";
 import { displayKeys, registerCommands, type Command, type MenuRef } from "../commands";
-import { openTab, persistSession, updateTab, type Tab } from "../store";
+import { openTab, persistSession, reportComparison, updateTab, type Tab } from "../store";
+import { textStatus, type ComparisonStatus } from "../comparisonStatus";
 import { textInfo } from "../components/InfoDialog";
 import { saveSession as saveNamedSession, sessionCommands } from "./sessionMenu";
 import { ReplacementDialog, RulesPanel } from "../components/RulesPanel";
@@ -153,8 +154,13 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
   const lines = (s: Side) => (s === 0 ? L() : R());
   const setLines = (s: Side, v: string[]) => (s === 0 ? setL(v) : setR(v));
   const readOnly = (s: Side) => !!tab().readOnly?.[s] || !!meta()[s]?.readOnly;
+  const loadSeq: [number, number] = [0, 0];
 
   async function loadSide(s: Side, path: string, content?: string[]) {
+    const seq = ++loadSeq[s];
+    token++;
+    loadingSides++;
+    clearTimeout(timer);
     let file: TextFile | null = null;
     let err = "";
     if (content) {
@@ -164,6 +170,10 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
         file = await api.loadText(path);
       } catch (e) {
         err = errText(e);
+      }
+      if (seq !== loadSeq[s] || path !== (tab().paths[s] ?? "")) {
+        loadingSides--;
+        return;
       }
     }
     // Update from the latest state after the await; both sides may load concurrently.
@@ -181,28 +191,47 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
       setDirty(d);
       newBase(s);
     });
+    loadingSides--;
   }
 
   let token = 0;
+  let loadingSides = 0;
   let timer: number | undefined;
   let goFirst = settings.nextDiffLoadFirst;
   function recompute(immediate = false) {
     clearTimeout(timer);
+    const t = ++token;
     const run = async () => {
-      const t = ++token;
+      const [l, r] = [L(), R()];
+      const paths = [...tab().paths];
+      const clean = !dirty()[0] && !dirty()[1] && loadingSides === 0;
+      const publish = (outcome: ComparisonStatus) => {
+        if (clean && t === token && L() === l && R() === r && !dirty()[0] && !dirty()[1] && loadingSides === 0)
+          reportComparison(tab(), paths, outcome);
+      };
       setBusy(true);
       try {
-        const [l, r] = [L(), R()];
+        const error = errors().filter(Boolean).join("\n");
+        if (error) {
+          setResult(null);
+          setMessage(error);
+          publish({ status: "error", error });
+          return;
+        }
         const res = applyIgnored(await diffSegments(l, r, rules(), cuts()), l, r);
         if (t === token) {
           setResult(res);
+          publish(textStatus(res));
           if (goFirst && res.hunks.length) {
             goFirst = false;
             queueMicrotask(() => nextHunk(1));
           }
         }
       } catch (e) {
-        setMessage(errText(e));
+        if (t === token) {
+          setMessage(errText(e));
+          publish({ status: "error", error: errText(e) });
+        }
       } finally {
         if (t === token) setBusy(false);
       }
@@ -210,6 +239,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
     if (immediate) void run();
     else timer = window.setTimeout(run, 120);
   }
+  onCleanup(() => { token++; loadSeq[0]++; loadSeq[1]++; clearTimeout(timer); });
 
   /** Marks the user's "Ignored" sections as unimportant. */
   function applyIgnored(res: DiffResult, l: string[], r: string[]): DiffResult {
@@ -594,10 +624,11 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
       setSidePath(s, p);
     }
     const m = meta()[s];
+    const savedLines = lines(s);
     try {
       await api.saveText({
         path,
-        lines: lines(s),
+        lines: savedLines,
         encoding: m?.encoding ?? "UTF-8",
         bom: m?.bom ?? false,
         eol: m?.eol === "Mixed" ? "LF" : m?.eol ?? "LF",
@@ -607,10 +638,11 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
         backupDir: settings.backupDir || null,
       });
       const d = [...dirty()] as [boolean, boolean];
-      d[s] = false;
+      d[s] = lines(s) !== savedLines;
       setDirty(d);
       newBase(s);
       setMessage(`Saved ${path}`);
+      if (path === tab().paths[s]) recompute(true);
       return true;
     } catch (e) {
       setMessage(`Save failed: ${errText(e)}`);
@@ -624,6 +656,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
     if (!p) return;
     if (await saveSide(s, p)) {
       setSidePath(s, p);
+      recompute(true);
       void persistSession(tab());
     }
   }

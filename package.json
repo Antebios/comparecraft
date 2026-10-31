@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "build:webview": "vite build --config vite.webview.config.ts",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tests/ui/tsconfig.json",
     "tauri": "tauri",
     "app:dev": "tauri dev",
     "app:build": "tauri build",
@@ -19,7 +19,8 @@
     "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
     "test:menus": "node scripts/build-linux-shell-extensions.mjs --test",
     "test:finder": "node scripts/build-macos-finder-extension.mjs --test",
-    "test": "npm run typecheck && npm run test:rust",
+    "test:ui": "cargo build --manifest-path src-tauri/Cargo.toml --bin comparecraft-backend && playwright test",
+    "test": "npm run typecheck && npm run test:ui && npm run test:rust",
     "parity": "bash scripts/parity.sh",
     "docs:install": "node scripts/docs.mjs install",
     "docs:serve": "node scripts/docs.mjs serve",
@@ -35,6 +36,8 @@
     "solid-js": "^1.9.17"
   },
   "devDependencies": {
+    "@playwright/test": "^1.56.0",
+    "@types/node": "^24.0.0",
     "@tauri-apps/cli": "^2.12.3",
     "typescript": "^5.9.0",
     "vite": "^8.3.4",

@@ -1,5 +1,5 @@
 import { writeText } from "../host";
-import { batch, createEffect, createMemo, createSignal, For, Index, on, onMount, Show } from "solid-js";
+import { batch, createEffect, createMemo, createSignal, For, Index, on, onCleanup, onMount, Show } from "solid-js";
 import { createStore } from "solid-js/store";
 import { api, errText, type TableOptions, type TableResult, type TableRow } from "../api";
 import { Btn, PathBar, ROW_H, useViewport } from "../components/common";
@@ -7,7 +7,8 @@ import { displayKeys, registerCommands, type Command, type MenuRef } from "../co
 import { showContextMenu } from "../components/ContextMenu";
 import { externalCommands } from "../components/external";
 import { dropDown, SessionButtons } from "../components/SessionTools";
-import { openTab, persistSession, updateTab, type Tab } from "../store";
+import { openTab, persistSession, reportComparison, updateTab, type Tab } from "../store";
+import { tableStatus } from "../comparisonStatus";
 import { tableInfo } from "../components/InfoDialog";
 import { sessionCommands } from "./sessionMenu";
 
@@ -91,14 +92,23 @@ export default function TableCompare(props: { tab: Tab; active: boolean }) {
     bar.addEventListener("pointerup", up);
   }
 
+  let comparisonSeq = 0;
+  onCleanup(() => { comparisonSeq++; });
   async function refresh() {
+    const seq = ++comparisonSeq;
     if (!left() || !right()) return;
+    const paths = [...tab().paths];
     setError("");
     try {
-      setResult(await api.compareTables(left(), right(), { ...opts, keys: [...opts.keys], unimportant: [...opts.unimportant] }));
+      const r = await api.compareTables(paths[0], paths[1], { ...opts, keys: [...opts.keys], unimportant: [...opts.unimportant] });
+      if (seq !== comparisonSeq) return;
+      setResult(r);
+      reportComparison(tab(), paths, tableStatus(r));
     } catch (e) {
+      if (seq !== comparisonSeq) return;
       setError(errText(e));
       setResult(null);
+      reportComparison(tab(), paths, { status: "error", error: errText(e) });
     }
   }
 

@@ -5,7 +5,8 @@ import { displayKeys, registerCommands } from "../commands";
 import { showContextMenu } from "../components/ContextMenu";
 import { externalCommands } from "../components/external";
 import { SessionButtons } from "../components/SessionTools";
-import { persistSession, updateTab, type Tab } from "../store";
+import { persistSession, reportComparison, updateTab, type Tab } from "../store";
+import { pictureStatus } from "../comparisonStatus";
 import { pictureInfo } from "../components/InfoDialog";
 import { sessionCommands } from "./sessionMenu";
 
@@ -98,10 +99,16 @@ export default function PictureCompare(props: { tab: Tab; active: boolean }) {
   const [hover, setHover] = createSignal<{ x: number; y: number } | null>(null);
   const [pixels, setPixels] = createSignal<(ImageData | null)[]>([null, null]);
 
+  let loadSeq = 0;
+  let sourcePaths: readonly string[] = [];
   async function load() {
+    const request = ++loadSeq;
+    seq++;
+    clearTimeout(timer);
+    const loadedPaths = [...paths()];
     const out: (Source | null)[] = [];
     const errs: string[] = [];
-    for (const p of paths()) {
+    for (const p of loadedPaths) {
       if (!p) {
         out.push(null);
         errs.push("");
@@ -115,10 +122,13 @@ export default function PictureCompare(props: { tab: Tab; active: boolean }) {
         errs.push(errText(e) || "Unsupported picture format");
       }
     }
+    if (request !== loadSeq || loadedPaths.some((p, i) => p !== paths()[i])) return;
+    sourcePaths = loadedPaths;
     batch(() => {
       setSources(out);
       setErrors(errs);
     });
+    if (errs.some(Boolean)) reportComparison(tab(), loadedPaths, { status: "error", error: errs.filter(Boolean).join("\n") });
   }
 
   onMount(async () => {
@@ -134,26 +144,31 @@ export default function PictureCompare(props: { tab: Tab; active: boolean }) {
       const [a, b] = sources();
       const o = opts();
       clearTimeout(timer);
-      if (!a || !b) return setResult(null);
       const n = ++seq;
+      if (!a || !b) return setResult(null);
+      const comparedPaths = [...sourcePaths];
       timer = window.setTimeout(async () => {
         setBusy(true);
         try {
-          const r = await api.pixCompare(paths()[0], paths()[1], o, a.raster, b.raster);
+          const r = await api.pixCompare(comparedPaths[0], comparedPaths[1], o, a.raster, b.raster);
           if (n !== seq) return;
           batch(() => {
             setResult(r);
             setCmpError("");
           });
+          reportComparison(tab(), comparedPaths, pictureStatus(r));
         } catch (e) {
-          if (n === seq) setCmpError(errText(e));
+          if (n === seq) {
+            setCmpError(errText(e));
+            reportComparison(tab(), comparedPaths, { status: "error", error: errText(e) });
+          }
         } finally {
           if (n === seq) setBusy(false);
         }
       }, 60);
     }),
   );
-  onCleanup(() => clearTimeout(timer));
+  onCleanup(() => { seq++; loadSeq++; clearTimeout(timer); });
 
   /** URLs of the pictures as compared (after rotate/flip/scale). */
   const shown = createMemo(() => [0, 1].map((i) => result()?.sides[i] ?? sources()[i]?.url ?? null));

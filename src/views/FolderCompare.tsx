@@ -19,6 +19,7 @@ import {
   type ReportRequest,
 } from "../api";
 import { Btn, Modal, PathBar, ROW_H, useViewport } from "../components/common";
+import type { ComparisonListener } from "../comparisonStatus";
 import { showContextMenu } from "../components/ContextMenu";
 import { externalCommands, shellWords, sideOf } from "../components/external";
 import { promptText } from "../components/Prompt";
@@ -232,8 +233,13 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
   });
   const flatMode = () => folderMode() === "flatten";
   let loadedOnce = false;
+  let comparisonEpoch = 0;
+  let disposed = false;
+  const openedRows = new Map<string, number>();
+  onCleanup(() => { disposed = true; });
 
   async function refresh() {
+    comparisonEpoch++;
     if (!left() || !right()) {
       setResult(null);
       return;
@@ -538,7 +544,63 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
   function openNode(n: FNode, kind?: ViewKind) {
     const paths = [n.left ? sidePath(n, "left") : "", n.right ? sidePath(n, "right") : ""];
     if (n.dir) return void openTab({ kind: kind ?? "folder", paths, options: { folder: { ...JSON.parse(JSON.stringify(opts)), align: [] } } });
-    void openAuto(paths, kind);
+    openFile(paths, kind, n);
+  }
+  function openFile(paths: string[], kind?: ViewKind, node?: FNode) {
+    const n = node ?? (effSel().length === 1 ? effSel()[0] : undefined);
+    let onComparison: ComparisonListener | undefined;
+    if (n && !n.dir && n.left && n.right && paths[0] === sidePath(n, "left") && paths[1] === sidePath(n, "right")) {
+      const rel = n.rel;
+      const epoch = comparisonEpoch;
+      const bases = [left(), right()];
+      const options = JSON.stringify(compareOptions());
+      const ticket = (openedRows.get(rel) ?? 0) + 1;
+      openedRows.set(rel, ticket);
+      let received = 0;
+      onComparison = (comparedPaths, outcome) => {
+        const receipt = ++received;
+        const currentOrigin = () => {
+          if (disposed || receipt !== received || epoch !== comparisonEpoch || ticket !== openedRows.get(rel) ||
+            left() !== bases[0] || right() !== bases[1] || JSON.stringify(compareOptions()) !== options) return false;
+          const current = nodeByRel().get(rel);
+          return !!current?.left && !!current.right && !current.dir &&
+            comparedPaths[0] === sidePath(current, "left") && comparedPaths[1] === sidePath(current, "right");
+        };
+        if (!currentOrigin()) return;
+        const apply = async () => {
+          const infos = await Promise.all(comparedPaths.map((path) => api.pathInfo(path)));
+          if (!currentOrigin()) return;
+          const missing = infos.find((info) => !info.exists || info.isDir);
+          const status = missing ? { status: "error" as const, error: `File is no longer available: ${missing.path}` } : outcome;
+          patchTree((byRel) => {
+            const target = byRel.get(rel)!;
+            target.status = status.status;
+            target.content = "content" in status ? status.content : undefined;
+            target.error = status.error;
+            if (!missing) {
+              target.left = { ...target.left!, size: infos[0].size, modified: infos[0].modified };
+              target.right = { ...target.right!, size: infos[1].size, modified: infos[1].modified };
+            }
+            const lm = target.left!.modified ?? 0;
+            const rm = target.right!.modified ?? 0;
+            target.newer = status.status === "diff" ? lm > rm ? "left" : rm > lm ? "right" : undefined : undefined;
+          });
+        };
+        void apply().catch((e) => {
+          if (!currentOrigin()) return;
+          const error = `Update comparison status failed: ${errText(e)}`;
+          patchTree((byRel) => {
+            const target = byRel.get(rel)!;
+            target.status = "error";
+            target.content = undefined;
+            target.newer = undefined;
+            target.error = error;
+          });
+          setMessage(error);
+        });
+      };
+    }
+    void openAuto(paths, kind, onComparison).catch((e) => setMessage(`Open comparison failed: ${errText(e)}`));
   }
   function activate(n: FNode) {
     if (n.dir) return toggle(n.rel);
@@ -551,7 +613,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
   }
   function openWith(kind: ViewKind) {
     const p = pairPaths();
-    if (p) void openAuto(p, kind);
+    if (p) openFile(p, kind);
   }
 
   async function quickCompare() {
@@ -942,6 +1004,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
   async function compareContents(mode: ContentMode, showResults: boolean) {
     const files = pairedFiles(effSel());
     if (!files.length) return setMessage("No files exist on both sides.");
+    comparisonEpoch++;
     setBusy(true);
     const codes: { rel: string; code: number }[] = [];
     try {
@@ -989,6 +1052,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
     const rels = effSel().map((n) => n.rel);
     if (!rels.length) return;
     if (flatMode()) return refresh();
+    comparisonEpoch++;
     setBusy(true);
     try {
       const nodes = await api.compareItems(left(), right(), rels, compareOptions());

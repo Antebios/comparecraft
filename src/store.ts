@@ -3,6 +3,7 @@ import { createStore, produce } from "solid-js/store";
 import { getCurrentWindow } from "./host";
 import { api, basename, type LaunchSpec, type Session, type ViewKind } from "./api";
 import { setSetting, settings, type WorkspaceTab } from "./settings";
+import type { ComparisonListener, ComparisonStatus } from "./comparisonStatus";
 
 export interface Tab {
   id: string;
@@ -21,6 +22,8 @@ export interface Tab {
   noBackups?: boolean;
   expandAll?: boolean;
   filters?: string | null;
+  /** Transient completion receiver for a file opened from a folder row. */
+  onComparison?: ComparisonListener;
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
@@ -134,6 +137,12 @@ export function findTab(id: string): Tab | undefined {
   return state.tabs.find((t) => t.id === id);
 }
 
+export function reportComparison(tab: Tab, paths: readonly string[], result: ComparisonStatus) {
+  const current = findTab(tab.id);
+  if (!current || paths.length !== current.paths.length || paths.some((p, i) => p !== current.paths[i])) return;
+  current.onComparison?.(paths, result);
+}
+
 /**
  * Records the comparison as a recent (auto-saved) session, or as a named one; a named session
  * replaces the saved session of that name unless it is locked.
@@ -194,7 +203,7 @@ export function openSession(s: Session) {
 }
 
 /** Opens a compare tab for two paths, choosing the viewer from the file type. */
-export async function openAuto(paths: string[], forceKind?: ViewKind) {
+export async function openAuto(paths: string[], forceKind?: ViewKind, onComparison?: ComparisonListener) {
   let kind: ViewKind | undefined = forceKind;
   if (!kind) {
     if (paths.length >= 3) kind = "merge";
@@ -206,7 +215,7 @@ export async function openAuto(paths: string[], forceKind?: ViewKind) {
       else kind = (["text", "hex", "table", "picture"].includes(first.kind) ? first.kind : "text") as ViewKind;
     }
   }
-  return openTab({ kind, paths });
+  return openTab({ kind, paths, onComparison });
 }
 
 export async function openSpec(spec: LaunchSpec) {

@@ -123,6 +123,10 @@ What happens when there are no more differences is set on the [Next Difference p
 - **Open With > Associated Application** opens the file in the program your system uses for it. **Open With > Show in File Manager** (on macOS: **Reveal in Finder**) shows it in your file manager.
 - Applications you add on the [Open With page of the Options](options.md#open-with) appear at the end of the **Open With** submenu.
 
+For files present on both sides, the file comparison starts automatically. When it finishes, the originating folder row's status symbol, colors, parent-folder statuses and summary counts update from that result, including for Text, Hex, Table and Picture Compare. This can replace a size/timestamp result with a content-comparison result without changing the folder's comparison settings.
+
+Unsaved text edits do not change the folder result. Saving or reloading the file comparison updates it from the saved content. Refreshing the folder view compares it again using the folder's configured criteria. Comparisons of disjoint items using **Compare To** do not change the original rows.
+
 To check whether two files differ without opening them, select them and choose **Quick Compare**. A message shows the result.
 
 ## Compare To
