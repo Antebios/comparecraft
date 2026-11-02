@@ -8,6 +8,14 @@ Prefer a separate window? Open comparisons in the CompareCraft desktop app.
 Folder comparisons always use the desktop app. See [Feature locations](#feature-locations)
 for the folder sorting setting and progress indicator.
 
+### Planned folder comparison support
+
+Embedded folder comparison is planned, not currently supported. The
+[folder comparison roadmap](../../docs/vscode-extension/folder-comparison-roadmap.md)
+documents a local, comparison-only first version, implementation tasks and
+handoff instructions, followed by future full local workflows and Remote SSH,
+WSL and Dev Containers phases.
+
 **Requires the [CompareCraft desktop app](https://github.com/Antebios/comparecraft/releases),
 installed separately.**
 
