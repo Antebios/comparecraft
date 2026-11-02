@@ -1,4 +1,4 @@
-import { ask, message } from "../host";
+import { ask, folderComparisonOnly, message } from "../host";
 import { createSignal, Show, type JSX } from "solid-js";
 import { api, dirname, type ReportRequest } from "../api";
 import type { Command } from "../commands";
@@ -96,7 +96,7 @@ export function sessionCommands(o: SessionMenuOptions): Command[] {
     },
   ];
   const r = o.report;
-  if (r)
+  if (r && !(folderComparisonOnly() && t().kind === "folder"))
     cmds.push({
       id: "session-report", menu: "Session", group: "report", label: `${o.title} Report…`,
       enabled: () => (r.enabled ? r.enabled() : t().paths.some(Boolean)),

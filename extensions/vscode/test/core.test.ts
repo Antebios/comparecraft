@@ -168,18 +168,18 @@ test("embedded/default mode opens two files in the embedded panel without launch
   assert.equal(host.embedded.length, 2);
 });
 
-test("embedded folder comparisons never silently fall back to the desktop", async () => {
+test("embedded folder comparisons open panels without desktop prompts or dirty-folder guards", async () => {
   const host = new FakeHost(), left = folder("left"), right = folder("right");
   host.add(left, right);
   host.mode = "embedded";
+  host.dirty = true;
   const controller = new ComparisonController(host);
   await controller.compare([left.path, right.path]);
-  assert.equal(host.embeddedNotices, 1);
+  assert.equal(host.embeddedNotices, 0);
   assert.equal(host.launches.length, 0);
-  host.embeddedAccepted = true;
   await controller.compare([left.path, right.path], "embedded");
-  assert.deepEqual(host.launches, [["--", left.path, right.path]]);
-  assert.equal(host.embedded.length, 0);
+  assert.deepEqual(host.launches, []);
+  assert.deepEqual(host.embedded, [[left.path, right.path], [left.path, right.path]]);
 });
 
 test("embedded mode shows two-sided content comparisons in the panel; merges ask before the desktop", async () => {

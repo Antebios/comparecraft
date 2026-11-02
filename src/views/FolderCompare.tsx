@@ -1,4 +1,4 @@
-import { listen, message, open as openDialog } from "../host";
+import { folderComparisonOnly, listen, message, openDesktopFolder, open as openDialog } from "../host";
 import { createEffect, createMemo, createSignal, For, Index, type JSX, on, onCleanup, onMount, Show } from "solid-js";
 import { createStore } from "solid-js/store";
 import {
@@ -186,8 +186,17 @@ const ROW_MENU: MenuRef[] = [
 ];
 const BACKGROUND_MENU: MenuRef[] = ["cto-cancel", "-", "refresh", "full-refresh", "-", "new-folder", "-", "select-all", "expand", "collapse", "-", "legend"];
 
+/** Remove commands entirely so context menus and custom/remapped shortcuts cannot expose them. */
+const COMPARISON_ONLY_UNSUPPORTED = new Set([
+  "session-report", "merge-bases", "sync-bases", "ow-sync", "open-default", "reveal",
+  "copy-side", "move-side", "copy-folder", "move-folder", "delete", "rename", "attributes", "touch", "new-folder",
+  "report", "sync-menu", "update-right", "update-left", "update-both", "mirror-right", "mirror-left",
+  "copy-right", "copy-left", "move-right", "move-left", "delete-perm",
+]);
+
 export default function FolderCompare(props: { tab: Tab; active: boolean }) {
   const tab = () => props.tab;
+  const comparisonOnly = folderComparisonOnly();
   const [opts, setOpts] = createStore<FolderOptions>({
     ...defaultOptions(),
     ...((tab().options.folder as Partial<FolderOptions> | undefined) ?? {}),
@@ -237,7 +246,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
   function storePresetState(state: ComparisonPresetState, rememberRecent = true) {
     setPresetState(state);
     updateTab(tab().id, { options: { ...tab().options, comparisonPresets: state } });
-    if (rememberRecent && tab().paths[0] && tab().paths[1]) void persistSession(tab());
+    if (rememberRecent && tab().paths[0] && tab().paths[1]) void rememberSession();
   }
   createEffect(on(allPresets, (presets) => {
     const resolved = resolvePresetState(tab().options.comparisonPresets ?? settings.comparisonPresets.defaults, presets);
@@ -340,12 +349,17 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
 
   onMount(async () => {
     await refresh();
-    if (left() && right()) void persistSession(tab());
+    if (left() && right()) void rememberSession();
   });
 
   createEffect(on(() => settings.folderDotNamesFirst, () => {
     if (viewSet().dotNameOrder === "inherit" && left() && right()) void refresh();
   }, { defer: true }));
+
+  async function rememberSession() {
+    try { await persistSession(tab()); }
+    catch (e) { setMessage(`Save session failed: ${errText(e)}`); }
+  }
 
   /** Changes the base folders, recording the previous pair for Back. */
   function setBases(paths: string[], record = true) {
@@ -355,7 +369,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
     setSel(new Set<string>());
     setExpanded(new Set<string>());
     setIgnored(new Set<string>());
-    void refresh().then(() => persistSession(tab()));
+    void refresh().then(rememberSession);
   }
   const setPath = (i: 0 | 1, p: string) => setBases(i === 0 ? [p, right()] : [left(), p]);
   function goBack() {
@@ -1361,7 +1375,15 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
     setSelSide(side);
   }
 
-  const openSync = (mode?: string) => (setSyncMode(mode), setSyncOpen(true));
+  const openSync = (mode?: string) => {
+    if (comparisonOnly) return;
+    setSyncMode(mode);
+    setSyncOpen(true);
+  };
+  const desktopFolder = async () => {
+    try { await openDesktopFolder(); }
+    catch (e) { setMessage(`Desktop launch failed: ${errText(e)}`); }
+  };
 
   /** Opens the Session Settings dialog (also reached from the Filters and Rules toolbar buttons). */
   function settingsDialog(page: SettingsTab = "specs") {
@@ -1372,8 +1394,30 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
         view={viewSet()}
         paths={[left(), right()]}
         sessionName={tab().sessionName}
+        locked={tab().locked}
         onClose={closeDialog}
         onApply={async ({ options, view, paths, scope }) => {
+          // Validate and persist before presenting a successful saved-session update.
+          const nextOptions = {
+            ...tab().options,
+            folder: { ...options, flatten: flatMode() },
+            folderView: { ...view },
+            ...(!!options.flatten !== flatMode() ? { folderMode: options.flatten ? "flatten" : "structure" } : {}),
+          };
+          if (scope === "saved") {
+            const name = tab().sessionName;
+            if (!name || tab().locked) throw new Error("Save the session under an unlocked name first.");
+            const ex = await api.findSession(name);
+            if (!ex) throw new Error("The saved session no longer exists. Use Save Session As.");
+            if (ex.locked) throw new Error(`The session “${ex.name}” is locked.`);
+            await api.saveSession({
+              ...ex, paths: [...paths],
+              options: JSON.parse(JSON.stringify({ ...nextOptions, folder: options })),
+              modified: Date.now(),
+            });
+            setSessionsVersion((v) => v + 1);
+            log(`Updated saved session “${ex.name}”.`);
+          }
           const flattenChanged = !!options.flatten !== flatMode();
           setOpts({ ...options, flatten: flatMode() });
           setViewSet(view);
@@ -1383,14 +1427,6 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
             setSetting("folderDefaults", rest);
             if (view.dotNameOrder !== "inherit") setSetting("folderDotNamesFirst", view.dotNameOrder === "first");
             log("Saved as session defaults.");
-          } else if (scope === "saved" && tab().sessionName) {
-            const all = await api.listSessions();
-            const ex = all.find((x) => x.saved && x.name === tab().sessionName);
-            if (ex) {
-              await api.saveSession({ ...ex, paths: [...paths], options: JSON.parse(JSON.stringify(tab().options)), modified: Date.now() });
-              setSessionsVersion((v) => v + 1);
-              log(`Updated saved session “${ex.name}”.`);
-            }
           }
           if (flattenChanged) setFolderMode(options.flatten ? "flatten" : "structure");
           if (paths[0] !== left() || paths[1] !== right()) setBases(paths);
@@ -1445,7 +1481,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
   );
   const syncCmd = (id: string, label: string, keys?: string): Command => ({ id, menu: "Actions", hidden: true, label, keys, enabled: () => idle() && basesDiffer(), run: () => openSync(id) });
 
-  const cmds: Command[] = [
+  const availableCommands: Command[] = [
     // Session
     ...sessionCommands({
       tab,
@@ -1520,9 +1556,10 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
     {
       id: "open-with", menu: "Actions", group: "open", label: "Open With",
       submenu: () => [
-        "open-default", "reveal", "-", "ow-folder", "ow-sync", "ow-text", "ow-hex", "ow-table", "ow-picture",
-        ...(settings.openWith.length ? ["-" as const] : []),
-        ...settings.openWith.map((a, i): Command => ({ id: `ow-user-${i}`, menu: "Actions", label: a.name, enabled: () => effSel().length > 0, run: () => runOpenWith(a.command) })),
+        ...(comparisonOnly ? [] : ["open-default", "reveal", "-"]),
+        "ow-folder", "ow-sync", "ow-text", "ow-hex", "ow-table", "ow-picture",
+        ...(!comparisonOnly && settings.openWith.length ? ["-" as const] : []),
+        ...(comparisonOnly ? [] : settings.openWith.map((a, i): Command => ({ id: `ow-user-${i}`, menu: "Actions", label: a.name, enabled: () => effSel().length > 0, run: () => runOpenWith(a.command) }))),
       ],
       run: () => {},
     },
@@ -1659,6 +1696,11 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
       },
     },
   ];
+  const cmds = availableCommands.filter((c) => !comparisonOnly || !COMPARISON_ONLY_UNSUPPORTED.has(c.id));
+  if (comparisonOnly) cmds.push({
+    id: "desktop-folder", menu: "Session", group: "using", label: "Open Folder Comparison in Desktop App",
+    enabled: () => !!left() && !!right(), run: desktopFolder,
+  });
   registerCommands(tab().id, cmds);
 
   /** Runs a command of this view by id if it is enabled (toolbar buttons). */
@@ -1712,6 +1754,13 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
 
   return (
     <div class="view">
+      <Show when={comparisonOnly}>
+        <div class="filterbar" role="note">
+          <span>Folder comparison reads saved files on disk.</span>
+          <span class="spacer" />
+          <Btn title="Open Folder Comparison in Desktop App" onClick={desktopFolder} disabled={!left() || !right()}>Open in Desktop App</Btn>
+        </div>
+      </Show>
       <div class="toolbar">
         <Btn title="Expand all" onClick={() => expandAll()} disabled={!result()}>⊞ Expand</Btn>
         <Btn title="Collapse all" onClick={() => setExpanded(new Set<string>())}>⊟ Collapse</Btn>
@@ -1729,11 +1778,13 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
           onRun={(preset) => void runPreset(preset)} onManage={managePresets}
           onDialog={() => runCmd("compare-contents")} dialogEnabled={cmdOn("compare-contents")} />
         <span class="sep" />
+        <Show when={!comparisonOnly}>
         <Btn title="Copy to Left" kbd={displayKeys("Ctrl+L")} onClick={() => runCmd("copy-left")} disabled={!cmdOn("copy-left")}>⇐ Copy</Btn>
         <Btn title="Copy to Right" kbd={displayKeys("Ctrl+R")} onClick={() => runCmd("copy-right")} disabled={!cmdOn("copy-right")}>Copy ⇒</Btn>
         <Btn title="Delete…" kbd={displayKeys("Del")} onClick={() => runCmd("delete")} disabled={!cmdOn("delete")}>🗑 Delete</Btn>
         <span class="sep" />
         <Btn title="Synchronize folders" onClick={() => openSync()} disabled={!result()}>⇆ Sync…</Btn>
+        </Show>
         <Btn title="Comparison rules (Session Settings)" onClick={() => settingsDialog("comparison")}>⚖ Rules</Btn>
         <Btn title="Swap sides" onClick={swap}>⇄ Swap</Btn>
         <Btn title="Refresh" kbd="F5" onClick={refresh}>⟳ Refresh</Btn>
@@ -1903,7 +1954,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
           </div>
         </Modal>
       </Show>
-      <Show when={syncOpen()}>
+      <Show when={!comparisonOnly && syncOpen()}>
         <SyncDialog
           left={left()}
           right={right()}

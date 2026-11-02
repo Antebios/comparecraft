@@ -18,6 +18,9 @@ export interface HostWindow {
 
 export interface Host {
   readonly name: "tauri" | "vscode";
+  /** Restricts folder UI only; editable child file views retain their own capabilities. */
+  readonly folderComparisonOnly?: boolean;
+  openDesktopFolder?(): Promise<void>;
   invoke: typeof Core.invoke;
   listen: typeof Event.listen;
   ask: typeof Dialog.ask;
@@ -46,6 +49,12 @@ export function host(): Host {
 }
 
 export const isEmbedded = () => current?.name === "vscode";
+export const folderComparisonOnly = () => current?.folderComparisonOnly === true;
+export const openDesktopFolder = (): Promise<void> => {
+  const action = host().openDesktopFolder;
+  if (!action) return Promise.reject(new Error("Desktop folder launch is unavailable."));
+  return action();
+};
 
 export const invoke: typeof Core.invoke = (cmd, args, options) => host().invoke(cmd, args, options);
 export const listen: typeof Event.listen = (event, handler, options) => host().listen(event, handler, options);

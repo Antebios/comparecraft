@@ -16,6 +16,22 @@ Once both paths are set, a progress strip appears below the path bars. **Scannin
 
 The counter includes one-sided files; folders themselves are not counted. It measures files processed, not bytes or estimated time remaining, so a large file can take longer than several small files. The strip disappears when the comparison completes or fails. The usual status summary or an error message then shows the outcome.
 
+### In the VS Code extension
+
+Use **CompareCraft: Compare Folder With...** or select two local folders and
+choose **Compare Selected in VS Code**. Embedded folder panels reuse the tree,
+filters, presets, refresh and file drill-down, but do not provide folder
+copy/move/delete/rename/touch, synchronization, folder merge, snapshots or reports.
+Use **Open Folder Comparison in Desktop App** for full folder operations.
+
+Folder gutter results reflect saved disk contents, not unsaved editor buffers.
+Child text comparisons remain editable; saving or reloading can re-evaluate the
+originating disk pair. Presets and named folder sessions are stored separately
+from desktop settings. Use **CompareCraft: Open Saved Folder Session...** to
+reopen a named extension session. Remote SSH, WSL and Dev Containers are not
+supported. See the [extension guide](../../extensions/vscode/README.md) for
+helper requirements and limitations.
+
 !!! tip "Snapshots"
     You can enter a snapshot file (`.ccsnap`) instead of a folder on either side. This compares a folder with the state it had when the snapshot was saved. See [Save Snapshot](options.md#save-snapshot).
 

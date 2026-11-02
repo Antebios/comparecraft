@@ -1,18 +1,17 @@
 # CompareCraft for VS Code
 
-Compare files, selected text, and Git revisions side by side without leaving
+Compare files, local folders, selected text, and Git revisions side by side without leaving
 VS Code. Edit text comparisons, explore CSV differences, and resolve three-way
 merge conflicts in a CompareCraft tab that follows your VS Code theme.
 
 Prefer a separate window? Open comparisons in the CompareCraft desktop app.
-Folder comparisons always use the desktop app. See [Feature locations](#feature-locations)
-for the folder sorting setting and progress indicator.
+Folder panels inside VS Code are comparison-only; use the desktop app for folder operations.
 
-### Planned folder comparison support
+### Folder comparison roadmap
 
-Embedded folder comparison is planned, not currently supported. The
+The
 [folder comparison roadmap](../../docs/vscode-extension/folder-comparison-roadmap.md)
-documents a local, comparison-only first version, implementation tasks and
+documents the local, comparison-only first version, implementation tasks and
 handoff instructions, followed by future full local workflows and Remote SSH,
 WSL and Dev Containers phases.
 
@@ -52,8 +51,10 @@ installed separately.**
 3. Review the differences in a CompareCraft tab. Text files can be edited and
   saved directly; images, binary files, and tables open read-only.
 
-To compare folders, use **CompareCraft: Compare Folder With...**. You will be
-asked before the desktop app opens.
+To compare folders, use **CompareCraft: Compare Folder With...**, or select two
+folders and choose **Compare Selected in VS Code**. An older helper without
+folder capabilities offers an explicit desktop alternative; update CompareCraft
+to enable embedded folders.
 
 ## Compare files and folders
 
@@ -63,7 +64,7 @@ Right-click resources in Explorer, a text editor, or an editor tab and open the
 | Command | Behavior |
 | --- | --- |
 | Compare Selected... | Compares two selected files or folders. With one selected item, asks for the other. |
-| Compare Selected in VS Code | Opens a file comparison in a VS Code tab. |
+| Compare Selected in VS Code | Opens a file or local folder comparison in a VS Code tab. |
 | Compare Selected in Desktop App | Opens a comparison in the desktop app. |
 | Select Left File or Folder | Remembers an item to compare later. |
 | Compare with Selected Left... | Compares the current item with your remembered selection of the same type. |
@@ -72,6 +73,7 @@ Right-click resources in Explorer, a text editor, or an editor tab and open the
 | Compare Folder With... | Picks another folder to compare with the selected folder. |
 | Compare Parent Folder With... | Compares the selected file's parent directory against a chosen folder. |
 | Open Desktop App | Opens CompareCraft's home view directly. |
+| Open Saved Folder Session... | Opens a named VS Code folder session from a Quick Pick. |
 
 Compare two different files or two different folders, not a file against a
 folder. Remembered selections last until cleared or VS Code restarts.
@@ -91,7 +93,29 @@ Right-click inside an editor (including untitled ones) and open **CompareCraft**
 **Your unsaved edits are included and never saved automatically.** In desktop
 mode, unsaved text opens as a read-only copy labeled *(unsaved buffer)*; edits
 to that copy cannot be saved back to VS Code. Save or revert unsaved files
-before comparing their folders.
+before comparing their folders in the desktop app.
+
+## Folder comparisons inside VS Code
+
+- Inspect the shared folder tree and gutter, select files, configure inclusion
+  and display filters, use CRC/Binary/Rules-based comparison presets, and refresh.
+- Folder comparisons read **saved files on disk**. Unsaved editor buffers are
+  shown in child text comparisons but never treated as saved-disk gutter results.
+  No files are automatically saved.
+- Open file rows in editable text comparisons or read-only binary/table/picture
+  views. Saved changes and reloads re-evaluate the originating pair from disk;
+  refreshing/changing the parent invalidates old child results.
+- Save named folder sessions from the folder panel; reopen them with
+  **CompareCraft: Open Saved Folder Session...**. Presets and sessions are stored
+  separately from the desktop app. Window reload restores paths and options and
+  recomputes the tree, rather than restoring stale comparison results.
+- Copy, move, delete, rename, touch, synchronization, folder merge, snapshots,
+  reports and external Open With are not available in folder panels. Use
+  **Open Folder Comparison in Desktop App** explicitly for full folder workflows.
+
+The helper must advertise protocol-v1 `folder.compare`, `folder.compareItems`
+and `file.quickCompare`. Protocol 1 alone does not imply folder support.
+Remote SSH, WSL and Dev Containers remain unsupported.
 
 ## Git comparisons and conflicts
 
@@ -175,11 +199,12 @@ start-up, and errors.
 ## Known limitations
 
 - Local desktop workspaces only; remote and virtual workspaces are not supported.
-- Folder comparison, sync, and merge open in the desktop app, after confirmation.
+- Folder sync and folder merge require the desktop app; embedded folders are comparison-only.
 - Binary (Hex), CSV/TSV (Table), Picture, and Patch views are read-only inside
   VS Code. Table and Picture views support files up to 64 MB.
 - Unsaved files, Git revisions, and clipboard content are always compared as text.
-- Reports, backups, and Open With are not available inside VS Code.
+- Named folder sessions are supported; reports, backups and external Open With
+  remain desktop features.
 
 ## Feature locations
 
@@ -193,13 +218,13 @@ In an embedded Text Compare tab, use **★ Save Session** on the toolbar. The fi
 
 ### Folder sorting and comparison progress
 
-Folder comparisons do not run in an embedded VS Code tab. From VS Code, choose **CompareCraft > Compare Selected…** for two folders and confirm opening the desktop app. In the desktop Folder Compare view, comparison progress appears below the path bars while folders are scanned and files are compared.
+From VS Code, choose **CompareCraft > Compare Selected…** for two folders to open a comparison tab. Explicit desktop commands open the desktop app instead. Comparison progress appears below the path bars while folders are scanned and files are compared.
 
-To put dot-prefixed folders and files first, set **Tools > Options > Colors, Fonts > Folder views > Dot-prefixed names first** for the global default. For one comparison, choose **Session > Session Settings… > Handling > Sorting** and select **First**; **Use global default** follows the global option. These controls are in the desktop app, not VS Code extension settings. See [Folder Compare: Name sorting](../../docs/manual/folder-compare.md#name-sorting).
+To put dot-prefixed folders and files first for one comparison, choose **Session > Session Settings… > Handling > Sorting** and select **First**; **Use global default** follows the global option. In the desktop app, set **Tools > Options > Colors, Fonts > Folder views > Dot-prefixed names first** for the global default. VS Code comparison preferences are stored separately from desktop settings. See [Folder Compare: Name sorting](../../docs/manual/folder-compare.md#name-sorting).
 
 ## Saved sessions
 
-The extension stores named and recent sessions in the same VS Code global state described above.
+The extension stores named and recent sessions in VS Code global state, with separate libraries for folder and file comparisons.
 
 ## Support
 

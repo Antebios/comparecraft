@@ -2,10 +2,10 @@
 
 ## Status and purpose
 
-**Planning only: embedded folder support has not been implemented.** The
-extension currently opens folder comparisons in the desktop app. Publication of
-this document authorizes documentation only; application implementation requires
-separate approval.
+**Phase A implemented and verified in the working tree.** Local, comparison-only
+folder panels now open inside VS Code with a folder-capable helper. The user
+authorized Phase A implementation after this planning document was published.
+Phases B-E remain future work; no remote support or folder mutations were enabled.
 
 This is the portable source of truth for continuing the planning session on
 another computer or in another agent session. It complements, rather than
@@ -20,8 +20,9 @@ replaces, the existing extension [plan](plan.md), [handoff](handoff.md) and
 - Existing uncommitted work implements desktop comparison presets and the
   Compare split-button border fix, with shared UI tests and manual updates.
   Preserve this work; it is not the embedded-folder implementation.
-- Phase A tasks T001-T007 below are all **not started**.
-- No commit or push was performed for this documentation request.
+- Phase A execution base: `543c3517469f456c81e3600efee0693a1745244c`.
+- Phase A tasks T001-T007 below are **complete**.
+- Implementation changes are uncommitted. No commit or push was performed.
 
 Saving this document locally does not synchronize computers. Transfer the full
 branch and working changes, including untracked files, by committing/pushing or
@@ -135,7 +136,11 @@ with documented failure/recovery behavior and scope.
 
 ## Phase A architecture and constraints
 
-| Surface | Current gap / planned integration |
+The following table records the planning-baseline gaps and their implementation
+surfaces. Phase A now supplies these integrations; retain the constraints below
+when extending them.
+
+| Surface | Planning baseline / implementation surface |
 | --- | --- |
 | [controller.ts](../../extensions/vscode/src/controller.ts) | `route` sends embedded folders to desktop confirmation. Route validated folder pairs to an embedded panel when capabilities exist. |
 | [extension.ts](../../extensions/vscode/src/extension.ts) | File-view detection and spec creation do not support folders. Detect directory inputs before file fallback, including direct callers. |
@@ -227,8 +232,9 @@ patterns, type safety, shared helpers, explicit errors and regression safeguards
 
 ## Phase A implementation tasks
 
-All tasks below are pending. Task tracking should be recreated in the next
-session; this document carries their portable descriptions and dependencies.
+T001-T007 are complete. Their descriptions and dependencies remain here for
+traceability and future maintenance. Continue with independently approved future
+phases, not a second implementation of Phase A.
 
 ### T001 / P1.1: add read-only backend methods
 
@@ -336,7 +342,7 @@ T004/T005 conceptually differ but share host/state files; avoid parallel edits
 there. Validation and user documentation can proceed independently once
 behavior is settled.
 
-## Validation plan (not yet executed for embedded folders)
+## Validation commands and acceptance criteria
 
 Use existing configured tooling; inspect current scripts before running:
 
@@ -386,7 +392,52 @@ Those results do not validate embedded folder support.
 | REQ-007 | P1.1, P2.1, P2.2, P3.2, P4.1, P4.2 | Desktop/file regressions and Git-wait safeguards |
 | REQ-008 | P2.1, P2.2, P3.1, P3.2, P4.1, P4.2 | Actual VS Code UX/focus/theme and truthful errors |
 
-All eight requirements map to planned work; this is traceability, not completion.
+All eight requirements map to implemented work. Verification evidence follows.
+
+## Phase A verification and handoff
+
+- Rust backend tests: **16 passed**, covering capability advertisement, folder
+  result/item shapes, numeric quick verdicts, readonly validation and errors.
+- Root typecheck, desktop frontend build and embedded webview build: **passed**.
+- Extension unit/contract suite with the new helper: **60 passed**, none skipped.
+- Combined embedded-folder, preset, folder-status and comparison-lifecycle
+  Playwright tests: **46 passed**.
+- Actual VS Code integration on Windows: **passed** with the real helper.
+  Verified folder launch/filter/preset transport, nested/orphan folder panels,
+  rejected mutations, session persistence/locks/failures and child lifetime.
+- Actual webview interaction: **passed** for Ctrl+A, light/high-contrast themes,
+  preset execution, row drill-down, repeated saved-disk gutter callbacks,
+  unsaved-buffer isolation, refresh invalidation, panel reload and saved-session
+  Quick Pick.
+- VSIX packaging and isolated install/upgrade/content/runtime/uninstall checks:
+  **passed** on VS Code 1.144.1 (Windows x64), including the new folder UI flows.
+
+The backend build is persistent under `src-tauri/target/debug/comparecraft-backend.exe`
+on Windows. The packaged extension is
+`extensions/vscode/comparecraft-0.1.0.vsix`. Both are generated build outputs,
+not substitutes for transferring source changes. For development testing,
+install that VSIX and set `comparecraft.backendPath` in **User** settings to the
+built helper. Existing installed desktop releases may lack folder capabilities
+despite sharing protocol version 1.
+
+This run did not execute macOS/Linux runtime checks or build the full Tauri
+desktop executable. Panel reload and serializer-state validation were tested;
+a complete VS Code window restart remains a useful manual release check.
+Existing Vite native-config, Solid cleanup/ResizeObserver and environment TLS
+warnings were not changed as part of this feature.
+
+Important integration invariants:
+
+- `openTab({...spec, origin:true})` returns a host-issued `originToken`; parent
+  events are `folder-comparison {token, receipt:{paths, result}}`, where `result`
+  is a shared comparison status, not a bare verdict. Cleanup uses
+  `folder-origin-disposed {token}`.
+- Disk reevaluation uses text rules, `options.table` or `options.pix` as
+  appropriate. Binary quick verdicts are 1 (same) and 11 (different), not zero.
+- Folder panels reject `save_text`; editable child file panels retain existing
+  VS Code document saves.
+- Reload recomputes metadata comparison according to current folder criteria.
+  It does not preserve previous content gutter verdicts as stale tree data.
 
 ## Resume checklist
 
@@ -394,18 +445,18 @@ All eight requirements map to planned work; this is traceability, not completion
    this roadmap. Inspect Git status and preserve existing work.
 2. Read this document and the [protocol](backend-protocol.md); reinspect source
    integration points against the current branch.
-3. Recreate T001-T007 and dependencies in the new session tracker. Do not depend
-   on the prior machine's session SQL or absolute paths.
-4. Confirm implementation authorization. Documentation approval alone does not
-   authorize application changes.
-5. Implement Phase A only, retaining local/comparison-only boundaries.
-6. Record completed tasks, exact validation results, deviations and blockers
-   here so the next handoff is self-contained.
-7. Propose future phases independently after Phase A passes its gate.
+3. Treat T001-T007 as complete. Do not depend on the prior machine's session SQL
+   or absolute build paths.
+4. Rebuild the helper and webview/extension, then repeat relevant checks on that
+   machine. Point development User settings to the new machine's helper.
+5. Preserve Phase A local/comparison-only boundaries during maintenance.
+6. Record new validation results, deviations and blockers here.
+7. Obtain independent approval before starting Phases B-E.
 
 Suggested resume prompt:
 
 > Read docs/vscode-extension/folder-comparison-roadmap.md and inspect the branch.
-> Continue Phase A only: local, comparison-only embedded folders. Preserve
-> desktop preset/border work. Present the plan for approval before implementation
-> unless authorization is already clear. Do not enable remote or folder mutations.
+> Phase A is implemented. Preserve its local, comparison-only boundaries and
+> desktop preset/border work. Rebuild and verify on this machine, then propose
+> the next requested phase for approval. Do not enable remote or folder mutations
+> without separately approved scope.

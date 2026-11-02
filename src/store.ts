@@ -1,6 +1,6 @@
 import { createSignal } from "solid-js";
 import { createStore, produce } from "solid-js/store";
-import { getCurrentWindow } from "./host";
+import { getCurrentWindow, message } from "./host";
 import { api, basename, type LaunchSpec, type Session, type ViewKind } from "./api";
 import { setSetting, settings, type WorkspaceTab } from "./settings";
 import type { ComparisonListener, ComparisonStatus } from "./comparisonStatus";
@@ -164,14 +164,17 @@ export async function persistSession(tab: Tab, name?: string) {
   };
   try {
     await api.saveSession(session);
-    if (saved) updateTab(tab.id, { sessionName: name, locked: false });
-    setSessionsVersion((v) => v + 1);
-    return true;
   } catch (e) {
-    console.error("save session failed", e);
+    // Automatic recent-session callers are intentionally fire-and-forget. Report their failures,
+    // but let named saves reject so Save Session cannot announce a false success.
     if (saved) throw e;
+    await message(`Save session failed: ${e instanceof Error ? e.message : String(e)}`, { title: "Session", kind: "error" })
+      .catch((error) => console.error("Could not display session error", error));
     return false;
   }
+  if (saved) updateTab(tab.id, { sessionId: session.id, sessionName: name, locked: false });
+  setSessionsVersion((v) => v + 1);
+  return true;
 }
 
 /** Locks or unlocks the named session of a tab. */

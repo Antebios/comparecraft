@@ -6,6 +6,7 @@ import { discoverBackend, discoverDesktop, InstallationError } from "./discovery
 import { BackendManager } from "./backend";
 import { EmbeddedPanels, specFromInputs } from "./embedded";
 import { pairViewKind, parseSpec, VIEW_METHODS, type EmbeddedSpec } from "./embeddedCore";
+import { sessionSpec } from "./folderSessions";
 import { desktopViewArguments, launchDesktop } from "./process";
 import { assertSavedResources } from "./resources";
 import { SnapshotStore } from "./snapshots";
@@ -153,11 +154,33 @@ export function activate(context: vscode.ExtensionContext): { embedded: Embedded
     },
     async confirmDesktop() {
       return await vscode.window.showInformationMessage(
-        "Embedded CompareCraft does not support this comparison yet (folder comparisons, and comparisons a Git tool waits on, use the desktop app). Open it in the installed desktop app instead?",
+        "This comparison requires a desktop process (for example a Git tool waiting for completion). Open it in the installed desktop app instead?",
         { modal: true }, "Open in Desktop App"
       ) === "Open in Desktop App";
     },
     async openEmbedded(inputs) {
+      const directories = await Promise.all(inputs.map(async input => {
+        if (input.kind !== "path") return false;
+        if (!path.isAbsolute(input.path)) throw new Error("Comparison paths must be absolute.");
+        return stat(input.path).then(info => info.isDirectory(), (error: NodeJS.ErrnoException) => {
+          if (error.code === "ENOENT") return false;
+          throw error;
+        });
+      }));
+      if (directories.some(Boolean)) {
+        if (inputs.length !== 2 || !directories.every(Boolean) || !inputs.every(input => input.kind === "path")) {
+          throw new Error("Folder comparisons require two local folders, not files or editor content.");
+        }
+        const spec = parseSpec({ kind: "folder", paths: inputs.map(input => input.kind === "path" ? input.path : ""),
+          titles: inputs.map(input => input.title ?? null) });
+        if (!(await embedded.supportsFolder())) {
+          await embedded.host.openInDesktop("folder", spec.paths, "Update CompareCraft: the installed backend lacks embedded folder comparison support.");
+          return;
+        }
+        await embedded.validateFolder(spec);
+        embedded.open(spec);
+        return;
+      }
       const view = await fileView(inputs);
       if (view) {
         embedded.open(view);
@@ -386,10 +409,17 @@ export function activate(context: vscode.ExtensionContext): { embedded: Embedded
     log: line => output.appendLine(line),
     async openInDesktop(kind, paths, reason) {
       const choice = await vscode.window.showInformationMessage(
-        reason ?? `The ${kind} view is not available in embedded CompareCraft. Open it in the installed desktop app?`,
+        reason ?? (kind === "folder" ? "Open this folder comparison in the installed CompareCraft desktop app?" :
+          `The ${kind} view is not available in embedded CompareCraft. Open it in the installed desktop app?`),
         { modal: true, ...(reason ? { detail: "Open it in the installed desktop app instead?" } : {}) }, "Open in Desktop App"
       );
       if (choice !== "Open in Desktop App") return;
+      if (kind === "folder") {
+        if (paths.length !== 2 || paths.some(file => !file)) throw new Error("Choose both folders before opening the desktop comparison.");
+        const resources = await Promise.all(paths.map(file => host.resource(file)));
+        if (resources.some(resource => resource.kind !== "folder")) throw new Error("Choose two folders for this desktop comparison.");
+        await host.assertSaved(resources);
+      }
       await host.launch(paths.length === 0 ? [] : desktopViewArguments(kind, paths));
     },
     async afterMergeSaved(file) {
@@ -524,6 +554,22 @@ export function activate(context: vscode.ExtensionContext): { embedded: Embedded
   });
   register("compareFileWith", async (first, selected) => controller.compareWithPicker(paths(first, selected), "file"));
   register("compareFolderWith", async (first, selected) => controller.compareWithPicker(paths(first, selected), "folder"));
+  register("openSavedFolderSession", async () => {
+    assertSupported();
+    const sessions = embedded.folderSessions().filter(session => session.saved);
+    if (!sessions.length) {
+      await vscode.window.showInformationMessage("CompareCraft: No saved folder sessions. Save a session from a folder comparison first.");
+      return;
+    }
+    const picked = await vscode.window.showQuickPick(sessions.map(session => ({
+      label: session.name, description: session.locked ? "Locked" : undefined,
+      detail: session.paths.join(" ↔ "), session
+    })), { title: "Open Saved Folder Session", matchOnDetail: true });
+    if (!picked) return;
+    const spec = sessionSpec(picked.session);
+    await embedded.validateFolder(spec);
+    embedded.open(spec);
+  });
   register("compareParentFolderWith", async (first, selected) => controller.compareParent(paths(first, selected)));
   register("openDesktop", async () => controller.openDesktop());
   register("locateDesktop", async () => locateDesktop());

@@ -3,10 +3,10 @@
  * Name Filters, Other Filters and Misc, with a "Use for this view only /
  * Also update session defaults / Also update saved session" choice.
  */
-import { open as openDialog } from "../host";
+import { folderComparisonOnly, open as openDialog } from "../host";
 import { createSignal, For, type JSX, Match, Show, Switch } from "solid-js";
 import { createStore, unwrap } from "solid-js/store";
-import { fmtSize, type FolderOptions, type OtherFilter } from "../api";
+import { errText, fmtSize, type FolderOptions, type OtherFilter } from "../api";
 import { Modal } from "../components/common";
 import { PresetEditor } from "../components/OptionsDialog";
 import { setSetting, settings } from "../settings";
@@ -78,7 +78,8 @@ export default function FolderSettingsDialog(props: {
   view: FolderViewSettings;
   paths: [string, string];
   sessionName?: string;
-  onApply: (r: { options: FolderOptions; view: FolderViewSettings; paths: [string, string]; scope: ApplyScope }) => void;
+  locked?: boolean;
+  onApply: (r: { options: FolderOptions; view: FolderViewSettings; paths: [string, string]; scope: ApplyScope }) => void | Promise<void>;
   onClose: () => void;
 }) {
   const [tab, setTab] = createSignal<SettingsTab>(props.tab ?? "names");
@@ -86,6 +87,8 @@ export default function FolderSettingsDialog(props: {
   const [v, setV] = createStore<FolderViewSettings>({ ...props.view });
   const [paths, setPaths] = createSignal<[string, string]>([...props.paths]);
   const [scope, setScope] = createSignal<ApplyScope>("view");
+  const [error, setError] = createSignal("");
+  const [applying, setApplying] = createSignal(false);
 
   // Comparison criteria as BC-style quick tests + contents comparison.
   const isContents = (c: FolderOptions["criteria"]) => c === "crc" || c === "binary" || c === "rules";
@@ -113,7 +116,16 @@ export default function FolderSettingsDialog(props: {
     out.exclude = [...split(excFiles()), ...split(excFolders()).map((m) => `${m.replace(/[\\/]+$/, "")}/`)].join(";");
     return out;
   }
-  const apply = () => props.onApply({ options: build(), view: { ...unwrap(v) }, paths: paths(), scope: scope() });
+  const apply = async (close = false) => {
+    if (applying()) return;
+    setApplying(true);
+    setError("");
+    try {
+      await props.onApply({ options: build(), view: { ...unwrap(v) }, paths: paths(), scope: scope() });
+      if (close) props.onClose();
+    } catch (e) { setError(errText(e)); }
+    finally { setApplying(false); }
+  };
 
   const nameMask = () => {
     const inc = split(incFiles());
@@ -176,7 +188,9 @@ export default function FolderSettingsDialog(props: {
                   <input type="text" style={{ flex: 1 }} value={paths()[1]} onInput={(e) => setPaths([paths()[0], e.currentTarget.value])} />
                   <button onClick={() => void browse(1)}>Browse…</button>
                 </div>
-                <p class="muted small">A snapshot file (.ccsnap) can be used in place of a folder.</p>
+                <Show when={!folderComparisonOnly()}>
+                  <p class="muted small">A snapshot file (.ccsnap) can be used in place of a folder.</p>
+                </Show>
               </>,
             )}
             {group("Description",
@@ -374,18 +388,19 @@ export default function FolderSettingsDialog(props: {
           </Match>
         </Switch>
       </div>
+      <Show when={error()}><div class="error" role="alert">{error()}</div></Show>
       <div class="modal-foot">
         <select value={scope()} onChange={(e) => setScope(e.currentTarget.value as ApplyScope)}>
           <option value="view">Use for this view only</option>
           <option value="defaults">Also update session defaults</option>
-          <Show when={props.sessionName}>
+          <Show when={props.sessionName && !props.locked}>
             <option value="saved">Also update saved session</option>
           </Show>
         </select>
         <span class="spacer" />
-        <button class="primary" onClick={() => (apply(), props.onClose())}>OK</button>
-        <button onClick={props.onClose}>Cancel</button>
-        <button onClick={apply}>Apply</button>
+        <button class="primary" disabled={applying()} onClick={() => void apply(true)}>OK</button>
+        <button disabled={applying()} onClick={props.onClose}>Cancel</button>
+        <button disabled={applying()} onClick={() => void apply()}>Apply</button>
       </div>
     </Modal>
   );

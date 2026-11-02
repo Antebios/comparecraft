@@ -62,13 +62,15 @@ export const VIEW_METHODS: Record<FileView, readonly string[]> = {
   patch: [],
 };
 
+export const FOLDER_METHODS = ["folder.compare", "folder.compareItems", "file.quickCompare"] as const;
+
 /** Initial state of an embedded text comparison; also the persisted webview state. */
 export interface EmbeddedSpec {
   /**
    * Defaults to a two-sided text comparison. A merge has paths [current, incoming, base, result].
    * Hex, table and picture compare two files read-only; a patch shows one file.
    */
-  readonly kind?: "text" | "merge" | FileView;
+  readonly kind?: "text" | "merge" | "folder" | FileView;
   readonly paths: string[];
   readonly titles: (string | null)[];
   readonly readOnly: boolean[];
@@ -77,6 +79,9 @@ export interface EmbeddedSpec {
   readonly restore?: [string[] | null, string[] | null];
   /** Unsaved merged text of a merge, kept only to offer it back when the panel closes. */
   readonly output?: string[] | null;
+  readonly sessionId?: string;
+  readonly sessionName?: string;
+  readonly locked?: boolean;
 }
 
 export interface EmbeddedSessionRecord {
@@ -168,6 +173,21 @@ export function parseSpec(value: unknown): EmbeddedSpec {
   if (!isObject(value)) throw new Error("Invalid embedded comparison state.");
   const { paths, titles = [], readOnly = [], options = {}, restore, kind = "text", output } = value;
   if (isFileView(kind)) return fileViewSpec(kind, paths, titles, options);
+  if (kind === "folder") {
+    if (!Array.isArray(paths) || paths.length !== 2 || !paths.every(item =>
+      typeof item === "string" && (item === "" || path.isAbsolute(item))) || !paths.some(Boolean)) {
+      throw new Error("Folder comparisons need two absolute sides and at least one folder.");
+    }
+    if (!Array.isArray(titles) || !titles.every(item => item === null || typeof item === "string")) throw new Error("Invalid comparison titles.");
+    if (!isObject(options)) throw new Error("Invalid folder options.");
+    if (restore !== undefined || output !== undefined) throw new Error("Folders cannot restore editor text.");
+    const sessionId = value.sessionId, sessionName = value.sessionName, locked = value.locked;
+    if (sessionId !== undefined && typeof sessionId !== "string") throw new Error("Invalid folder session identity.");
+    if (sessionName !== undefined && typeof sessionName !== "string") throw new Error("Invalid folder session name.");
+    if (locked !== undefined && typeof locked !== "boolean") throw new Error("Invalid folder session lock.");
+    return { paths, titles, options, readOnly: [true, true], kind, ...(typeof sessionId === "string" ? { sessionId } : {}),
+      ...(typeof sessionName === "string" ? { sessionName } : {}), ...(typeof locked === "boolean" ? { locked } : {}) };
+  }
   if (kind !== "text" && kind !== "merge") throw new Error("Invalid embedded view kind.");
   const merge = kind === "merge";
   if (!Array.isArray(paths) || paths.length > (merge ? 4 : 2) || !paths.every(item => typeof item === "string" && (item === "" || path.isAbsolute(item)))) {
@@ -325,7 +345,7 @@ export function titleOf(spec: EmbeddedSpec): string {
   if (spec.kind === "patch") return `Patch: ${spec.titles[0] || path.basename(spec.paths[0] ?? "") || "Untitled"}`;
   const names = [0, 1].map(side => spec.titles[side] || (spec.paths[side] ? path.basename(spec.paths[side]!) : "Untitled"));
   const pair = names[0] === names[1] ? names[0]! : `${names[0]} ↔ ${names[1]}`;
-  const prefix = { hex: "Hex", table: "Table", picture: "Picture" }[spec.kind as string];
+  const prefix = { hex: "Hex", table: "Table", picture: "Picture", folder: "Folder" }[spec.kind as string];
   return prefix ? `${prefix}: ${pair}` : pair;
 }
 

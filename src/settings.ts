@@ -187,12 +187,14 @@ function migrateLocal(s: Settings): Settings {
   return s;
 }
 
-export async function loadSettings() {
+export async function loadSettings(preserveOnError = false) {
   try {
     const raw = await api.loadSettings();
     const empty = !raw || Object.keys(raw).length === 0;
     setSettingsStore(reconcile(empty ? migrateLocal(normalize({})) : normalize(raw)));
-  } catch {
+  } catch (e) {
+    // A broadcast reload must not wipe the current library/defaults on a transient host failure.
+    if (preserveOnError) throw e;
     setSettingsStore(reconcile(migrateLocal(normalize({}))));
   }
   loaded = true;

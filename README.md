@@ -46,9 +46,10 @@
 
 Use the [CompareCraft VS Code extension](extensions/vscode/README.md) to open file,
 folder, unsaved-text, clipboard and Git comparisons (including merge/rebase
-conflict resolution and optional `git mergetool`/`difftool` setup) in the
-installed desktop app. Embedded views are planned in
-[incremental phases](docs/vscode-extension/plan.md).
+conflict resolution and optional `git mergetool`/`difftool` setup) inside VS Code
+or the installed desktop app. Local embedded folder panels are comparison-only;
+see the [folder roadmap](docs/vscode-extension/folder-comparison-roadmap.md) for
+full local and remote workflow phases.
 
 CompareCraft opens the right view for whatever you give it: two files, two folders, three files to merge, or a saved session.
 

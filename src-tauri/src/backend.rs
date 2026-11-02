@@ -4,7 +4,7 @@
 //! lifecycle) is documented in `docs/vscode-extension/backend-protocol.md`; keep the two in sync.
 //! Every method is read-only: the helper never writes, deletes or executes anything.
 
-use crate::{diff, fileio, hex, merge, pix, table};
+use crate::{diff, fileio, folder, hex, merge, pix, quick, table};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
@@ -26,7 +26,19 @@ pub const MAX_LINES_PER_SIDE: usize = 2_000_000;
 pub const MAX_TABLE_FILE_BYTES: u64 = 64 << 20;
 /// Picture files are decoded whole and returned as PNG data URLs; larger files get `LIMIT`.
 pub const MAX_PICTURE_FILE_BYTES: u64 = 64 << 20;
-pub const METHODS: [&str; 8] = ["path.info", "text.load", "text.diff", "text.merge", "hex.align", "table.compare", "pix.compare", "pix.image"];
+pub const METHODS: [&str; 11] = [
+    "path.info",
+    "text.load",
+    "text.diff",
+    "text.merge",
+    "hex.align",
+    "table.compare",
+    "pix.compare",
+    "pix.image",
+    "folder.compare",
+    "folder.compareItems",
+    "file.quickCompare",
+];
 
 pub mod code {
     pub const PARSE_ERROR: i64 = -32700;
@@ -212,6 +224,33 @@ struct PixParams {
     right_data: Option<String>,
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct FolderParams {
+    left: String,
+    right: String,
+    #[serde(default)]
+    options: Option<Value>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct FolderItemsParams {
+    left: String,
+    right: String,
+    rels: Vec<String>,
+    #[serde(default)]
+    options: Option<Value>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct QuickCompareParams {
+    left: String,
+    right: String,
+    mode: String,
+}
+
 fn params<T: DeserializeOwned>(value: Value) -> Result<T, RpcError> {
     let value = if value.is_null() { Value::Object(Map::new()) } else { value };
     serde_json::from_value(value).map_err(|e| RpcError::new(code::INVALID_PARAMS, format!("invalid params: {e}")))
@@ -222,6 +261,140 @@ fn absolute(path: &str) -> Result<(), RpcError> {
         return Err(RpcError::new(code::INVALID_PARAMS, format!("path must be absolute: {path:?}")));
     }
     Ok(())
+}
+
+fn require_path_kind(path: &str, directory: bool) -> Result<(), RpcError> {
+    absolute(path)?;
+    let metadata = std::fs::metadata(path).map_err(|e| io_error(path, &e))?;
+    let matches = if directory { metadata.is_dir() } else { metadata.is_file() };
+    if !matches {
+        return Err(RpcError::new(
+            code::INVALID_PARAMS,
+            format!("path must be an existing {}: {path:?}", if directory { "directory" } else { "file" }),
+        ));
+    }
+    Ok(())
+}
+
+fn require_readable_directory(path: &str) -> Result<(), RpcError> {
+    let mut entries = std::fs::read_dir(path).map_err(|e| io_error(path, &e))?;
+    if let Some(Err(e)) = entries.next() {
+        return Err(io_error(path, &e));
+    }
+    Ok(())
+}
+
+fn safe_relative_path(path: &str, allow_empty: bool) -> bool {
+    if path.is_empty() {
+        return allow_empty;
+    }
+    if path.starts_with('/')
+        || path.contains('\\')
+        || path.contains(':')
+        || path.chars().any(char::is_control)
+    {
+        return false;
+    }
+    path.split('/').all(|segment| !segment.is_empty() && segment != "." && segment != "..")
+}
+
+fn reject_unknown_fields(value: &Value, path: &str, allowed: &[&str]) -> Result<(), RpcError> {
+    let Value::Object(object) = value else {
+        return Err(RpcError::new(code::INVALID_PARAMS, format!("{path} must be an object")));
+    };
+    if let Some(unknown) = object.keys().find(|key| !allowed.contains(&key.as_str())) {
+        return Err(RpcError::new(code::INVALID_PARAMS, format!("unknown {path} field: {unknown}")));
+    }
+    Ok(())
+}
+
+fn folder_options(value: Option<Value>) -> Result<folder::FolderOptions, RpcError> {
+    let Some(value) = value.filter(|v| !v.is_null()) else {
+        return Ok(folder::FolderOptions::default());
+    };
+    const OPTION_FIELDS: &[&str] = &[
+        "criteria",
+        "timeToleranceSecs",
+        "include",
+        "exclude",
+        "includeFolders",
+        "otherFilters",
+        "excludeHidden",
+        "flatten",
+        "ignoreDst",
+        "ignoreTz",
+        "ignoreCaseNames",
+        "followSymlinks",
+        "align",
+    ];
+    const FILTER_FIELDS: &[&str] = &[
+        "kind",
+        "enabled",
+        "newer",
+        "days",
+        "date",
+        "larger",
+        "size",
+        "notContaining",
+        "text",
+        "caseSensitive",
+        "wholeWords",
+        "regex",
+    ];
+    const ALIGN_FIELDS: &[&str] = &["parent", "left", "right"];
+
+    reject_unknown_fields(&value, "options", OPTION_FIELDS)?;
+    if let Some(filters) = value.get("otherFilters") {
+        let filters = filters.as_array().ok_or_else(|| RpcError::new(code::INVALID_PARAMS, "options.otherFilters must be an array"))?;
+        for filter in filters {
+            reject_unknown_fields(filter, "options.otherFilters[]", FILTER_FIELDS)?;
+        }
+    }
+    if let Some(alignments) = value.get("align") {
+        let alignments = alignments.as_array().ok_or_else(|| RpcError::new(code::INVALID_PARAMS, "options.align must be an array"))?;
+        for alignment in alignments {
+            reject_unknown_fields(alignment, "options.align[]", ALIGN_FIELDS)?;
+            let parent = alignment.get("parent").and_then(Value::as_str).unwrap_or("");
+            let left = alignment.get("left").and_then(Value::as_str).unwrap_or("");
+            let right = alignment.get("right").and_then(Value::as_str).unwrap_or("");
+            if !safe_relative_path(parent, true) || !safe_relative_path(left, false) || left.contains('/')
+                || !safe_relative_path(right, false) || right.contains('/')
+            {
+                return Err(RpcError::new(code::INVALID_PARAMS, "alignment paths must use safe relative parent paths and single-segment names"));
+            }
+        }
+    }
+
+    let options: folder::FolderOptions = serde_json::from_value(value)
+        .map_err(|e| RpcError::new(code::INVALID_PARAMS, format!("invalid folder options: {e}")))?;
+    if !matches!(options.criteria.as_str(), "timesize" | "size" | "binary" | "crc" | "rules") {
+        return Err(RpcError::new(code::INVALID_PARAMS, format!("invalid folder comparison criteria: {}", options.criteria)));
+    }
+    if options.time_tolerance_secs < 0 || options.time_tolerance_secs > i64::MAX / 1000 {
+        return Err(RpcError::new(code::INVALID_PARAMS, "timeToleranceSecs must be between 0 and i64::MAX / 1000"));
+    }
+    for filter in &options.other_filters {
+        if !matches!(filter.kind.as_str(), "date" | "size" | "content") {
+            return Err(RpcError::new(code::INVALID_PARAMS, format!("invalid folder filter kind: {}", filter.kind)));
+        }
+        if filter.kind == "content" && filter.regex {
+            let pattern = if filter.whole_words { format!(r"\b(?:{})\b", filter.text) } else { filter.text.clone() };
+            let mut builder = regex::bytes::RegexBuilder::new(&pattern);
+            builder.case_insensitive(!filter.case_sensitive);
+            builder.build().map_err(|e| RpcError::new(code::INVALID_PARAMS, format!("invalid content filter regex: {e}")))?;
+        }
+    }
+    Ok(options)
+}
+
+fn quick_mode(mode: &str) -> Result<quick::QcMode, RpcError> {
+    match mode {
+        "rules" => Ok(quick::QcMode::Rules),
+        "size" => Ok(quick::QcMode::Size),
+        "crc" => Ok(quick::QcMode::Crc),
+        "binary" => Ok(quick::QcMode::Binary),
+        _ => Err(RpcError::new(code::INVALID_PARAMS, format!("invalid quick comparison mode: {mode}"))),
+    }
 }
 
 /// `Rules` ignores unknown fields for desktop compatibility; the protocol rejects them so typos are visible.
@@ -313,6 +486,36 @@ pub fn call(method: &str, value: Value) -> Result<Value, RpcError> {
             absolute(&p.path)?;
             limit_file(&p.path, MAX_PICTURE_FILE_BYTES)?;
             to_value(pix::pix_image(&p.path).map_err(|e| RpcError::new(code::IO, format!("{}: {e}", p.path)))?)
+        }
+        "folder.compare" => {
+            let p: FolderParams = params(value)?;
+            require_path_kind(&p.left, true)?;
+            require_path_kind(&p.right, true)?;
+            let options = folder_options(p.options)?;
+            let result = folder::compare_folders(&p.left, &p.right, &options)
+                .map_err(|e| io_error(&format!("{} / {}", p.left, p.right), &e))?;
+            to_value(result)
+        }
+        "folder.compareItems" => {
+            let p: FolderItemsParams = params(value)?;
+            require_path_kind(&p.left, true)?;
+            require_path_kind(&p.right, true)?;
+            require_readable_directory(&p.left)?;
+            require_readable_directory(&p.right)?;
+            for rel in &p.rels {
+                if !safe_relative_path(rel, false) {
+                    return Err(RpcError::new(code::INVALID_PARAMS, format!("item path must be a safe relative path: {rel:?}")));
+                }
+            }
+            let options = folder_options(p.options)?;
+            to_value(folder::compare_items(&p.left, &p.right, &p.rels, &options))
+        }
+        "file.quickCompare" => {
+            let p: QuickCompareParams = params(value)?;
+            require_path_kind(&p.left, false)?;
+            require_path_kind(&p.right, false)?;
+            let mode = quick_mode(&p.mode)?;
+            Ok(json!(quick::quick_compare(Path::new(&p.left), Path::new(&p.right), mode)))
         }
         "text.diff" => {
             let p: DiffParams = params(value)?;
@@ -745,6 +948,13 @@ mod tests {
         let inits: Vec<&Value> = out.iter().filter(|m| m["id"] == json!(0)).collect();
         assert_eq!(inits[0]["result"]["server"]["name"], json!(SERVER_NAME));
         assert_eq!(inits[0]["result"]["capabilities"]["methods"], json!(METHODS));
+        assert_eq!(
+            json!(METHODS),
+            json!([
+                "path.info", "text.load", "text.diff", "text.merge", "hex.align", "table.compare", "pix.compare",
+                "pix.image", "folder.compare", "folder.compareItems", "file.quickCompare"
+            ])
+        );
         assert_eq!(inits[1]["error"]["code"], json!(code::INVALID_REQUEST));
         assert_eq!(by_id(&out, 3)["error"]["code"], json!(code::METHOD_NOT_FOUND));
         assert_eq!(by_id(&out, 4)["result"], Value::Null);
@@ -869,6 +1079,144 @@ mod tests {
         assert_eq!(e.data.unwrap()["limit"], json!(MAX_TABLE_FILE_BYTES));
         assert_eq!(err("pix.compare", json!({ "left": big, "right": big })).code, code::LIMIT);
         assert_eq!(err("pix.image", json!({ "path": big })).code, code::LIMIT);
+    }
+
+    #[test]
+    fn folder_methods_match_engine_shapes_and_are_read_only() {
+        let temp = tempfile::tempdir().unwrap();
+        let left = temp.path().join("left");
+        let right = temp.path().join("right");
+        std::fs::create_dir_all(left.join("sub")).unwrap();
+        std::fs::create_dir_all(right.join("sub")).unwrap();
+        std::fs::write(left.join("sub/a.txt"), b"same\n").unwrap();
+        std::fs::write(right.join("sub/a.txt"), b"same\n").unwrap();
+        std::fs::write(left.join("left-only.txt"), b"left\n").unwrap();
+        let (left, right) = (left.to_string_lossy().to_string(), right.to_string_lossy().to_string());
+        let left_contents = std::fs::read(Path::new(&left).join("sub/a.txt")).unwrap();
+        let right_contents = std::fs::read(Path::new(&right).join("sub/a.txt")).unwrap();
+
+        let options = folder::FolderOptions::default();
+        let expected = serde_json::to_value(folder::compare_folders(&left, &right, &options).unwrap()).unwrap();
+        let got = call("folder.compare", json!({ "left": left, "right": right })).unwrap();
+        assert_eq!(got, expected);
+        let left_only = got["root"]["children"].as_array().unwrap().iter().find(|node| node["name"] == "left-only.txt").unwrap();
+        assert_eq!(left_only["status"], json!("left"));
+
+        let rels = vec!["sub/a.txt".to_string(), "missing.txt".to_string()];
+        let expected = serde_json::to_value(folder::compare_items(&left, &right, &rels, &options)).unwrap();
+        let got = call("folder.compareItems", json!({ "left": left, "right": right, "rels": rels })).unwrap();
+        assert_eq!(got, expected);
+        assert!(got[0].is_object());
+        assert!(got[1].is_null());
+
+        assert_eq!(std::fs::read(Path::new(&left).join("sub/a.txt")).unwrap(), left_contents);
+        assert_eq!(std::fs::read(Path::new(&right).join("sub/a.txt")).unwrap(), right_contents);
+    }
+
+    #[test]
+    fn folder_methods_reject_invalid_shapes_paths_and_options() {
+        let temp = tempfile::tempdir().unwrap();
+        let left = temp.path().join("left");
+        let right = temp.path().join("right");
+        std::fs::create_dir_all(&left).unwrap();
+        std::fs::create_dir_all(&right).unwrap();
+        let file = temp.path().join("file");
+        std::fs::write(&file, b"file").unwrap();
+        let (left, right, file) = (
+            left.to_string_lossy().to_string(),
+            right.to_string_lossy().to_string(),
+            file.to_string_lossy().to_string(),
+        );
+        let err = |method: &str, value: Value| call(method, value).unwrap_err();
+
+        assert_eq!(err("folder.compare", json!({ "left": left, "right": file })).code, code::INVALID_PARAMS);
+        assert_eq!(
+            err("folder.compare", json!({ "left": left, "right": right, "extra": true })).code,
+            code::INVALID_PARAMS
+        );
+        assert_eq!(
+            err("folder.compare", json!({ "left": left, "right": right, "options": { "criteria": "nonsense" } })).code,
+            code::INVALID_PARAMS
+        );
+        assert_eq!(
+            err("folder.compare", json!({ "left": left, "right": right, "options": { "otherFilters": [{ "kind": "bad" }] } })).code,
+            code::INVALID_PARAMS
+        );
+        assert_eq!(
+            err("folder.compare", json!({ "left": left, "right": right, "options": { "otherFilters": [{ "kind": "size", "typo": 1 }] } })).code,
+            code::INVALID_PARAMS
+        );
+        let oversized_tolerance = i64::MAX;
+        assert_eq!(
+            err(
+                "folder.compare",
+                json!({ "left": left, "right": right, "options": { "timeToleranceSecs": oversized_tolerance } })
+            )
+            .code,
+            code::INVALID_PARAMS
+        );
+        assert_eq!(
+            err(
+                "folder.compare",
+                json!({ "left": left, "right": right, "options": { "otherFilters": [{ "kind": "content", "enabled": false, "regex": true, "text": "[" }] } })
+            )
+            .code,
+            code::INVALID_PARAMS
+        );
+        for rel in ["", "/absolute", "../escape", "a/../escape", "a\\..\\escape", "a//b", "a/./b", "C:/escape"] {
+            assert_eq!(
+                err("folder.compareItems", json!({ "left": left, "right": right, "rels": [rel] })).code,
+                code::INVALID_PARAMS,
+                "{rel:?}"
+            );
+        }
+        assert_eq!(
+            err("folder.compareItems", json!({ "left": left, "right": right, "rels": ["ok"], "unexpected": 1 })).code,
+            code::INVALID_PARAMS
+        );
+        assert_eq!(
+            err("folder.compare", json!({ "left": "relative", "right": right })).code,
+            code::INVALID_PARAMS
+        );
+        let missing = temp.path().join("missing").to_string_lossy().to_string();
+        assert_eq!(err("folder.compare", json!({ "left": left, "right": missing })).code, code::IO);
+    }
+
+    #[test]
+    fn quick_compare_validates_files_and_preserves_verdict_codes() {
+        let temp = tempfile::tempdir().unwrap();
+        let left = temp.path().join("left.txt");
+        let right = temp.path().join("right.txt");
+        std::fs::write(&left, b"hello\n").unwrap();
+        std::fs::write(&right, b"hello\n").unwrap();
+        let (left, right) = (left.to_string_lossy().to_string(), right.to_string_lossy().to_string());
+
+        for mode in ["rules", "size", "crc", "binary"] {
+            let expected = quick::quick_compare(Path::new(&left), Path::new(&right), quick_mode(mode).unwrap());
+            assert_eq!(call("file.quickCompare", json!({ "left": left, "right": right, "mode": mode })).unwrap(), json!(expected));
+        }
+        assert_eq!(
+            call("file.quickCompare", json!({ "left": left, "right": right, "mode": "rules" })).unwrap(),
+            json!(quick::BINARY_SAME)
+        );
+        assert_eq!(
+            call("file.quickCompare", json!({ "left": left, "right": right, "mode": "unknown" })).unwrap_err().code,
+            code::INVALID_PARAMS
+        );
+        assert_eq!(
+            call("file.quickCompare", json!({ "left": left, "right": right, "mode": "rules", "extra": 1 })).unwrap_err().code,
+            code::INVALID_PARAMS
+        );
+        assert_eq!(
+            call("file.quickCompare", json!({ "left": left, "right": Path::new(&right).parent().unwrap(), "mode": "rules" }))
+                .unwrap_err()
+                .code,
+            code::INVALID_PARAMS
+        );
+        assert_eq!(
+            call("file.quickCompare", json!({ "left": "relative", "right": right, "mode": "rules" })).unwrap_err().code,
+            code::INVALID_PARAMS
+        );
     }
 
     #[test]

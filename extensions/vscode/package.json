@@ -97,6 +97,11 @@
         "category": "CompareCraft"
       },
       {
+        "command": "comparecraft.openSavedFolderSession",
+        "title": "Open Saved Folder Session...",
+        "category": "CompareCraft"
+      },
+      {
         "command": "comparecraft.openDesktop",
         "title": "Open Desktop App",
         "category": "CompareCraft"
