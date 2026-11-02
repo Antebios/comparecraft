@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 import solid from "vite-plugin-solid";
 import { readFile, readdir, stat, writeFile } from "node:fs/promises";
-import { resolve, join, extname } from "node:path";
+import { resolve, join, extname, sep } from "node:path";
 import { BackendClient } from "../../extensions/vscode/src/backend";
 import type { FNode, FolderResult, Summary } from "../../src/api";
 
@@ -27,7 +27,7 @@ async function folderResult(left: string, right: string, options: { dotNamesFirs
         else summary[status]++;
       }
       return {
-        name, rel: path, dir, status,
+        name, rel: path.split(sep).join("/"), dir, status,
         left: l ? { name, size: l.size, modified: l.mtimeMs } : undefined,
         right: r ? { name, size: r.size, modified: r.mtimeMs } : undefined,
         children: dir && l && r ? await walk(path) : undefined,

@@ -23,7 +23,7 @@ The counter includes one-sided files; folders themselves are not counted. It mea
 
 From top to bottom, the Folder Compare window has:
 
-- The **toolbar**, with expand and collapse buttons, display filters, copy and delete buttons, Sync, Rules, Swap, Refresh and Save Session.
+- The **toolbar**, with expand and collapse buttons, display filters, comparison presets, copy and delete buttons, Sync, Rules, Swap, Refresh and Save Session.
 - The **filter bar**, with the **Filters:** box and the **⛃ Filters** and **👁 Peek** buttons. See [Filters](filters.md).
 - The **path bars** for the left and right base folders.
 - The **two trees**. Each side has the columns **Name**, **Size** and **Modified**. A narrow status column between the sides shows a symbol for each row.
@@ -111,6 +111,42 @@ The **View** menu has four modes for how folders are shown and compared:
 By default, files are compared by size and timestamp, with a timestamp tolerance of 2 seconds. To change how files are compared, click **⚖ Rules** on the toolbar, or choose **Session > Session Settings…** and open the **Comparison** tab. See [Session Settings](#session-settings).
 
 To check the contents of some files without changing the criteria, select them and choose **Actions > Compare Contents…**. See [Compare contents](#compare-contents).
+
+## Comparison presets
+
+The comparison split-button provides a faster way to check contents without selecting everything or opening a dialog:
+
+1. Open the arrow beside **Compare All: Rules-based**.
+2. Choose **All included files** or **Selected items**, then **CRC**, **Binary**, or **Rules-based**. Choosing an item only changes the button; it does not start comparison.
+3. Click the main button to run. Results update the gutter, folder totals, and status bar without opening a results dialog.
+
+**All included files** checks paired files throughout the loaded folder tree, including collapsed folders and items hidden by display filters such as **Diffs** or **Same**. Configured session filters still apply, even when **Peek** or **Suppress Filters** temporarily reveals excluded items. Current counterpart mappings are preserved, including aligned names and flattened folder views. One-sided files keep their orphan status.
+
+**Selected items** uses the existing selection, including descendants of selected folders. It never silently switches to All when nothing is selected. Running either scope does not select all, clear your selection, or change the permanent comparison criteria.
+
+Progress and completion counts appear in the status bar; same, similar, different, and failed comparisons are counted separately. Unreadable files are errors, not differences. Quick presets require two folders with file contents; they do not compare snapshot bytes that are unavailable. Execution buttons are disabled while a comparison is running.
+
+### Named presets and pinned buttons
+
+Choose **Manage Comparison Presets…** from the comparison dropdown or the **Actions** menu to open the preset editor.
+
+- Use **New** or **Duplicate** to create a named preset containing a method and scope. Names must be nonempty and unique, ignoring case.
+- Built-in presets cannot be edited or deleted.
+- Check **Pin in this folder session** to add a direct-run toolbar button. Extra pins move into **More** when space is limited. Clicking a pin runs that preset without changing the main button's choice.
+- **Save** commits editing and pin changes but never runs a comparison. **Cancel** discards the draft.
+- Deleting a shared preset asks for confirmation. Sessions referencing deleted presets remove those pins, reset an unavailable active choice to **Compare All: Rules-based**, and report the change.
+
+Named presets form an application-wide library. Each folder session remembers its own active choice and pins. Use **Save Session** to retain those choices in a named session; workspace restoration also retains them. Locked sessions keep their normal Save/Save As protections.
+
+To initialize future folder sessions with the current main-button choice and the edited pins, check **Use the current comparison choice and these pins as defaults for new folder sessions** before saving. Changing a session does not automatically change these defaults.
+
+Presets are not recorded macros: they do not save custom text rules, file filters, paths, or copy/delete operations. Rules-based uses the existing comparison engine behavior.
+
+### Keyboard access and the existing dialog
+
+Tab to the comparison dropdown and press `Down` or `Enter` to open it. Use the arrow keys to navigate, `Enter` to choose, and `Esc` to close and restore focus. The main button and pinned buttons run with `Enter` or `Space`.
+
+The context-menu and **Actions > Compare Contents…** dialog remain available, including their remembered method and **Show results dialog** option. Their preferences are separate from quick presets. The comparison dropdown also links to this dialog when a selection is available.
 
 ## Navigate and find
 

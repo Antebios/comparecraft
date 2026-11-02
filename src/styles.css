@@ -249,6 +249,137 @@ button.link {
   background: var(--bg2);
   flex: none;
 }
+.comparison-preset-toolbar {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  position: relative;
+}
+.preset-split {
+  display: inline-flex;
+  min-width: 0;
+  flex-shrink: 0;
+  max-width: 100%;
+}
+.preset-run-wrap {
+  display: inline-flex;
+  min-width: 0;
+  position: relative;
+}
+.preset-run-wrap:hover,
+.preset-run-wrap:focus-within {
+  z-index: 1;
+}
+.preset-run {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 220px;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.preset-run > span, .preset-pin, .preset-editor-list button > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.preset-run small {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.preset-dropdown {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  margin-left: -1px;
+}
+.preset-pin-wrap {
+  display: inline-flex;
+  min-width: 0;
+}
+.preset-pin {
+  display: inline-block;
+  max-width: 150px;
+}
+.preset-more {
+  flex-shrink: 0;
+}
+.preset-measure {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
+  display: flex;
+  width: max-content;
+  height: 0;
+  overflow: hidden;
+}
+.preset-measure .preset-pin {
+  flex-shrink: 0;
+  border: 1px solid transparent;
+}
+.preset-editor {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) minmax(200px, 1.2fr);
+  gap: 16px;
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+.preset-editor-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 320px;
+  overflow: auto;
+  min-width: 0;
+}
+.preset-editor-list button {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  text-align: left;
+  flex-shrink: 0;
+}
+.preset-editor-list button.active {
+  border-color: var(--accent);
+  background: var(--sel);
+}
+.preset-editor-list small {
+  color: var(--muted);
+}
+.preset-editor-fields {
+  min-width: 0;
+}
+.preset-editor-fields > label:not(.opt-check) {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+.preset-delete {
+  border: 1px solid var(--border);
+  padding: 8px;
+}
+.preset-delete button + button {
+  margin-left: 6px;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+@media (max-width: 600px) {
+  .preset-editor {
+    grid-template-columns: 1fr;
+  }
+  .preset-editor-list {
+    max-height: 160px;
+  }
+}
 .tb-btn {
   padding: 2px 8px;
   white-space: nowrap;

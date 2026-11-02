@@ -25,7 +25,10 @@ import { showContextMenu } from "../components/ContextMenu";
 import { externalCommands, shellWords, sideOf } from "../components/external";
 import { promptText } from "../components/Prompt";
 import { displayKeys, isEnabled, IS_MAC, registerCommands, type Command, type MenuRef } from "../commands";
-import { backupSpec, rememberFilter, setSetting, settings } from "../settings";
+import { backupSpec, comparisonPresetWarnings, rememberFilter, saveComparisonPresetSettings, setSetting, settings } from "../settings";
+import { BUILTIN_PRESETS, presetDescription, resolvePresetState, type ComparisonPreset, type ComparisonPresetState } from "../comparisonPresets";
+import ComparisonPresetToolbar from "../components/ComparisonPresetToolbar";
+import ComparisonPresetsDialog from "../components/ComparisonPresetsDialog";
 import { openAuto, openTab, persistSession, setSessionsVersion, tabTitle, updateTab, type Tab } from "../store";
 import { folderInfo } from "../components/InfoDialog";
 import { ReportDialog, type ReportKind } from "../components/ReportDialog";
@@ -110,6 +113,16 @@ const STATUS_GLYPH: Record<string, string> = { same: "=", similar: "≈", diff: 
 const other = (s: SideName): SideName => (s === "left" ? "right" : "left");
 const parentRel = (rel: string) => (rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "");
 const extOf = (name: string) => (name.lastIndexOf(".") > 0 ? name.slice(name.lastIndexOf(".")) : "");
+
+function folderSidePath(n: FNode, side: SideName, base: string, byRel: Map<string, FNode>): string {
+  const fp = side === "left" ? n.leftPath : n.rightPath;
+  if (fp !== undefined) return joinPath(base, fp);
+  const parts = n.rel.split("/");
+  return joinPath(base, parts.map((part, i) => {
+    const ancestor = byRel.get(parts.slice(0, i + 1).join("/"));
+    return ancestor?.[side]?.name ?? ancestor?.[other(side)]?.name ?? part;
+  }).join("/"));
+}
 
 /** Case-insensitive file-name glob (`*`, `?`). */
 function globMatch(mask: string, name: string): boolean {
@@ -215,6 +228,43 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
   const [quietExclude, setQuietExclude] = createSignal(false);
   const closeDialog = () => setDialog(null);
   const show = (d: () => JSX.Element) => setDialog(() => d);
+  const allPresets = createMemo(() => [...BUILTIN_PRESETS, ...settings.comparisonPresets.library]);
+  const [presetState, setPresetState] = createSignal<ComparisonPresetState>(
+    resolvePresetState(tab().options.comparisonPresets ?? settings.comparisonPresets.defaults, allPresets()).state,
+  );
+  const activePreset = () => allPresets().find((p) => p.id === presetState().activePresetId) ?? BUILTIN_PRESETS[2];
+  const pinnedPresets = () => presetState().pinnedPresetIds.flatMap((id) => allPresets().filter((p) => p.id === id));
+  function storePresetState(state: ComparisonPresetState, rememberRecent = true) {
+    setPresetState(state);
+    updateTab(tab().id, { options: { ...tab().options, comparisonPresets: state } });
+    if (rememberRecent && tab().paths[0] && tab().paths[1]) void persistSession(tab());
+  }
+  createEffect(on(allPresets, (presets) => {
+    const resolved = resolvePresetState(tab().options.comparisonPresets ?? settings.comparisonPresets.defaults, presets);
+    const previous = tab().options.comparisonPresets;
+    storePresetState(resolved.state, previous !== undefined && JSON.stringify(previous) !== JSON.stringify(resolved.state));
+    const warnings = [...comparisonPresetWarnings(), ...(resolved.warning ? [resolved.warning] : [])];
+    if (warnings.length) setMessage(warnings.join(" "));
+  }));
+  const choosePreset = (id: string) => {
+    storePresetState({ ...presetState(), activePresetId: id });
+  };
+  function managePresets() {
+    const version = JSON.stringify(settings.comparisonPresets.library);
+    show(() => <ComparisonPresetsDialog library={settings.comparisonPresets.library} state={presetState()} onClose={closeDialog}
+      onSave={async (library, state, useDefaults) => {
+        const reset = state.activePresetId !== presetState().activePresetId;
+        if (JSON.stringify(settings.comparisonPresets.library) !== version)
+          throw new Error("The shared preset library changed. Close and reopen this dialog before saving.");
+        await saveComparisonPresetSettings({
+          library,
+          defaults: useDefaults ? state : resolvePresetState(settings.comparisonPresets.defaults, [...BUILTIN_PRESETS, ...library]).state,
+        });
+        storePresetState(state);
+        closeDialog();
+        setMessage("Comparison presets saved." + (reset ? " The unavailable active preset was reset." : ""));
+      }} />);
+  }
 
   let scroller!: HTMLDivElement;
   const vp = useViewport(() => scroller);
@@ -488,15 +538,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
 
   /** Path of a node on a side; ancestor names come from that side (they can differ by case or alignment). */
   function sidePath(n: FNode, side: SideName): string {
-    const fp = side === "left" ? n.leftPath : n.rightPath;
-    if (fp !== undefined) return joinPath(rootOf(side), fp);
-    const parts = n.rel.split("/");
-    const names: string[] = [];
-    for (let i = 1; i <= parts.length; i++) {
-      const a = nodeByRel().get(parts.slice(0, i).join("/"));
-      names.push(a?.[side]?.name ?? a?.[other(side)]?.name ?? parts[i - 1]);
-    }
-    return joinPath(rootOf(side), names.join("/"));
+    return folderSidePath(n, side, rootOf(side), nodeByRel());
   }
   const parentPath = (n: FNode, side: SideName) => {
     if (n.leftPath !== undefined || n.rightPath !== undefined) {
@@ -1012,7 +1054,11 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
   /** Files below the selection that exist on both sides. */
   const pairedFiles = (nodes: FNode[]) => {
     const out: FNode[] = [];
-    const walk = (n: FNode) => (n.dir ? n.children?.forEach(walk) : n.left && n.right && out.push(n));
+    const seen = new Set<string>();
+    const walk = (n: FNode) => {
+      if (n.dir) n.children?.forEach(walk);
+      else if (n.left && n.right && !seen.has(n.rel)) { seen.add(n.rel); out.push(n); }
+    };
     nodes.forEach(walk);
     return out;
   };
@@ -1030,22 +1076,70 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
     setResult({ root, summary });
   }
 
-  async function compareContents(mode: ContentMode, showResults: boolean) {
-    const files = pairedFiles(effSel());
-    if (!files.length) return setMessage("No files exist on both sides.");
-    comparisonEpoch++;
+  const presetDisabledReason = (preset: ComparisonPreset) =>
+    !result() ? "Load two folders before comparing contents." : busy() ? "A comparison is already running." :
+      preset.scope === "selected" && !effSel().length ? "Select files or folders before running a Selected preset." : undefined;
+
+  async function runPreset(preset: ComparisonPreset) {
+    const reason = presetDisabledReason(preset);
+    if (reason) return setMessage(reason);
+    await compareContents(preset.method, false, { ...preset });
+  }
+
+  async function compareContents(mode: ContentMode, showResults: boolean, preset?: ComparisonPreset) {
+    if (!idle()) return;
+    const bases: [string, string] = [left(), right()];
+    const options = JSON.stringify(compareOptions());
+    const configured: FolderOptions = { ...JSON.parse(JSON.stringify(opts)), flatten: flatMode(), criteria: "size" };
+    let files = pairedFiles(preset?.scope === "all" ? [result()!.root] : effSel())
+      .map((node) => ({ node, left: sidePath(node, "left"), right: sidePath(node, "right") }));
+    if (!files.length) return setMessage("No eligible files exist on both sides.");
+    const epoch = ++comparisonEpoch;
+    const current = () => !disposed && epoch === comparisonEpoch && left() === bases[0] && right() === bases[1] &&
+      JSON.stringify(compareOptions()) === options;
     setBusy(true);
-    const codes: { rel: string; code: number }[] = [];
+    const codes: { rel: string; code: number; error?: string }[] = [];
     try {
+      if (preset) {
+        const infos = await Promise.all(bases.map((path) => api.pathInfo(path)));
+        if (!current()) return;
+        if (infos.some((info) => !info.isDir))
+          throw new Error("Quick comparison presets require two folders with readable file contents. Snapshot content cannot be compared by this action.");
+      }
+      if (preset?.scope === "all" && (peek() || suppress())) {
+        setMessage("Finding files included by session filters...");
+        const eligible = await api.compareFolders(bases[0], bases[1], configured);
+        if (!current()) return;
+        const byRel = new Map<string, FNode>();
+        const index = (n: FNode) => { byRel.set(n.rel, n); n.children?.forEach(index); };
+        index(eligible.root);
+        const accepted: Record<SideName, Set<string>> = { left: new Set(), right: new Set() };
+        for (const n of byRel.values()) if (!n.dir) {
+          for (const side of ["left", "right"] as const) if (n[side])
+            accepted[side].add(folderSidePath(n, side, side === "left" ? bases[0] : bases[1], byRel));
+        }
+        files = files.filter((f) => accepted.left.has(f.left) && accepted.right.has(f.right));
+        if (!files.length) { setMessage("No eligible files exist on both sides."); return; }
+      }
+      if (preset) setMessage(`Running ${presetDescription(preset)}...`);
       for (let i = 0; i < files.length; i += 8) {
+        if (!current()) return;
         const batch = files.slice(i, i + 8);
-        const res = await Promise.all(batch.map((n) => api.quickCompare(sidePath(n, "left"), sidePath(n, "right"), mode).catch(() => 100)));
-        batch.forEach((n, k) => codes.push({ rel: n.rel, code: res[k] }));
+        const res = await Promise.all(batch.map(async (f) => {
+          try { return { rel: f.node.rel, code: await api.quickCompare(f.left, f.right, mode) }; }
+          catch (e) { return { rel: f.node.rel, code: 100, error: errText(e) }; }
+        }));
+        if (!current()) return;
+        codes.push(...res);
         setMessage(`Comparing contents… ${codes.length}/${files.length}`);
       }
+    } catch (e) {
+      if (current()) setMessage(`Content comparison failed: ${errText(e)}`);
+      return;
     } finally {
-      setBusy(false);
+      if (epoch === comparisonEpoch && !disposed) setBusy(false);
     }
+    if (!current()) return;
     const st = (c: number): Status => (c === 1 || c === 2 ? "same" : c === 12 ? "similar" : c === 11 || c === 13 ? "diff" : "error");
     const verdict = (c: number): ContentVerdict | undefined => {
       if (c === 1) return "sameBinary";
@@ -1054,16 +1148,21 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
       return c === 2 ? "same" : c === 12 ? "similar" : "different";
     };
     patchTree((byRel) => {
-      for (const { rel, code } of codes) {
+      for (const { rel, code, error: failure } of codes) {
         const n = byRel.get(rel);
         if (!n) continue;
         n.status = st(code);
         n.content = verdict(code);
+        n.error = n.status === "error" ? failure ?? `Content comparison failed (code ${code}).` : undefined;
         n.newer = n.status === "diff" ? n.newer ?? ((n.left!.modified ?? 0) > (n.right!.modified ?? 0) ? "left" : (n.right!.modified ?? 0) > (n.left!.modified ?? 0) ? "right" : undefined) : undefined;
       }
     });
     const same = codes.filter((c) => c.code === 1 || c.code === 2).length;
-    setMessage(`Compared ${codes.length} file(s): ${same} same, ${codes.length - same} different.`);
+    const similar = codes.filter((c) => c.code === 12).length;
+    const different = codes.filter((c) => c.code === 11 || c.code === 13).length;
+    const errors = codes.length - same - similar - different;
+    setMessage(`Compared ${codes.length} file(s): ${same} same, ${similar} similar, ${different} different, ${errors} errors.`);
+    for (const c of codes) if (c.error) log(`${c.rel}: ${c.error}`);
     if (showResults)
       show(() => (
         <ContentsResults
@@ -1449,6 +1548,9 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
     },
 
     { id: "compare-contents", menu: "Actions", group: "ops", label: "Compare Contents…", enabled: () => idle() && effSel().length > 0, run: () => show(() => <ContentsDialog counts={counts()} onClose={closeDialog} onStart={(m, s) => (closeDialog(), void compareContents(m, s))} />) },
+    { id: "run-comparison-preset", menu: "Actions", group: "ops", label: "Run Comparison Preset", caption: () => `Run ${activePreset().name}`,
+      enabled: () => !presetDisabledReason(activePreset()), run: () => runPreset(activePreset()) },
+    { id: "manage-comparison-presets", menu: "Actions", group: "ops", label: "Manage Comparison Presets…", run: managePresets },
     { id: "copy-side", menu: "Actions", group: "ops", label: "Copy to Side…", caption: () => sideCaption(false), enabled: () => idle() && basesDiffer() && anySide(), run: () => sideDialog(false, sideDirection()) },
     { id: "move-side", menu: "Actions", group: "ops", label: "Move to Side…", caption: () => sideCaption(true), enabled: () => idle() && basesDiffer() && anySide(), run: () => sideDialog(true, sideDirection()) },
     { id: "copy-folder", menu: "Actions", group: "ops", label: "Copy to Folder…", enabled: () => idle() && anySide(), run: () => folderDialog(false) },
@@ -1622,6 +1724,11 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
           ))}
         </div>
         <span class="sep" />
+        <ComparisonPresetToolbar scope={tab().id} active={activePreset()} library={settings.comparisonPresets.library}
+          pins={pinnedPresets()} disabledReason={presetDisabledReason} onChoose={choosePreset}
+          onRun={(preset) => void runPreset(preset)} onManage={managePresets}
+          onDialog={() => runCmd("compare-contents")} dialogEnabled={cmdOn("compare-contents")} />
+        <span class="sep" />
         <Btn title="Copy to Left" kbd={displayKeys("Ctrl+L")} onClick={() => runCmd("copy-left")} disabled={!cmdOn("copy-left")}>⇐ Copy</Btn>
         <Btn title="Copy to Right" kbd={displayKeys("Ctrl+R")} onClick={() => runCmd("copy-right")} disabled={!cmdOn("copy-right")}>Copy ⇒</Btn>
         <Btn title="Delete…" kbd={displayKeys("Del")} onClick={() => runCmd("delete")} disabled={!cmdOn("delete")}>🗑 Delete</Btn>
@@ -1775,7 +1882,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
             </span>
           )}
         </Show>
-        <span class="muted">{message_()}</span>
+        <span class="muted" role="status" aria-live="polite">{message_()}</span>
         <span class="spacer" />
         <span class="muted">
           {anySide() ? `Selected: left ${counts().left.files + counts().left.folders}, right ${counts().right.files + counts().right.folders}` : ""}
