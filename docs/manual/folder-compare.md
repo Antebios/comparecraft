@@ -27,6 +27,14 @@ From top to bottom, the Folder Compare window has:
 
 To hide the Size or Modified column, use **View > Columns**.
 
+## Name sorting
+
+Folders appear before files. By default, dot-prefixed names come first within each group: dot-prefixed folders, other folders, dot-prefixed files, then other files. This is based on the name, not the Windows Hidden attribute, and does not change file filters.
+
+Change **Dot-prefixed names first** under **Tools > Options > Colors, Fonts > Folder views** to set the global default. In **Session Settings > Handling > Sorting**, choose **Use global default**, **First**, or **Alphabetical** for the current comparison. Both panes share the same order. **Alphabetical** uses the existing name sorting, which initially ignores punctuation.
+
+The session choice is retained when saving and reopening a named session. **Use global default** continues to follow global changes. Selecting **Also update session defaults** with **First** or **Alphabetical** also changes the global default; selecting it with **Use global default** leaves the global default unchanged.
+
 ## Colors and status symbols
 
 Each row is colored by its comparison result. To see the meaning of the colors at any time, choose **View > Legend** (`Ctrl+Alt+L`).

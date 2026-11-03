@@ -132,6 +132,7 @@ export interface FolderOptions {
   exclude: string;
   ignoreCaseNames: boolean;
   followSymlinks: boolean;
+  dotNamesFirst?: boolean;
   /** Items compared with each other although their names differ ("Align With"). */
   align?: Alignment[];
   /** Folder-name masks; empty or "*" includes all folders. */

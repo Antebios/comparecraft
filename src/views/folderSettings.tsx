@@ -16,13 +16,14 @@ export type ApplyScope = "view" | "defaults" | "saved";
 
 /** Per-view settings that are not comparison options. */
 export interface FolderViewSettings {
+  dotNameOrder: "inherit" | "first" | "alphabetical";
   expandOnLoad: boolean;
   expandDiffsOnly: boolean;
   /** Automatic refresh interval in seconds; 0 = off. */
   autoRefreshSecs: number;
   description: string;
 }
-export const defaultViewSettings = (): FolderViewSettings => ({ expandOnLoad: false, expandDiffsOnly: false, autoRefreshSecs: 0, description: "" });
+export const defaultViewSettings = (): FolderViewSettings => ({ dotNameOrder: "inherit", expandOnLoad: false, expandDiffsOnly: false, autoRefreshSecs: 0, description: "" });
 
 const TABS: [SettingsTab, string][] = [
   ["specs", "Specs"],
@@ -214,6 +215,16 @@ export default function FolderSettingsDialog(props: {
           </Match>
 
           <Match when={tab() === "handling"}>
+            {group("Sorting",
+              <label class="opt-row">
+                Dot-prefixed names:
+                <select value={v.dotNameOrder} onChange={(e) => setV("dotNameOrder", e.currentTarget.value as FolderViewSettings["dotNameOrder"])}>
+                  <option value="inherit">Use global default</option>
+                  <option value="first">First</option>
+                  <option value="alphabetical">Alphabetical</option>
+                </select>
+              </label>,
+            )}
             {group("Folder handling",
               <>
                 <label class="opt-check"><input type="checkbox" checked disabled /> Automatically scan subfolders</label>

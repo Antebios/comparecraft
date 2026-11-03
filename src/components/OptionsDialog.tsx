@@ -12,7 +12,7 @@ export type OptionsPage =
 const PAGES: { id: OptionsPage; label: string; keywords: string }[] = [
   { id: "startup", label: "Startup", keywords: "workspace quick compare file manager integration nautilus dolphin thunar explorer finder context menu" },
   { id: "tabs", label: "Tabs", keywords: "tab window close warn hide single" },
-  { id: "colors", label: "Colors, Fonts", keywords: "theme dark light color font stripes background text size" },
+  { id: "colors", label: "Colors, Fonts", keywords: "theme dark light color font stripes background text size folder sort dot names first" },
   { id: "text", label: "Text Editing", keywords: "context lines tab size find word indent" },
   { id: "nextdiff", label: "Next Difference", keywords: "next difference first load copy wrap message" },
   { id: "backups", label: "Backups", keywords: "backup bak tilde save copy folder" },
@@ -369,6 +369,7 @@ export default function OptionsDialog(props: { page?: OptionsPage; onClose: () =
                 {group(
                   "Folder views",
                   <>
+                    {check("folderDotNamesFirst", "Dot-prefixed names first")}
                     {check(
                       "folderStripes",
                       "Alternate row background (stripes)",

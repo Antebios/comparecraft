@@ -35,6 +35,7 @@ pub struct FolderOptions {
     pub ignore_tz: bool,
     pub ignore_case_names: bool,
     pub follow_symlinks: bool,
+    pub dot_names_first: bool,
     /// Items forced to be compared with each other although their names differ ("Align With").
     pub align: Vec<Alignment>,
 }
@@ -115,6 +116,7 @@ impl Default for FolderOptions {
             ignore_tz: false,
             ignore_case_names: cfg!(any(windows, target_os = "macos")),
             follow_symlinks: false,
+            dot_names_first: true,
             align: vec![],
         }
     }
@@ -565,8 +567,12 @@ pub fn name_order(a: &str, b: &str) -> Ordering {
 }
 
 /// Folders first, then by display name order.
-fn entry_order(a: &(String, bool), b: &(String, bool)) -> Ordering {
-    b.1.cmp(&a.1).then_with(|| name_order(&a.0, &b.0))
+fn display_name_order(a: &str, b: &str, dot_names_first: bool) -> Ordering {
+    (dot_names_first && b.starts_with('.')).cmp(&(dot_names_first && a.starts_with('.'))).then_with(|| name_order(a, b))
+}
+
+fn entry_order(a: &(String, bool), b: &(String, bool), dot_names_first: bool) -> Ordering {
+    b.1.cmp(&a.1).then_with(|| display_name_order(&a.0, &b.0, dot_names_first))
 }
 
 struct Listing {
@@ -690,7 +696,7 @@ fn orphan_tree(parent: &Loc, rel: &str, name: &str, m: &Meta, left: bool, cx: &C
         match list(&loc, rel, cx) {
             Ok(l) => {
                 let mut entries: Vec<_> = l.entries.into_iter().collect();
-                entries.sort_by(|a, b| entry_order(&a.0, &b.0));
+                entries.sort_by(|a, b| entry_order(&a.0, &b.0, cx.o.dot_names_first));
                 for (_, (cname, cm)) in entries {
                     let crel = format!("{rel}/{cname}");
                     node.children.push(orphan_tree(&loc, &crel, &cname, &cm, left, cx, sum));
@@ -721,7 +727,7 @@ fn compare_dirs(lp: &Loc, rp: &Loc, rel: &str, cx: &Ctx, sum: &mut Summary) -> i
     }
     let hidden: Vec<&(String, bool)> = aligned.values().collect();
     let mut keys: Vec<(String, bool)> = ll.entries.keys().chain(rl.entries.keys().filter(|k| !hidden.contains(k))).cloned().collect();
-    keys.sort_by(entry_order);
+    keys.sort_by(|a, b| entry_order(a, b, o.dot_names_first));
     keys.dedup();
     let mut out = Vec::new();
     for key in keys {
@@ -917,7 +923,7 @@ fn compare_flat(left: &Loc, right: &Loc, cx: &Ctx, sum: &mut Summary) -> io::Res
         node.rel = rel;
         out.push(node);
     }
-    out.sort_by(|a, b| name_order(&a.name, &b.name).then_with(|| a.rel.cmp(&b.rel)));
+    out.sort_by(|a, b| display_name_order(&a.name, &b.name, o.dot_names_first).then_with(|| a.rel.cmp(&b.rel)));
     Ok(out)
 }
 
@@ -1283,6 +1289,72 @@ fn remove(p: &Path, use_trash: bool) -> io::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn name_order_dot_prefix_groups_follow_folders_first() {
+        let entries = vec![("api", true), ("README.md", false), (".vscode", true), (".git", false), (".github", true), ("app.yml", false), (".env", false), (".streamlit", true)];
+        let mut entries: Vec<_> = entries.into_iter().map(|(name, dir)| (name.to_string(), dir)).collect();
+        entries.sort_by(|a, b| super::entry_order(a, b, true));
+        assert_eq!(entries.iter().map(|entry| entry.0.as_str()).collect::<Vec<_>>(), [".github", ".streamlit", ".vscode", "api", ".env", ".git", "app.yml", "README.md"]);
+        entries.sort_by(|a, b| super::entry_order(a, b, false));
+        assert_eq!(entries.iter().map(|entry| entry.0.as_str()).collect::<Vec<_>>(), ["api", ".github", ".streamlit", ".vscode", "app.yml", ".env", ".git", "README.md"]);
+    }
+
+    #[test]
+    fn name_order_legacy_options_default_to_dot_first() {
+        let options: super::FolderOptions = serde_json::from_str("{}").unwrap();
+        assert!(options.dot_names_first);
+        let options: super::FolderOptions = serde_json::from_str(r#"{"dotNamesFirst":false}"#).unwrap();
+        assert!(!options.dot_names_first);
+    }
+
+    #[test]
+    fn name_order_applies_to_trees_flattening_and_snapshots() {
+        let directory = tempfile::tempdir().unwrap();
+        let left = directory.path().join("left");
+        let right = directory.path().join("right");
+        for base in [&left, &right] {
+            for name in ["api/a.txt", ".github/workflow.yml", ".streamlit/config.toml", ".vscode/settings.json", ".git", ".env", "app.yml", "README.md", "nested/.vscode/config", "nested/api/config"] {
+                write(&base.join(name), "same");
+            }
+        }
+        for name in ["orphan/.vscode/config", "orphan/api/config", "orphan/.git", "orphan/app.yml"] {
+            write(&left.join(name), "orphan");
+        }
+        let left = left.to_string_lossy().into_owned();
+        let right = right.to_string_lossy().into_owned();
+        let options = FolderOptions::default();
+        let names = |node: &Node| node.children.iter().map(|child| child.name.clone()).collect::<Vec<_>>();
+        let first = compare_folders(&left, &right, &options).unwrap();
+        assert_eq!(names(&first.root), [".github", ".streamlit", ".vscode", "api", "nested", "orphan", ".env", ".git", "app.yml", "README.md"]);
+        assert_eq!(names(find(&first.root, "nested")), [".vscode", "api"]);
+        assert_eq!(names(find(&first.root, "orphan")), [".vscode", "api", ".git", "app.yml"]);
+        let alphabetical = FolderOptions { dot_names_first: false, ..options.clone() };
+        let legacy = compare_folders(&left, &right, &alphabetical).unwrap();
+        assert_eq!(names(&legacy.root), ["api", ".github", "nested", "orphan", ".streamlit", ".vscode", "app.yml", ".env", ".git", "README.md"]);
+        assert_eq!(names(find(&legacy.root, "nested")), ["api", ".vscode"]);
+        assert_eq!(names(find(&legacy.root, "orphan")), ["api", ".vscode", "app.yml", ".git"]);
+        assert_eq!(serde_json::to_value(&first.summary).unwrap(), serde_json::to_value(&legacy.summary).unwrap());
+        let snapshot = directory.path().join("right.ccsnap").to_string_lossy().into_owned();
+        crate::snapshot::save_snapshot(&right, &snapshot, false, true, Some(&options)).unwrap();
+        for option in [&options, &alphabetical] {
+            let disk = compare_folders(&left, &right, option).unwrap();
+            let snap = compare_folders(&left, &snapshot, option).unwrap();
+            assert_eq!(names(&disk.root), names(&snap.root));
+            assert_eq!(names(find(&disk.root, "nested")), names(find(&snap.root, "nested")));
+        }
+        let flat_options = FolderOptions { flatten: true, ..options };
+        let flat = compare_folders(&left, &right, &flat_options).unwrap();
+        assert!(flat.root.children.iter().take(3).all(|node| node.name.starts_with('.')));
+        let flat_legacy = compare_folders(&left, &right, &FolderOptions { dot_names_first: false, ..flat_options }).unwrap();
+        assert_eq!(flat_legacy.root.children[0].name, "app.yml");
+        let identities = |result: &FolderResult| {
+            let mut rows = result.root.children.iter().map(|node| format!("{}:{:?}:{:?}", node.rel, node.left_path, node.right_path)).collect::<Vec<_>>();
+            rows.sort();
+            rows
+        };
+        assert_eq!(identities(&flat), identities(&flat_legacy));
+    }
+
     #[test]
     fn name_order_ignores_punctuation_then_accents_then_case() {
         let mut v = vec!["9.txt", "b.txt", "a.txt", "Ä.txt", "a-c.txt", "ab.txt", "a_b.txt", "A2.txt", "10.txt", "x.y.w", "xy", "Zeta.txt", "zeta2.txt", "b c.txt"];

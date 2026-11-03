@@ -229,6 +229,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
     align: [...(opts.align ?? [])],
     otherFilters: [...(opts.otherFilters ?? [])],
     flatten: folderMode() === "flatten",
+    dotNamesFirst: viewSet().dotNameOrder === "inherit" ? settings.folderDotNamesFirst : viewSet().dotNameOrder === "first",
     ...(suppress() || peek() ? { include: "*", exclude: "", includeFolders: "", otherFilters: [], excludeHidden: false } : {}),
   });
   const flatMode = () => folderMode() === "flatten";
@@ -239,7 +240,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
   onCleanup(() => { disposed = true; });
 
   async function refresh() {
-    comparisonEpoch++;
+    const epoch = ++comparisonEpoch;
     if (!left() || !right()) {
       setResult(null);
       return;
@@ -248,6 +249,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
     setError("");
     try {
       const r = await api.compareFolders(left(), right(), compareOptions());
+      if (disposed || epoch !== comparisonEpoch) return;
       setResult(r);
       if (!loadedOnce) {
         loadedOnce = true;
@@ -256,10 +258,11 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
       }
       log(`Compared ${left()} ↔ ${right()}: ${r.summary.files} files, ${r.summary.diff} different, ${r.summary.leftOnly + r.summary.rightOnly} orphans`);
     } catch (e) {
+      if (disposed || epoch !== comparisonEpoch) return;
       setError(errText(e));
       setResult(null);
     } finally {
-      setBusy(false);
+      if (!disposed && epoch === comparisonEpoch) setBusy(false);
     }
   }
 
@@ -267,6 +270,10 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
     await refresh();
     if (left() && right()) void persistSession(tab());
   });
+
+  createEffect(on(() => settings.folderDotNamesFirst, () => {
+    if (viewSet().dotNameOrder === "inherit" && left() && right()) void refresh();
+  }, { defer: true }));
 
   /** Changes the base folders, recording the previous pair for Back. */
   function setBases(paths: string[], record = true) {
@@ -1253,6 +1260,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
           if (scope === "defaults") {
             const { align: _a, flatten: _f, ...rest } = JSON.parse(JSON.stringify(options)) as FolderOptions;
             setSetting("folderDefaults", rest);
+            if (view.dotNameOrder !== "inherit") setSetting("folderDotNamesFirst", view.dotNameOrder === "first");
             log("Saved as session defaults.");
           } else if (scope === "saved" && tab().sessionName) {
             const all = await api.listSessions();

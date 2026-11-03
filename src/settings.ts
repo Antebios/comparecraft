@@ -42,6 +42,7 @@ export interface Settings {
   colors: Record<string, string>;
   folderStripes: boolean;
   folderColorFolders: boolean;
+  folderDotNamesFirst: boolean;
   uiFontSize: number;
   editorFont: string;
   editorFontSize: number;
@@ -102,6 +103,7 @@ export const DEFAULT_SETTINGS: Settings = {
   colors: {},
   folderStripes: false,
   folderColorFolders: true,
+  folderDotNamesFirst: true,
   uiFontSize: 13,
   editorFont: "",
   editorFontSize: 12,
