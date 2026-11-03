@@ -19,7 +19,7 @@ If one of the files contains binary data, a banner says "One of the files looks 
 
 - The **toolbar** with navigation, copy, editing, save, view and rules buttons.
 - The **path bars**. Each shows the file path, a **💾** button to save that side, a **RO** badge if the file is read-only, and a **●** badge when the side has unsaved changes. Below the path, a line shows the file size, modification time, encoding (with "BOM" if the file has a byte order mark) and line ending style.
-- The **difference map** at the far left: a narrow strip that shows where the differences are in the whole file. Click a mark to jump to it.
+- The **difference map** at the far left: a narrow strip that shows where differences occur among the displayed lines. A bordered, translucent highlight shows the area currently visible in the text panes. Click a difference mark to select and jump to that section, or click empty space in the strip to center that location in both panes.
 - The **two text panes**, each with a gutter, line numbers and the text.
 - The **details pane** at the bottom, which shows the selected line from both sides, one above the other, so you can see small differences in long lines. Until you select a line it says "Select a line to see details. Double-click a line to edit it."
 - The **status bar**, which summarizes the result: "Files are identical", "Only unimportant differences (N sections)" or "N difference sections, M unimportant".
@@ -63,6 +63,8 @@ The number of context lines (3 by default) is set with **Context lines (Show Con
 - Use `Up` and `Down` to move between lines.
 
 On the [Next Difference page of the Options](options.md#next-difference) you can make CompareCraft go to the first difference when the files are loaded, and wrap around at the end of the file.
+
+The difference map follows the **All**, **Diffs**, **Context** and **Same** display filters. Its viewport highlight updates when either pane scrolls or the window resizes; the **Same** view has no difference marks. Clicking the map changes the vertical position without changing the horizontal scroll position. With the map focused, use `Up`/`Down`, `Page Up`/`Page Down`, or `Home`/`End` to scroll both panes.
 
 ## Copy a difference to the other side
 

@@ -423,6 +423,22 @@ button.link {
   position: relative;
   background: var(--bg3);
   border-right: 1px solid var(--border);
+  cursor: pointer;
+  overflow: hidden;
+}
+.overview:focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: -2px;
+}
+.ov-viewport {
+  position: absolute;
+  left: 0;
+  right: 0;
+  box-sizing: border-box;
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  pointer-events: none;
+  z-index: 1;
 }
 .ov-mark {
   position: absolute;
