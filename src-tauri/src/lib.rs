@@ -86,8 +86,22 @@ async fn merge_texts(
 }
 
 #[tauri::command]
-async fn compare_folders(left: String, right: String, options: folder::FolderOptions) -> CmdResult<folder::FolderResult> {
-    blocking(move || folder::compare_folders(&left, &right, &options).map_err(s)).await
+async fn compare_folders(window: tauri::WebviewWindow, left: String, right: String, options: folder::FolderOptions, request_id: Option<String>) -> CmdResult<folder::FolderResult> {
+    blocking(move || {
+        if let Some(request_id) = request_id {
+            folder::compare_folders_with_progress(&left, &right, &options, &|progress| {
+                let _ = window.emit_to(window.label(), "folder-comparison-progress", serde_json::json!({
+                    "requestId": request_id,
+                    "phase": progress.phase,
+                    "completed": progress.completed,
+                    "total": progress.total,
+                    "discovered": progress.discovered,
+                }));
+            }).map_err(s)
+        } else {
+            folder::compare_folders(&left, &right, &options).map_err(s)
+        }
+    }).await
 }
 
 #[tauri::command]

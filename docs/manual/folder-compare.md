@@ -12,6 +12,10 @@ Folder Compare shows two folder trees side by side and marks which files and fol
 
 Until both folders are set, the view shows "Choose a left and right folder to compare."
 
+Once both paths are set, a progress strip appears below the path bars. **Scanning folders...** indicates that CompareCraft is discovering the files included by the current filters. Once discovery finishes, the strip shows **Comparing files** and a completed/total file counter, such as **428 / 2,310 files**, with a progress bar.
+
+The counter includes one-sided files; folders themselves are not counted. It measures files processed, not bytes or estimated time remaining, so a large file can take longer than several small files. The strip disappears when the comparison completes or fails. The usual status summary or an error message then shows the outcome.
+
 !!! tip "Snapshots"
     You can enter a snapshot file (`.ccsnap`) instead of a folder on either side. This compares a folder with the state it had when the snapshot was saved. See [Save Snapshot](options.md#save-snapshot).
 

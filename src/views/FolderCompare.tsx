@@ -1,4 +1,4 @@
-import { message, open as openDialog } from "../host";
+import { listen, message, open as openDialog } from "../host";
 import { createEffect, createMemo, createSignal, For, Index, type JSX, on, onCleanup, onMount, Show } from "solid-js";
 import { createStore } from "solid-js/store";
 import {
@@ -12,6 +12,7 @@ import {
   type FNode,
   type FolderOptions,
   type FolderResult,
+  type FolderComparisonProgress,
   type Status,
   type ContentVerdict,
   type Summary,
@@ -181,6 +182,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
   const [result, setResult] = createSignal<FolderResult | null>(null);
   const [error, setError] = createSignal("");
   const [busy, setBusy] = createSignal(false);
+  const [progress, setProgress] = createSignal<FolderComparisonProgress | null>(null);
   const [expanded, setExpanded] = createSignal<Set<string>>(new Set());
   const [mask, setMask] = createSignal<number>((tab().options.displayFilter as number | undefined) ?? ALL_BITS);
   const [folderMode, setFolderModeRaw] = createSignal<FolderMode>(
@@ -236,19 +238,33 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
   let loadedOnce = false;
   let comparisonEpoch = 0;
   let disposed = false;
+  let stopProgress: (() => void) | undefined;
   const openedRows = new Map<string, number>();
-  onCleanup(() => { disposed = true; });
+  onCleanup(() => { disposed = true; stopProgress?.(); });
 
   async function refresh() {
     const epoch = ++comparisonEpoch;
+    stopProgress?.();
+    stopProgress = undefined;
     if (!left() || !right()) {
       setResult(null);
+      setBusy(false);
+      setProgress(null);
       return;
     }
+    const requestId = crypto.randomUUID();
+    let unlisten: (() => void) | undefined;
+    const release = () => { const stop = unlisten; unlisten = undefined; stop?.(); };
+    stopProgress = release;
     setBusy(true);
+    setProgress({ requestId, phase: "scanning", completed: 0, total: null, discovered: 0 });
     setError("");
     try {
-      const r = await api.compareFolders(left(), right(), compareOptions());
+      unlisten = await listen<FolderComparisonProgress>("folder-comparison-progress", ({ payload }) => {
+        if (!disposed && epoch === comparisonEpoch && payload.requestId === requestId) setProgress(payload);
+      }).catch(() => undefined);
+      if (disposed || epoch !== comparisonEpoch) return;
+      const r = await api.compareFolders(left(), right(), compareOptions(), unlisten ? requestId : undefined);
       if (disposed || epoch !== comparisonEpoch) return;
       setResult(r);
       if (!loadedOnce) {
@@ -262,7 +278,12 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
       setError(errText(e));
       setResult(null);
     } finally {
-      if (!disposed && epoch === comparisonEpoch) setBusy(false);
+      release();
+      if (stopProgress === release) stopProgress = undefined;
+      if (!disposed && epoch === comparisonEpoch) {
+        setBusy(false);
+        setProgress(null);
+      }
     }
   }
 
@@ -1650,6 +1671,26 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
         <PathBar folder value={left()} title={tab().titles?.[0]} onCommit={(p) => setPath(0, p)} />
         <PathBar folder value={right()} title={tab().titles?.[1]} onCommit={(p) => setPath(1, p)} />
       </div>
+      <Show when={busy() && progress()}>
+        {(state) => (
+          <div class="folder-progress">
+            <span class="folder-progress-label">
+              {state().phase === "scanning" ? "Scanning folders..." : "Comparing files"}
+            </span>
+            <Show when={state().phase === "comparing"} fallback={<progress aria-label="Folder comparison progress" aria-valuetext="Scanning folders" />}>
+              <progress
+                aria-label="Folder comparison progress"
+                aria-valuetext={`${state().completed} of ${state().total ?? 0} files completed`}
+                max={Math.max(1, state().total ?? 1)}
+                value={state().completed}
+              />
+            </Show>
+            <span class="folder-progress-count">
+              {state().phase === "scanning" ? (state().discovered ? `${state().discovered.toLocaleString()} files found` : "") : `${state().completed.toLocaleString()} / ${(state().total ?? 0).toLocaleString()} files`}
+            </span>
+          </div>
+        )}
+      </Show>
       <div class="fheader">
         <For each={[0, 1]}>
           {(i) => (

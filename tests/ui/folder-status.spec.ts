@@ -1,6 +1,131 @@
 import { test, expect, folderTab } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
-import type { Session } from "../../src/api";
+import type { FolderComparisonProgress, Session } from "../../src/api";
+
+async function sendFolderProgress(page: Page, payload: FolderComparisonProgress) {
+  await page.evaluate((payload) => window.dispatchEvent(new CustomEvent("comparecraft-test-event", {
+    detail: { name: "folder-comparison-progress", payload },
+  })), payload);
+}
+
+async function holdFolderComparisons(page: Page) {
+  const pending: { requestId: string; release: () => void; finished: Promise<void> }[] = [];
+  await page.route("**/test-invoke", async (route) => {
+    const { cmd, args } = route.request().postDataJSON();
+    if (cmd !== "compare_folders") { await route.fallback(); return; }
+    const response = await route.fetch();
+    let release!: () => void;
+    let finish!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const finished = new Promise<void>((resolve) => { finish = resolve; });
+    pending.push({ requestId: args.requestId, release, finished });
+    try { await gate; await route.fulfill({ response }); }
+    finally { finish(); }
+  });
+  return pending;
+}
+
+test("folder progress shows scanning then completed files and clears on success", async ({ page, folders }, testInfo) => {
+  test.slow();
+  await folders.pair("same.txt", "same", "same");
+  const pending = await holdFolderComparisons(page);
+  await page.setViewportSize({ width: 1536, height: 864 });
+  await page.goto(`/tests/ui/?spec=${encodeURIComponent(JSON.stringify({ kind: "folder", paths: [folders.left, folders.right] }))}`);
+  const bar = page.getByRole("progressbar", { name: "Folder comparison progress" });
+  try {
+    await expect(bar).toBeVisible();
+    await expect(page.locator(".folder-progress-label")).toHaveText("Scanning folders...");
+    await expect(bar).not.toHaveAttribute("value", /.+/);
+    await expect.poll(() => pending.length).toBe(1);
+    const requestId = pending[0].requestId;
+    expect(requestId).toBeTruthy();
+    await sendFolderProgress(page, { requestId, phase: "scanning", completed: 0, total: null, discovered: 4 });
+    await expect(page.locator(".folder-progress-count")).toHaveText("4 files found");
+    await sendFolderProgress(page, { requestId, phase: "comparing", completed: 2, total: 4, discovered: 4 });
+    await expect(bar).toHaveAttribute("value", "2");
+    await expect(bar).toHaveAttribute("max", "4");
+    await expect(page.locator(".folder-progress-count")).toHaveText("2 / 4 files");
+    await sendFolderProgress(page, { requestId: "another-session", phase: "comparing", completed: 9, total: 10, discovered: 10 });
+    await expect(bar).toHaveAttribute("value", "2");
+    await page.screenshot({ path: testInfo.outputPath("folder-progress-desktop.png") });
+    await page.setViewportSize({ width: 480, height: 800 });
+    await expect(bar).toBeVisible();
+    const fits = await page.locator(".folder-progress").evaluate((strip) => {
+      const bounds = strip.getBoundingClientRect();
+      return [...strip.children].every((child) => {
+        const box = child.getBoundingClientRect();
+        return box.left >= bounds.left && box.right <= bounds.right;
+      });
+    });
+    expect(fits).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath("folder-progress-mobile.png") });
+    pending[0].release();
+    await pending[0].finished;
+    await expect(bar).toHaveCount(0);
+    await expect(page.locator(".frow")).toHaveCount(1);
+  } finally { pending.forEach((request) => request.release()); }
+});
+
+test("folder progress handles an empty comparison without an invalid percentage", async ({ page, folders }) => {
+  const pending = await holdFolderComparisons(page);
+  await page.goto(`/tests/ui/?spec=${encodeURIComponent(JSON.stringify({ kind: "folder", paths: [folders.left, folders.right] }))}`);
+  try {
+    await expect.poll(() => pending.length).toBe(1);
+    await sendFolderProgress(page, { requestId: pending[0].requestId, phase: "comparing", completed: 0, total: 0, discovered: 0 });
+    await expect(page.locator(".folder-progress-count")).toHaveText("0 / 0 files");
+    await expect(page.getByRole("progressbar")).toHaveAttribute("max", "1");
+    pending[0].release();
+    await expect(page.getByRole("progressbar")).toHaveCount(0);
+    await expect(page.locator(".tab-view:visible .statusbar")).toContainText("0 files");
+  } finally { pending.forEach((request) => request.release()); }
+});
+
+test("folder progress clears when comparison fails", async ({ page, folders }) => {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  await page.route("**/test-invoke", async (route) => {
+    if (route.request().postDataJSON().cmd !== "compare_folders") { await route.fallback(); return; }
+    await gate;
+    await route.fulfill({ status: 500, json: { error: "Folder access denied" } });
+  });
+  await page.goto(`/tests/ui/?spec=${encodeURIComponent(JSON.stringify({ kind: "folder", paths: [folders.left, folders.right] }))}`);
+  try {
+    await expect(page.getByRole("progressbar")).toBeVisible();
+    release();
+    await expect(page.getByRole("progressbar")).toHaveCount(0);
+    await expect(page.locator(".banner.err")).toHaveText("Folder access denied");
+  } finally { release(); }
+});
+
+test("folder progress ignores superseded requests and closing tabs", async ({ page, folders }) => {
+  await folders.pair("same.txt", "same", "same");
+  await folders.open(page);
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  const pending = await holdFolderComparisons(page);
+  try {
+    await page.keyboard.press("F5");
+    await expect.poll(() => pending.length).toBe(1);
+    await sendFolderProgress(page, { requestId: pending[0].requestId, phase: "comparing", completed: 1, total: 9, discovered: 9 });
+    await expect(page.locator(".folder-progress-count")).toHaveText("1 / 9 files");
+    await page.keyboard.press("F5");
+    await expect.poll(() => pending.length).toBe(2);
+    expect(pending[1].requestId).not.toBe(pending[0].requestId);
+    await sendFolderProgress(page, { requestId: pending[1].requestId, phase: "comparing", completed: 2, total: 5, discovered: 5 });
+    await sendFolderProgress(page, { requestId: pending[0].requestId, phase: "comparing", completed: 8, total: 9, discovered: 9 });
+    await expect(page.locator(".folder-progress-count")).toHaveText("2 / 5 files");
+    pending[0].release();
+    await pending[0].finished;
+    await expect(page.locator(".folder-progress-count")).toHaveText("2 / 5 files");
+    await folderTab(page).locator(".tab-close").click();
+    await expect(page.getByRole("progressbar")).toHaveCount(0);
+    await sendFolderProgress(page, { requestId: pending[1].requestId, phase: "comparing", completed: 5, total: 5, discovered: 5 });
+    pending[1].release();
+    await pending[1].finished;
+    await expect(page.getByRole("progressbar")).toHaveCount(0);
+    expect(errors).toEqual([]);
+  } finally { pending.forEach((request) => request.release()); }
+});
 
 async function expectNames(names: Locator, expected: string[]) {
   await expect.poll(() => names.evaluateAll((entries) => entries.map((entry) => Array.from(entry.childNodes)

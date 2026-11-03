@@ -1,6 +1,7 @@
 import { render } from "solid-js/web";
 import App from "../../src/App";
 import { setHost } from "../../src/host";
+import type { EventCallback, EventName } from "@tauri-apps/api/event";
 import "../../src/styles.css";
 
 setHost({
@@ -15,7 +16,14 @@ setHost({
     if (!response.ok) throw new Error(data.error);
     return data;
   },
-  listen: async () => () => {},
+  listen: async <Payload,>(name: EventName, handler: EventCallback<Payload>) => {
+    const receive = (message: Event) => {
+      const detail = (message as CustomEvent<{ name: string; payload: Payload }>).detail;
+      if (detail.name === name) handler({ event: name, id: 0, payload: detail.payload });
+    };
+    window.addEventListener("comparecraft-test-event", receive);
+    return () => window.removeEventListener("comparecraft-test-event", receive);
+  },
   ask: async () => true,
   message: async () => "Ok",
   open: async () => null,

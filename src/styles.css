@@ -1670,6 +1670,44 @@ kbd {
   align-items: center;
   gap: 6px;
 }
+.folder-progress {
+  display: grid;
+  grid-template-columns: max-content minmax(60px, 1fr) max-content;
+  align-items: center;
+  gap: 12px;
+  min-height: 34px;
+  padding: 5px 10px;
+  flex: none;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg3);
+}
+.folder-progress progress {
+  width: 100%;
+  height: 8px;
+  min-width: 0;
+  accent-color: var(--accent, #007acc);
+}
+.folder-progress-count {
+  min-width: 18ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 600px) {
+  .folder-progress {
+    grid-template-columns: minmax(0, 1fr) max-content;
+    gap: 4px 8px;
+  }
+  .folder-progress progress {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .folder-progress-label {
+    overflow-wrap: anywhere;
+  }
+  .folder-progress-count {
+    min-width: 0;
+  }
+}
 .filter-combo input {
   width: 320px;
   font-family: var(--mono);

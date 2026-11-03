@@ -4,12 +4,23 @@ use crate::fileio::{make_backup, modified_ms, BackupSpec};
 use crate::quick::{crc32_file, files_binary_equal, rules_verdict, BINARY_DIFFERENT, BINARY_SAME, RULES_SAME, SIMILAR};
 use crate::snapshot::{self, Snapshot};
 use serde::{Deserialize, Serialize};
+use std::cell::{Cell, RefCell};
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ComparisonProgress {
+    pub phase: &'static str,
+    pub completed: usize,
+    pub total: Option<usize>,
+    pub discovered: usize,
+}
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -396,12 +407,35 @@ pub(crate) struct Ctx<'a> {
     o: &'a FolderOptions,
     masks: Masks,
     filters: Vec<Filter>,
+    pending: RefCell<Option<HashMap<String, (Meta, Meta)>>>,
+    progress: Option<&'a dyn Fn(ComparisonProgress)>,
+    discovered: Cell<usize>,
+    last_progress: Cell<Instant>,
 }
 
 impl<'a> Ctx<'a> {
     pub(crate) fn new(o: &'a FolderOptions) -> Ctx<'a> {
         let now = now_ms();
-        Ctx { o, masks: Masks::new(o), filters: o.other_filters.iter().filter_map(|f| Filter::compile(f, now)).collect() }
+        Ctx {
+            o, masks: Masks::new(o), filters: o.other_filters.iter().filter_map(|f| Filter::compile(f, now)).collect(),
+            pending: RefCell::new(None), progress: None, discovered: Cell::new(0), last_progress: Cell::new(Instant::now()),
+        }
+    }
+
+    fn notify(&self, phase: &'static str, completed: usize, total: Option<usize>, force: bool) {
+        if let Some(progress) = self.progress {
+            if force || self.last_progress.get().elapsed() >= Duration::from_millis(75) {
+                self.last_progress.set(Instant::now());
+                progress(ComparisonProgress { phase, completed, total, discovered: self.discovered.get() });
+            }
+        }
+    }
+
+    fn discover_file(&self) {
+        if self.pending.borrow().is_some() {
+            self.discovered.set(self.discovered.get() + 1);
+            self.notify("scanning", 0, None, false);
+        }
     }
 
     /// Whether an entry of `parent` is listed.
@@ -706,6 +740,7 @@ fn orphan_tree(parent: &Loc, rel: &str, name: &str, m: &Meta, left: bool, cx: &C
         }
     } else {
         sum.files += 1;
+        cx.discover_file();
         if left { sum.left_only += 1 } else { sum.right_only += 1 }
     }
     node
@@ -773,9 +808,18 @@ fn pair_node(lp: &Loc, rp: &Loc, crel: &str, ln: &str, lm: &Meta, rn: &str, rm: 
         node
     } else {
         sum.files += 1;
-        let (status, content, error) = match compare_files(&lp.join(ln), &rp.join(rn), lm, rm, &ls, &rs, o) {
-            Ok((s, c)) => (s, c, None),
-            Err(e) => (Status::Error, None, Some(e.to_string())),
+        cx.discover_file();
+        let deferred = if let Some(pending) = cx.pending.borrow_mut().as_mut() {
+            pending.insert(crel.to_string(), (lm.clone(), rm.clone()));
+            true
+        } else { false };
+        let (status, content, error) = if deferred {
+            (Status::Same, None, None)
+        } else {
+            match compare_files(&lp.join(ln), &rp.join(rn), lm, rm, &ls, &rs, o) {
+                Ok((status, content)) => (status, content, None),
+                Err(error) => (Status::Error, None, Some(error.to_string())),
+            }
         };
         match status {
             Status::Same => sum.same += 1,
@@ -927,12 +971,60 @@ fn compare_flat(left: &Loc, right: &Loc, cx: &Ctx, sum: &mut Summary) -> io::Res
     Ok(out)
 }
 
+fn finish_comparison(nodes: &mut [Node], left: &Loc, right: &Loc, cx: &Ctx, pending: &mut HashMap<String, (Meta, Meta)>, sum: &mut Summary, total: usize) {
+    for node in nodes {
+        if node.dir {
+            let left_child = node.left.as_ref().map_or_else(|| left.clone(), |side| left.join(&side.name));
+            let right_child = node.right.as_ref().map_or_else(|| right.clone(), |side| right.join(&side.name));
+            finish_comparison(&mut node.children, &left_child, &right_child, cx, pending, sum, total);
+            if node.left.is_some() && node.right.is_some() && node.error.is_none() {
+                node.status = folder_status(&node.children);
+            }
+            continue;
+        }
+        if let (Some(left_side), Some(right_side)) = (&node.left, &node.right) {
+            let left_rel = node.left_path.as_deref().unwrap_or(&node.rel);
+            let (left_meta, right_meta) = pending.remove(left_rel).expect("discovered paired file metadata");
+            let left_parent = node.left_path.as_ref().map_or_else(|| left.clone(), |path| left.join_rel(path.rsplit_once('/').map_or("", |(parent, _)| parent)));
+            let right_parent = node.right_path.as_ref().map_or_else(|| right.clone(), |path| right.join_rel(path.rsplit_once('/').map_or("", |(parent, _)| parent)));
+            let compared = pair_node(&left_parent, &right_parent, left_rel, &left_side.name, &left_meta, &right_side.name, &right_meta, cx, sum);
+            node.status = compared.status;
+            node.newer = compared.newer;
+            node.content = compared.content;
+            node.error = compared.error;
+        } else {
+            sum.files += 1;
+            if node.left.is_some() { sum.left_only += 1 } else { sum.right_only += 1 }
+        }
+        cx.notify("comparing", sum.files as usize, Some(total), false);
+    }
+}
+
 pub fn compare_folders(left: &str, right: &str, o: &FolderOptions) -> io::Result<FolderResult> {
+    compare_folders_impl(left, right, o, None)
+}
+
+pub fn compare_folders_with_progress(left: &str, right: &str, o: &FolderOptions, progress: &dyn Fn(ComparisonProgress)) -> io::Result<FolderResult> {
+    compare_folders_impl(left, right, o, Some(progress))
+}
+
+fn compare_folders_impl(left: &str, right: &str, o: &FolderOptions, progress: Option<&dyn Fn(ComparisonProgress)>) -> io::Result<FolderResult> {
+    let mut cx = Ctx::new(o);
+    cx.progress = progress;
+    cx.notify("scanning", 0, None, true);
     let lp = open_source(left)?.ok_or_else(|| io::Error::other(format!("Left folder not found: {left}")))?;
     let rp = open_source(right)?.ok_or_else(|| io::Error::other(format!("Right folder not found: {right}")))?;
-    let cx = Ctx::new(o);
+    if progress.is_some() { *cx.pending.borrow_mut() = Some(HashMap::new()); }
     let mut sum = Summary::default();
-    let children = if o.flatten { compare_flat(&lp, &rp, &cx, &mut sum)? } else { compare_dirs(&lp, &rp, "", &cx, &mut sum)? };
+    let mut children = if o.flatten { compare_flat(&lp, &rp, &cx, &mut sum)? } else { compare_dirs(&lp, &rp, "", &cx, &mut sum)? };
+    let pending = cx.pending.borrow_mut().take();
+    if let Some(mut pending) = pending {
+        let total = sum.files as usize;
+        sum = Summary { errors: sum.errors, ..Summary::default() };
+        cx.notify("comparing", 0, Some(total), true);
+        finish_comparison(&mut children, &lp, &rp, &cx, &mut pending, &mut sum, total);
+        cx.notify("comparing", total, Some(total), true);
+    }
     let mut root = Node::new("", "", true, folder_status(&children));
     root.left = Some(lp.root_side(left)?);
     root.right = Some(rp.root_side(right)?);
@@ -1289,6 +1381,66 @@ fn remove(p: &Path, use_trash: bool) -> io::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn progress_preserves_results_and_reports_completed_total() {
+        let (_directory, left, right) = fixture();
+        for (criteria, flatten) in ["timesize", "size", "binary", "crc", "rules"].into_iter().flat_map(|criteria| [false, true].map(|flatten| (criteria, flatten))) {
+            let options = FolderOptions { criteria: criteria.into(), flatten, ..Default::default() };
+            let updates = RefCell::new(Vec::new());
+            let result = compare_folders_with_progress(&left, &right, &options, &|update| updates.borrow_mut().push(update)).unwrap();
+            let expected = compare_folders(&left, &right, &options).unwrap();
+            assert_eq!(serde_json::to_value(&result).unwrap(), serde_json::to_value(expected).unwrap());
+            let updates = updates.into_inner();
+            assert_eq!(updates[0].phase, "scanning");
+            assert_eq!(updates[0].total, None);
+            let comparing = updates.iter().find(|update| update.phase == "comparing").unwrap();
+            assert_eq!(comparing.completed, 0);
+            assert_eq!(comparing.total, Some(result.summary.files as usize));
+            let last = updates.last().unwrap();
+            assert_eq!(last.completed, result.summary.files as usize);
+            assert_eq!(last.total, Some(last.completed));
+        }
+    }
+
+    #[test]
+    fn progress_handles_empty_and_invalid_folders() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().to_string_lossy();
+        let updates = RefCell::new(Vec::new());
+        let report = |update| updates.borrow_mut().push(update);
+        let result = compare_folders_with_progress(&path, &path, &FolderOptions::default(), &report).unwrap();
+        assert_eq!(result.summary.files, 0);
+        assert_eq!(updates.borrow().last().unwrap().total, Some(0));
+        assert!(compare_folders_with_progress("", &path, &FolderOptions::default(), &report).is_err());
+    }
+
+    #[test]
+    fn progress_preserves_case_alignment_filters_and_snapshots() {
+        let directory = tempfile::tempdir().unwrap();
+        let left = directory.path().join("left");
+        let right = directory.path().join("right");
+        write(&left.join("sub/same.txt"), "same");
+        write(&right.join("SUB/SAME.txt"), "same");
+        write(&left.join("old/left.txt"), "left");
+        write(&right.join("new/right.txt"), "right");
+        write(&left.join("ignored/file.txt"), "ignored");
+        let options = FolderOptions {
+            criteria: "binary".into(), ignore_case_names: true, exclude: "ignored/".into(),
+            align: vec![
+                Alignment { parent: "".into(), left: "old".into(), right: "new".into() },
+                Alignment { parent: "old".into(), left: "left.txt".into(), right: "right.txt".into() },
+            ],
+            ..Default::default()
+        };
+        let snapshot = directory.path().join("right.ccsnap").to_string_lossy().into_owned();
+        crate::snapshot::save_snapshot(&right.to_string_lossy(), &snapshot, true, true, Some(&options)).unwrap();
+        for target in [right.to_string_lossy().into_owned(), snapshot] {
+            let expected = compare_folders(&left.to_string_lossy(), &target, &options).unwrap();
+            let actual = compare_folders_with_progress(&left.to_string_lossy(), &target, &options, &|_| {}).unwrap();
+            assert_eq!(serde_json::to_value(actual).unwrap(), serde_json::to_value(expected).unwrap());
+        }
+    }
+
     #[test]
     fn name_order_dot_prefix_groups_follow_folders_first() {
         let entries = vec![("api", true), ("README.md", false), (".vscode", true), (".git", false), (".github", true), ("app.yml", false), (".env", false), (".streamlit", true)];
