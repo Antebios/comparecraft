@@ -111,7 +111,14 @@ npm run test:integration
 `COMPARECRAFT_BACKEND` also makes `npm test` run the client contract test against
 that helper instead of the repository's debug build. If neither exists, the
 real-helper contract test is skipped. To build the debug helper, run
-`cargo build --bin comparecraft-backend` from `src-tauri`.
+`cargo build --bin comparecraft-backend` from `src-tauri`. On Windows, first run
+`node scripts\build-windows-shell-extension.mjs` from the repository root to
+generate the shell-extension resources required by the Tauri build.
+
+For folder integration checks, point `COMPARECRAFT_BACKEND` at the helper built
+from the same source as the webview. Folder method capabilities alone do not
+establish support for newly added options such as `dotNamesFirst`. Do not count
+skipped real-helper tests as successful folder verification.
 
 ## Package and verify the VSIX
 

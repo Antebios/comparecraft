@@ -29,8 +29,12 @@ Child text comparisons remain editable; saving or reloading can re-evaluate the
 originating disk pair. Presets and named folder sessions are stored separately
 from desktop settings. Use **CompareCraft: Open Saved Folder Session...** to
 reopen a named extension session. Remote SSH, WSL and Dev Containers are not
-supported. See the [extension guide](../../extensions/vscode/README.md) for
+supported. See the [extension guide](https://github.com/Antebios/comparecraft/blob/main/extensions/vscode/README.md) for
 helper requirements and limitations.
+
+Embedded comparisons show an indeterminate progress indicator. The desktop
+progress strip also provides the scanning and completed/total file counts
+described above.
 
 !!! tip "Snapshots"
     You can enter a snapshot file (`.ccsnap`) instead of a folder on either side. This compares a folder with the state it had when the snapshot was saved. See [Save Snapshot](options.md#save-snapshot).

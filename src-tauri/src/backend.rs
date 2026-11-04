@@ -325,6 +325,7 @@ fn folder_options(value: Option<Value>) -> Result<folder::FolderOptions, RpcErro
         "ignoreTz",
         "ignoreCaseNames",
         "followSymlinks",
+        "dotNamesFirst",
         "align",
     ];
     const FILTER_FIELDS: &[&str] = &[
@@ -1099,6 +1100,8 @@ mod tests {
         let expected = serde_json::to_value(folder::compare_folders(&left, &right, &options).unwrap()).unwrap();
         let got = call("folder.compare", json!({ "left": left, "right": right })).unwrap();
         assert_eq!(got, expected);
+        let got = call("folder.compare", json!({ "left": left, "right": right, "options": options })).unwrap();
+        assert_eq!(got, expected, "the protocol accepts every serialized desktop option");
         let left_only = got["root"]["children"].as_array().unwrap().iter().find(|node| node["name"] == "left-only.txt").unwrap();
         assert_eq!(left_only["status"], json!("left"));
 
@@ -1111,6 +1114,29 @@ mod tests {
 
         assert_eq!(std::fs::read(Path::new(&left).join("sub/a.txt")).unwrap(), left_contents);
         assert_eq!(std::fs::read(Path::new(&right).join("sub/a.txt")).unwrap(), right_contents);
+    }
+
+    #[test]
+    fn folder_methods_preserve_dot_name_sorting_options() {
+        let temp = tempfile::tempdir().unwrap();
+        let left = temp.path().join("left");
+        let right = temp.path().join("right");
+        for base in [&left, &right] {
+            std::fs::create_dir_all(base).unwrap();
+            for name in ["alpha.txt", ".zeta.txt"] {
+                std::fs::write(base.join(name), b"same\n").unwrap();
+            }
+        }
+        for (dot_names_first, first) in [(true, ".zeta.txt"), (false, "alpha.txt")] {
+            let options = json!({ "criteria": "binary", "dotNamesFirst": dot_names_first });
+            let got = call("folder.compare", json!({ "left": left, "right": right, "options": options })).unwrap();
+            assert_eq!(got["root"]["children"][0]["name"], first);
+            let got = call("folder.compareItems", json!({
+                "left": left, "right": right, "rels": [".zeta.txt", "alpha.txt"], "options": options
+            })).unwrap();
+            assert_eq!(got[0]["name"], ".zeta.txt");
+            assert_eq!(got[1]["name"], "alpha.txt");
+        }
     }
 
     #[test]

@@ -26,10 +26,22 @@ CompareCraft keeps the 50 most recent sessions. Older ones are removed automatic
 3. If the session has no name yet, enter a name in the **Save Session** dialog and click **OK**.
 
 The session appears under **Saved sessions** on the Home view, and its name is shown in the tab title. Once a session has a name, **Save Session** updates it without asking again.
+Automatic recent-session updates never overwrite the named session.
 
 To save a copy under a different name, choose **Session > Save Session As…** or the toolbar arrow. If a saved session with that name already exists, CompareCraft asks before replacing it. The comparison tab switches to the saved copy after a successful save.
 
 Every comparison view can be saved: Folder Compare, Folder Merge, Folder Sync, Text Compare, Text Merge, Table Compare, Hex Compare and Picture Compare.
+
+### In the VS Code extension
+
+Folder and file sessions use separate VS Code global-state libraries, independent
+of desktop sessions. Save a folder comparison with **Session > Save Session**
+or **★ Save Session**, and reopen it with **CompareCraft: Open Saved Folder
+Session...**. Text comparisons also provide a **Sessions** toolbar menu.
+Reloading a folder panel restores its paths and options and recomputes the tree
+from disk; it does not save child editor buffers or preserve stale gutter results.
+Saved names are case-insensitive. Locked sessions and replacement confirmations
+follow the same save rules described here.
 
 ## Lock a session
 

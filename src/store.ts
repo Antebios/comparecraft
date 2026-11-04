@@ -153,7 +153,8 @@ export async function persistSession(tab: Tab, name?: string) {
   const existing = name ? await api.findSession(name) : null;
   if (existing?.locked) throw new Error(`The session “${existing.name}” is locked. Use Save Session As to save it under another name.`);
   const session: Session = {
-    id: existing?.id ?? (saved ? uid() : tab.sessionId),
+    // A named tab's restored identity must not let an automatic recent overwrite its saved entry.
+    id: existing?.id ?? (saved ? uid() : tab.sessionName ? `recent:${tab.sessionId}` : tab.sessionId),
     name: name ?? tabTitle(tab),
     kind: tab.kind,
     paths: [...tab.paths],

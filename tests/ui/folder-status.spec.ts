@@ -1,6 +1,8 @@
 import { test, expect, folderTab } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import type { FolderComparisonProgress, Session } from "../../src/api";
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 
 async function sendFolderProgress(page: Page, payload: FolderComparisonProgress) {
   await page.evaluate((payload) => window.dispatchEvent(new CustomEvent("comparecraft-test-event", {
@@ -198,7 +200,7 @@ test("session save split button prompts once, updates in place, and offers confi
   await page.evaluate(() => { (window as Window & { __comparecraftAskResult?: boolean }).__comparecraftAskResult = false; });
   await menuButton.click();
   const menu = page.getByRole("menu");
-  await expect(menu.getByRole("menuitem", { name: "Save Session Shift+Ctrl+S", exact: true })).toBeVisible();
+  await expect(menu.getByRole("menuitem", { name: "Save Session", exact: true })).toBeVisible();
   await menu.getByRole("menuitem", { name: "Save Session As…", exact: true }).click();
   const saveAs = page.locator(".modal").filter({ hasText: "Save Session As" });
   await saveAs.getByLabel("Session name:").fill("other comparison");
@@ -222,6 +224,31 @@ test("session save split button prompts once, updates in place, and offers confi
   await expect.poll(() => state.saves).toBe(savesBeforeFailure + 1);
   await expect.poll(() => page.evaluate(() => (window as Window & { __comparecraftMessages?: string[] }).__comparecraftMessages)).toContain("Session storage unavailable");
   expect(state.sessions.find((session) => session.id === "other-session")).toEqual(savedBeforeFailure);
+});
+
+test("refreshing and changing bases never replaces a named session with an automatic recent", async ({ page, folders }) => {
+  const state = await sortingPersistence(page);
+  await folders.pair("same.txt", "same", "same");
+  await folders.open(page);
+  await page.locator(".session-save-split > button").first().click();
+  const prompt = page.locator(".modal").filter({ hasText: "Save Session As" });
+  await prompt.getByLabel("Session name:").fill("Keep this comparison");
+  await prompt.getByRole("button", { name: "OK", exact: true }).click();
+  await expect.poll(() => state.sessions.filter((session) => session.saved).length).toBe(1);
+  const saved = structuredClone(state.sessions.find((session) => session.saved)!);
+  const replacement = join(folders.right, "replacement");
+  await mkdir(replacement);
+  await writeFile(join(replacement, "same.txt"), "changed");
+  const rightPath = page.locator(".tab-view:visible .path-input").nth(1);
+  const savesBefore = state.saves;
+  await rightPath.fill(replacement);
+  await rightPath.press("Enter");
+  await expect.poll(() => state.saves).toBeGreaterThan(savesBefore);
+  expect(state.sessions.find((session) => session.id === saved.id)).toEqual(saved);
+  expect(state.sessions.find((session) => !session.saved && session.paths[1] === replacement)?.id).not.toBe(saved.id);
+  await page.keyboard.press("F5");
+  await expect(page.locator(".tab-view:visible .statusbar")).toContainText("1 different");
+  expect(state.sessions.find((session) => session.id === saved.id)).toEqual(saved);
 });
 
 async function openSorting(page: Page) {

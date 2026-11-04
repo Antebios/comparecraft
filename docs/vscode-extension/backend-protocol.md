@@ -161,7 +161,11 @@ document APIs (decision for T010).
 object. Its optional fields are `criteria` (`timesize`, `size`, `binary`,
 `crc` or `rules`), `timeToleranceSecs`, `include`, `exclude`, `includeFolders`,
 `otherFilters`, `excludeHidden`, `flatten`, `ignoreDst`, `ignoreTz`,
-`ignoreCaseNames`, `followSymlinks`, and `align`. `timeToleranceSecs` must be between zero and
+`ignoreCaseNames`, `followSymlinks`, `dotNamesFirst`, and `align`.
+`dotNamesFirst` defaults to `true`: folders sort before files, with dot-prefixed
+names first within each group. Set it to `false` for alphabetical sorting within
+each group; item comparisons still retain the requested item order.
+`timeToleranceSecs` must be between zero and
 `i64::MAX / 1000` (the engine stores timestamps in milliseconds). Each `otherFilters` entry
 accepts `kind` (`date`, `size` or `content`), `enabled`, `newer`, `days`,
 `date`, `larger`, `size`, `notContaining`, `text`, `caseSensitive`,

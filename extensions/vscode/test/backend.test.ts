@@ -237,7 +237,7 @@ test("real folder methods preserve tree, item ordering, verdicts and readonly va
     await writeFile(path.join(left, "same.txt"), "same\n");
     await writeFile(path.join(right, "same.txt"), "same\n");
     await writeFile(path.join(left, "left.bin"), Buffer.from([0, 1]));
-    const options = { criteria: "binary", include: "*.txt" };
+    const options = { criteria: "binary", include: "*.txt", dotNamesFirst: false };
     const scan = await client.request<{ summary: { files: number; same: number } }>("folder.compare", { left, right, options });
     assert.equal(scan.summary.files, 1);
     assert.equal(scan.summary.same, 1);

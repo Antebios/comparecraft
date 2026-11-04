@@ -218,13 +218,17 @@ In an embedded Text Compare tab, use **★ Save Session** on the toolbar. The fi
 
 ### Folder sorting and comparison progress
 
-From VS Code, choose **CompareCraft > Compare Selected…** for two folders to open a comparison tab. Explicit desktop commands open the desktop app instead. Comparison progress appears below the path bars while folders are scanned and files are compared.
+From VS Code, choose **CompareCraft > Compare Selected…** for two folders to open a comparison tab in embedded mode. Explicit desktop commands open the desktop app instead. Embedded folder comparisons show an indeterminate progress indicator; the desktop app also reports scanning and completed/total file counts while comparing.
 
 To put dot-prefixed folders and files first for one comparison, choose **Session > Session Settings… > Handling > Sorting** and select **First**; **Use global default** follows the global option. In the desktop app, set **Tools > Options > Colors, Fonts > Folder views > Dot-prefixed names first** for the global default. VS Code comparison preferences are stored separately from desktop settings. See [Folder Compare: Name sorting](../../docs/manual/folder-compare.md#name-sorting).
 
 ## Saved sessions
 
 The extension stores named and recent sessions in VS Code global state, with separate libraries for folder and file comparisons.
+Recent entries are refreshed for matching paths and limited to 50 per library.
+Automatic recent-session updates do not overwrite named sessions. Names are
+matched case-insensitively, and locked sessions must be unlocked or saved under
+a different name before changing their saved paths or settings.
 
 ## Support
 

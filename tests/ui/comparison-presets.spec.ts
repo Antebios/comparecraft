@@ -412,3 +412,31 @@ test("the compare button's right border stays above the overlapping dropdown on 
   await expect(button).toBeFocused();
   expect(await borderIsVisible()).toBe(true);
 });
+
+test("split dropdowns have square left corners and a visible left border on hover and focus", async ({ page, folders }) => {
+  await presetHost(page);
+  await folders.pair("one.txt", "same", "same");
+  await folders.open(page);
+  for (const name of ["Choose comparison preset", "More session save options"]) {
+    const dropdown = page.getByRole("button", { name, exact: true });
+    const leftEdge = () => dropdown.evaluate((el) => {
+      const style = getComputedStyle(el);
+      const bounds = el.getBoundingClientRect();
+      return {
+        topRadius: style.borderTopLeftRadius,
+        bottomRadius: style.borderBottomLeftRadius,
+        width: style.borderLeftWidth,
+        color: style.borderLeftColor,
+        rightColor: style.borderRightColor,
+        visible: el.contains(document.elementFromPoint(bounds.left + 0.5, bounds.top + bounds.height / 2)),
+      };
+    });
+    await dropdown.hover();
+    expect(await leftEdge()).toMatchObject({ topRadius: "0px", bottomRadius: "0px", width: "1px", visible: true });
+    const hovered = await leftEdge();
+    expect(hovered.color).toBe(hovered.rightColor);
+    await page.mouse.move(0, 0);
+    await dropdown.focus();
+    expect(await leftEdge()).toMatchObject({ topRadius: "0px", bottomRadius: "0px", width: "1px", visible: true });
+  }
+});

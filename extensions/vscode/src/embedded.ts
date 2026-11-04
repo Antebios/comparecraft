@@ -559,20 +559,13 @@ export class EmbeddedPanel {
           : this.owner.findSession(requireString(args.name, "session name"));
       case "take_launch_spec":
         return null;
-      case "save_session":
+      case "save_session": {
         if (this.spec.kind !== "folder") {
           await this.owner.saveSession(args.session);
           return null;
         }
-        {
         const session = parseFolderSession(args.session);
-        await this.owner.updateSessions(sessions => {
-          const previous = sessions.find(item => item.id === session.id);
-          if (previous?.locked && JSON.stringify(previous.paths) !== JSON.stringify(session.paths)) throw new Error("The folder session is locked. Use Save As.");
-          if (previous?.locked && JSON.stringify(previous.options) !== JSON.stringify(session.options)) throw new Error("The folder session is locked. Use Save As.");
-          if (session.saved && sessions.some(item => item.id !== session.id && item.saved && item.name.toLowerCase() === session.name.toLowerCase())) throw new Error("A folder session with this name already exists.");
-          return [...sessions.filter(item => item.id !== session.id), session];
-        });
+        await this.owner.updateSessions(sessions => upsertEmbeddedSession(sessions, session).map(parseFolderSession));
         return null;
       }
       case "delete_session": {

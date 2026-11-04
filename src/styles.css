@@ -290,9 +290,16 @@ button.link {
   color: var(--muted);
 }
 .preset-dropdown {
+  position: relative;
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
   margin-left: -1px;
+}
+.preset-dropdown:hover,
+.preset-dropdown:focus-visible,
+.session-save-menu:hover,
+.session-save-menu:focus-visible {
+  z-index: 2;
 }
 .preset-pin-wrap {
   display: inline-flex;
@@ -390,13 +397,19 @@ button.link {
   flex: none;
 }
 .session-save-split > .tb-btn:first-child {
+  position: relative;
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;
 }
+.session-save-split > .tb-btn:first-child:hover,
+.session-save-split > .tb-btn:first-child:focus-visible {
+  z-index: 1;
+}
 .session-save-split > .session-save-menu {
+  position: relative;
   min-width: 24px;
   padding-inline: 5px;
-  border-left: 0;
+  margin-left: -1px;
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
 }

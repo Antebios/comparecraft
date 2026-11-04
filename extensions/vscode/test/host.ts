@@ -183,6 +183,15 @@ async function embeddedPanels(api: { embedded: EmbeddedPanels }, tempDirectory: 
   const c = path.join(directory, "embedded c.txt");
   await writeFile(c, "alpha\r\nbeta\r\n");
   const invoke = (cmd: string, args: Record<string, unknown>) => panel.handle("invoke", { cmd, args });
+  const textSession = { id: "text-session", name: "Saved text comparison", kind: "text", paths: [a, b],
+    options: {}, modified: Date.now(), saved: true };
+  await invoke("save_session", { session: textSession });
+  assert.deepEqual(await invoke("find_session", { name: textSession.name.toUpperCase() }), textSession);
+  assert.ok((await invoke("list_sessions", {}) as typeof textSession[]).some(session => session.id === textSession.id));
+  assert.equal(panels.folderSessions().some(session => session.id === textSession.id), false);
+  await invoke("delete_session", { id: textSession.id });
+  assert.equal(await invoke("find_session", { name: textSession.name }), null);
+  console.log("PASS: existing embedded text sessions save, find, list and delete independently of folder sessions.");
   const loaded = await invoke("load_text", { path: c }) as { lines: string[]; eol: string; finalNewline: boolean };
   assert.deepEqual([loaded.lines, loaded.eol, loaded.finalNewline], [["alpha", "beta"], "CRLF", true]);
   await invoke("save_text", { path: c, lines: ["alpha", "BETA"], finalNewline: true });
@@ -314,13 +323,21 @@ async function folderViews(panels: EmbeddedPanels, directory: string): Promise<v
   const session = { id: `test-${Date.now()}`, name: "Integration folder", kind: "folder", paths: [left, right],
     options: { comparisonPresets: { activePresetId: "builtin:all:binary", pinnedPresetIds: [] } }, modified: Date.now(), saved: true };
   await invoke("save_session", { session });
-  const found = await invoke("find_session", { name: session.name }) as typeof session;
+  const found = await invoke("find_session", { name: session.name.toUpperCase() }) as typeof session;
   assert.deepEqual(found.paths, session.paths);
   assert.deepEqual(found.options, session.options);
   await assert.rejects(invoke("save_session", { session: { ...session, kind: "text" } }), /Only folder/);
   await invoke("save_session", { session: { ...session, locked: true } });
   await assert.rejects(invoke("save_session", { session: { ...session, options: { changed: true } } }), /locked/);
-  await invoke("save_session", { session });
+  await assert.rejects(invoke("save_session", { session: { ...session, name: "Renamed while locked", locked: false } }), /locked/);
+  await invoke("save_session", { session: { ...session, locked: false } });
+  assert.equal((await invoke("find_session", { name: session.name }) as { locked?: boolean }).locked, false);
+  const recent = { ...session, id: "folder-recent-one", saved: false };
+  await invoke("save_session", { session: recent });
+  await invoke("save_session", { session: { ...recent, id: "folder-recent-two" } });
+  const listed = await invoke("list_sessions", {}) as typeof session[];
+  assert.equal(listed.filter(item => !item.saved && item.paths[0] === left && item.paths[1] === right).length, 1);
+  assert.ok(listed.some(item => item.saved && item.id === session.id));
   const storage = panels.context.globalState;
   const update = storage.update.bind(storage);
   storage.update = () => Promise.reject(new Error("simulated persistence failure"));
@@ -363,7 +380,7 @@ async function folderViews(panels: EmbeddedPanels, directory: string): Promise<v
 }
 
 function folderProbe(panel: EmbeddedPanel) {
-  const replies = new Map<number, { gutter: string; notice: boolean; summary: string; theme: string }>();
+  const replies = new Map<number, { gutter: string; notice: boolean; summary: string; theme: string; body: string }>();
   let id = 0;
   const listener = panel.panel.webview.onDidReceiveMessage(message => {
     if (message?.type === "folder-test-result") replies.set(message.id, message.value);
@@ -394,7 +411,8 @@ function folderProbe(panel: EmbeddedPanel) {
         gutter:row?.querySelector(".fstatus")?.textContent?.trim() ?? "",
         notice:document.body.textContent.includes("Folder comparison reads saved files on disk."),
         summary:document.querySelector(".statusbar")?.textContent ?? "",
-        theme:document.body.className
+        theme:document.body.className,
+        body:document.body.innerText.slice(0, 2000)
       }});
     });
   </script>`;
@@ -427,7 +445,11 @@ async function folderUi(panels: EmbeddedPanels, directory: string): Promise<void
   const workbench = vscode.workspace.getConfiguration("workbench");
   const theme = workbench.inspect<string>("colorTheme")?.globalValue;
   try {
-    await until("real folder UI row", async () => (await probe.request()).gutter === "=");
+    try {
+      await until("real folder UI row", async () => (await probe.request()).gutter === "=");
+    } catch (error) {
+      throw new Error(`${String(error)}\nFolder webview: ${(await probe.request()).body}`);
+    }
     assert.equal((await probe.request()).notice, true);
     await probe.request("selectAll");
     await until("keyboard selection in the folder UI", async () => /selected/i.test((await probe.request()).summary));
@@ -477,6 +499,10 @@ async function folderUi(panels: EmbeddedPanels, directory: string): Promise<void
     assert.equal(restored.state.spec.sessionId, session.id);
     assert.equal(restored.state.spec.sessionName, session.name);
     await until("saved session to recompute tree", () => restored.received.includes("compare_folders"));
+    await until("restored session to record a distinct recent", () => panels.folderSessions().some(item =>
+      !item.saved && item.id === `recent:${session.id}`));
+    assert.ok(panels.folderSessions().some(item => item.saved && item.id === session.id),
+      "automatic restoration must not replace the named folder session");
     await parent.handle("invoke", { cmd: "delete_session", args: { id: session.id } });
     restored.panel.dispose();
     child.panel.dispose();

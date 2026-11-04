@@ -2,9 +2,8 @@
 
 ## Status and purpose
 
-**Phase A implemented and verified in the working tree.** Local, comparison-only
-folder panels now open inside VS Code with a folder-capable helper. The user
-authorized Phase A implementation after this planning document was published.
+**Phase A implemented.** Local, comparison-only
+folder panels now open inside VS Code with a folder-capable helper.
 Phases B-E remain future work; no remote support or folder mutations were enabled.
 
 This is the portable source of truth for continuing the planning session on
@@ -12,17 +11,18 @@ another computer or in another agent session. It complements, rather than
 replaces, the existing extension [plan](plan.md), [handoff](handoff.md) and
 [backend protocol](backend-protocol.md).
 
-### Branch baseline
+### Source and integration baseline
 
 - Repository: Antebios/comparecraft.
-- Branch at handoff: `feature/quick-compare`.
-- HEAD at handoff: `9fad639da4c8cd83107386e9a3d64d3d6b16c36d`.
-- Existing uncommitted work implements desktop comparison presets and the
-  Compare split-button border fix, with shared UI tests and manual updates.
-  Preserve this work; it is not the embedded-folder implementation.
-- Phase A execution base: `543c3517469f456c81e3600efee0693a1745244c`.
+- Original source commits: `a98b8f2` (presets), `543c351` (roadmap), and
+  `89bf16f` (embedded folders), from `feature/quick-compare`.
+- These three commits were cherry-picked into `feature/compare-tweaks` above
+  destination baseline `2c2e723`, preserving dot-name sorting, desktop folder
+  progress, minimap viewport controls, and session save prompts.
 - Phase A tasks T001-T007 below are **complete**.
-- Implementation changes are uncommitted. No commit or push was performed.
+- Additional integration fixes and documentation updates are separate working
+  changes for review, not a fourth cherry-pick. No push or publication is part
+  of this integration.
 
 Saving this document locally does not synchronize computers. Transfer the full
 branch and working changes, including untracked files, by committing/pushing or
@@ -394,7 +394,11 @@ Those results do not validate embedded folder support.
 
 All eight requirements map to implemented work. Verification evidence follows.
 
-## Phase A verification and handoff
+## Original Phase A verification
+
+The following results describe the original source implementation, not proof
+that a later cherry-pick or release works. Rebuild and repeat the checks after
+integration; see the integration notes below.
 
 - Rust backend tests: **16 passed**, covering capability advertisement, folder
   result/item shapes, numeric quick verdicts, readonly validation and errors.
@@ -439,9 +443,46 @@ Important integration invariants:
 - Reload recomputes metadata comparison according to current folder criteria.
   It does not preserve previous content gutter verdicts as stale tree data.
 
+## compare-tweaks integration verification
+
+The integration preserves the destination's existing sorting, progress, minimap
+and session-save behavior. Follow-up fixes address semantic conflicts that Git
+did not detect:
+
+- The backend accepts `dotNamesFirst` and the complete serialized desktop folder
+  options; tests verify both sorting modes and requested item ordering.
+- Named saves retain boolean success results and session identity. Automatic
+  recent entries use distinct identities, including after named-session reload,
+  so they cannot replace saved sessions.
+- Folder and file session libraries remain separate. Folder saves reuse the
+  existing case-insensitive replacement, lock checks, recent deduplication and
+  50-entry pruning logic, with folder-specific path/state validation.
+- The updated accessibility label for menu items is reflected in the save-menu
+  regression rather than treating shortcut text as part of the command name.
+
+Verification on Windows with a helper built from the integrated source:
+
+| Check | Result |
+| --- | --- |
+| Root and extension typechecks; desktop/frontend and embedded webview builds | Passed |
+| Rust library engine/backend tests | 97 passed |
+| Rust backend process integration tests | 3 passed |
+| Extension unit and real-helper contract tests | 62 passed; none skipped |
+| All five Playwright UI specifications | 63 passed |
+| Actual VS Code host integration | Passed, including text/folder session isolation and preservation of named sessions after reload |
+| Local VSIX install, upgrade, content, host runtime and uninstall | Passed in isolated profiles on VS Code 1.144.1, Windows x64 |
+
+The local package retains version `0.1.0`. No normal-profile installation,
+publishing or push was performed. macOS/Linux runtime validation and a full
+desktop GUI session remain outside this local verification.
+
+Embedded folder progress is indeterminate; detailed scanning and completed-file
+counts remain a desktop feature. Folder mutation and remote phases remain
+unimplemented and require separately approved scope.
+
 ## Resume checklist
 
-1. Obtain the full branch/working patch, including untracked preset files and
+1. Obtain the integrated branch and any reviewed follow-up patch, including
    this roadmap. Inspect Git status and preserve existing work.
 2. Read this document and the [protocol](backend-protocol.md); reinspect source
    integration points against the current branch.

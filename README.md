@@ -48,7 +48,9 @@ Use the [CompareCraft VS Code extension](extensions/vscode/README.md) to open fi
 folder, unsaved-text, clipboard and Git comparisons (including merge/rebase
 conflict resolution and optional `git mergetool`/`difftool` setup) inside VS Code
 or the installed desktop app. Local embedded folder panels are comparison-only;
-see the [folder roadmap](docs/vscode-extension/folder-comparison-roadmap.md) for
+they include content comparison presets, dot-name sorting, named sessions and
+editable file drill-down, with folder results based on saved disk contents.
+See the [folder roadmap](docs/vscode-extension/folder-comparison-roadmap.md) for
 full local and remote workflow phases.
 
 CompareCraft opens the right view for whatever you give it: two files, two folders, three files to merge, or a saved session.
