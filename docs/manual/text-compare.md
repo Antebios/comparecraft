@@ -2,7 +2,7 @@
 
 Text Compare shows two text files side by side, lines up the matching lines, and highlights what changed, down to the characters within a line. You can copy changes from one side to the other, edit either side, and save each side on its own.
 
-![Text Compare with two versions of a file side by side](images/text-compare.jpg)
+![Text Compare with an inline highlighted change, four difference-map marks and a blue viewport highlight](images/text-compare-current.png)
 
 ## Start a text comparison
 
@@ -65,6 +65,10 @@ The number of context lines (3 by default) is set with **Context lines (Show Con
 On the [Next Difference page of the Options](options.md#next-difference) you can make CompareCraft go to the first difference when the files are loaded, and wrap around at the end of the file.
 
 The difference map follows the **All**, **Diffs**, **Context** and **Same** display filters. Its viewport highlight updates when either pane scrolls or the window resizes; the **Same** view has no difference marks. Clicking the map changes the vertical position without changing the horizontal scroll position. With the map focused, use `Up`/`Down`, `Page Up`/`Page Down`, or `Home`/`End` to scroll both panes.
+
+![Text panes scrolled to line 91 with four red difference marks and a blue viewport rectangle in the map at the far left](images/text-difference-map.png)
+
+*The red marks locate difference sections; the blue rectangle tracks the visible lines.*
 
 ## Copy a difference to the other side
 

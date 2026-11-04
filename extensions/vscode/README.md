@@ -32,6 +32,42 @@ installed separately.**
 
 ![Read-only CSV comparison with keyed rows, highlighted cells, and selected-row details](media/screenshots/03-csv-comparison.png)
 
+### Compare local folders in a VS Code tab
+
+![Embedded folder comparison with expanded trees, difference and orphan markers, presets and the saved-disk notice](media/screenshots/04-folder-comparison.png)
+
+Folder results come from saved disk contents. Use **Open in Desktop App** for
+folder operations.
+
+### Choose a comparison method and scope
+
+![Comparison preset dropdown with All included files expanded to CRC, Binary and Rules-based choices](media/screenshots/05-comparison-presets.png)
+
+Choosing a preset changes the main button; click that button to run it.
+
+![Comparison Presets dialog editing Release check with Binary, All included files and Pin in this folder session selected](media/screenshots/06-manage-presets.png)
+
+Named presets are shared across extension folder panels; pins belong to the
+current folder session. Extra pins appear under **More**.
+
+### Save and reopen a named folder session
+
+![Save Session split-button menu offering Save Session and Save Session As](media/screenshots/07-save-session.png)
+
+Use the main button to save, or its arrow to save a copy under another name.
+
+![VS Code Open Saved Folder Session Quick Pick listing the named Release review comparison](media/screenshots/08-open-saved-folder-session.png)
+
+Run **CompareCraft: Open Saved Folder Session...** from the Command Palette to
+find your saved folder sessions.
+
+### Locate text changes with the difference map
+
+![Embedded text comparison scrolled to a changed line with four difference-map marks and a blue viewport highlight](media/screenshots/09-text-difference-map.png)
+
+The map at the left shows changes throughout the file and highlights the
+currently visible lines.
+
 ## Requirements
 
 - VS Code 1.95 or newer on local Windows, macOS, or Linux desktop.

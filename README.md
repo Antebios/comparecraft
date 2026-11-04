@@ -35,9 +35,9 @@
 <br>
 
 <p align="center">
-  <img src="docs/manual/images/text-compare.jpg" alt="CompareCraft Text Compare: two versions of a file side by side, with changed lines and the changed characters within them highlighted" width="100%">
+  <img src="docs/manual/images/text-compare-current.png" alt="CompareCraft Text Compare: highlighted text changes, four difference-map marks and a blue viewport highlight showing the visible lines" width="100%">
   <br>
-  <sub>Text Compare: line alignment, highlighting within lines, and important (red) vs. unimportant (blue) differences.</sub>
+  <sub>Text Compare: aligned lines, highlighting within lines, and a difference map showing changes and the current viewport.</sub>
 </p>
 
 ## Features
@@ -52,6 +52,10 @@ they include content comparison presets, dot-name sorting, named sessions and
 editable file drill-down, with folder results based on saved disk contents.
 See the [folder roadmap](docs/vscode-extension/folder-comparison-roadmap.md) for
 full local and remote workflow phases.
+
+![Folder comparison inside VS Code with expanded trees, content presets and a saved-disk notice](extensions/vscode/media/screenshots/04-folder-comparison.png)
+
+*Local folder comparison in a VS Code tab. Use the desktop app for folder operations.*
 
 CompareCraft opens the right view for whatever you give it: two files, two folders, three files to merge, or a saved session.
 

@@ -30,6 +30,10 @@ Automatic recent-session updates never overwrite the named session.
 
 To save a copy under a different name, choose **Session > Save Session As…** or the toolbar arrow. If a saved session with that name already exists, CompareCraft asks before replacing it. The comparison tab switches to the saved copy after a successful save.
 
+![Save Session split-button menu offering Save Session and Save Session As](images/save-session-dropdown.png)
+
+*Shown in VS Code; Folder Compare and Text Compare also provide this split-button in the desktop app.*
+
 Every comparison view can be saved: Folder Compare, Folder Merge, Folder Sync, Text Compare, Text Merge, Table Compare, Hex Compare and Picture Compare.
 
 ### In the VS Code extension
@@ -42,6 +46,10 @@ Reloading a folder panel restores its paths and options and recomputes the tree
 from disk; it does not save child editor buffers or preserve stale gutter results.
 Saved names are case-insensitive. Locked sessions and replacement confirmations
 follow the same save rules described here.
+
+![VS Code Open Saved Folder Session Quick Pick showing Release review and its compared folder paths](images/vscode-saved-folder-session.png)
+
+*Find named folder sessions in the Command Palette's **CompareCraft: Open Saved Folder Session...** command.*
 
 ## Lock a session
 
