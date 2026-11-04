@@ -24,8 +24,16 @@ setHost({
     window.addEventListener("comparecraft-test-event", receive);
     return () => window.removeEventListener("comparecraft-test-event", receive);
   },
-  ask: async () => true,
-  message: async () => "Ok",
+  ask: async (text) => {
+    const target = window as Window & { __comparecraftAskResult?: boolean };
+    const detail = { text, result: target.__comparecraftAskResult ?? true };
+    window.dispatchEvent(new CustomEvent("comparecraft-test-ask", { detail }));
+    return detail.result;
+  },
+  message: async (text) => {
+    window.dispatchEvent(new CustomEvent("comparecraft-test-message", { detail: { text } }));
+    return "Ok";
+  },
   open: async () => null,
   save: async () => null,
   readText: async () => "",

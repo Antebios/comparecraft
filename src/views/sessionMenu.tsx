@@ -1,6 +1,6 @@
 import { ask, message } from "../host";
 import { createSignal, Show, type JSX } from "solid-js";
-import { dirname, type ReportRequest } from "../api";
+import { api, dirname, type ReportRequest } from "../api";
 import type { Command } from "../commands";
 import { InfoDialog, type InfoGroup } from "../components/InfoDialog";
 import { promptText } from "../components/Prompt";
@@ -37,7 +37,13 @@ export async function saveSessionAs(tab: Tab, notify?: (m: string) => void): Pro
   const n = (await promptText("Save Session As", "Session name:", tab.sessionName ?? ""))?.trim();
   if (!n) return false;
   try {
-    await persistSession(tab, n);
+    const existing = await api.findSession(n);
+    if (existing?.locked) throw new Error(`The session “${existing.name}” is locked. Choose another name.`);
+    if (existing && existing.name.toLocaleLowerCase() !== tab.sessionName?.toLocaleLowerCase()) {
+      const replace = await ask(`A saved session named “${existing.name}” already exists. Replace it?`, { title: "Save Session As", kind: "warning", okLabel: "Replace" });
+      if (!replace) return false;
+    }
+    if (!(await persistSession(tab, n))) return false;
     notify?.(`Saved session “${n}”`);
     return true;
   } catch (e) {
@@ -50,7 +56,7 @@ export async function saveSessionAs(tab: Tab, notify?: (m: string) => void): Pro
 export async function saveSession(tab: Tab, notify?: (m: string) => void): Promise<boolean> {
   if (!tab.sessionName || tab.locked) return saveSessionAs(tab, notify);
   try {
-    await persistSession(tab, tab.sessionName);
+    if (!(await persistSession(tab, tab.sessionName))) return false;
     notify?.(`Saved session “${tab.sessionName}”`);
     return true;
   } catch (e) {
@@ -66,8 +72,8 @@ export async function saveSession(tab: Tab, notify?: (m: string) => void): Promi
 export function sessionCommands(o: SessionMenuOptions): Command[] {
   const t = o.tab;
   const cmds: Command[] = [
-    { id: "save-session", menu: "Session", group: "session", label: "Save Session", keys: "Shift+Ctrl+S", run: () => saveSession(t(), o.notify) },
-    { id: "save-session-as", menu: "Session", group: "session", label: "Save Session As…", run: () => saveSessionAs(t(), o.notify) },
+    { id: "save-session", menu: "Session", group: "session", label: "Save Session", keys: "Shift+Ctrl+S", enabled: () => t().paths.some(Boolean), run: () => saveSession(t(), o.notify) },
+    { id: "save-session-as", menu: "Session", group: "session", label: "Save Session As…", enabled: () => t().paths.some(Boolean), run: () => saveSessionAs(t(), o.notify) },
     {
       id: "session-locked", menu: "Session", group: "session", label: "Locked", checked: () => !!t().locked,
       enabled: () => t().paths.some(Boolean),

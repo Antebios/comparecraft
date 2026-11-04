@@ -5,7 +5,8 @@ VS Code. Edit text comparisons, explore CSV differences, and resolve three-way
 merge conflicts in a CompareCraft tab that follows your VS Code theme.
 
 Prefer a separate window? Open comparisons in the CompareCraft desktop app.
-Folder comparisons always use the desktop app.
+Folder comparisons always use the desktop app. See [Feature locations](#feature-locations)
+for the folder sorting setting and progress indicator.
 
 **Requires the [CompareCraft desktop app](https://github.com/Antebios/comparecraft/releases),
 installed separately.**
@@ -170,7 +171,27 @@ start-up, and errors.
 - Binary (Hex), CSV/TSV (Table), Picture, and Patch views are read-only inside
   VS Code. Table and Picture views support files up to 64 MB.
 - Unsaved files, Git revisions, and clipboard content are always compared as text.
-- Sessions, reports, backups, and Open With are not available inside VS Code.
+- Reports, backups, and Open With are not available inside VS Code.
+
+## Feature locations
+
+### Text Compare difference map
+
+Open a Text Compare in a VS Code tab. The narrow **difference map** is at the far left of the text panes. It marks where differences occur; click a mark to jump to it, or click elsewhere in the strip to move both panes to that location. A viewport highlight tracks the visible area. See the [Text Compare manual](../../docs/manual/text-compare.md#the-window).
+
+### Save and reopen sessions
+
+In an embedded Text Compare tab, use **★ Save Session** on the toolbar. The first save asks for a name; later saves update that session. Use the adjacent **▾** arrow or **Session > Save Session As…** to save a copy under another name. If that name belongs to a different saved session, CompareCraft asks before replacing it. Use the toolbar's **Sessions** menu to reopen a saved Text Compare. Session data is stored in this VS Code installation's extension global state and is available across workspaces. See the [Sessions manual](../../docs/manual/sessions.md#save-a-session).
+
+### Folder sorting and comparison progress
+
+Folder comparisons do not run in an embedded VS Code tab. From VS Code, choose **CompareCraft > Compare Selected…** for two folders and confirm opening the desktop app. In the desktop Folder Compare view, comparison progress appears below the path bars while folders are scanned and files are compared.
+
+To put dot-prefixed folders and files first, set **Tools > Options > Colors, Fonts > Folder views > Dot-prefixed names first** for the global default. For one comparison, choose **Session > Session Settings… > Handling > Sorting** and select **First**; **Use global default** follows the global option. These controls are in the desktop app, not VS Code extension settings. See [Folder Compare: Name sorting](../../docs/manual/folder-compare.md#name-sorting).
+
+## Saved sessions
+
+The extension stores named and recent sessions in the same VS Code global state described above.
 
 ## Support
 

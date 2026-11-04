@@ -22,12 +22,12 @@ CompareCraft keeps the 50 most recent sessions. Older ones are removed automatic
 ## Save a session
 
 1. Open the comparison and set it up the way you want it.
-2. Choose **Session > Save Session** or press `Shift+Ctrl+S`. In Folder Compare and Text Compare you can also click **★ Save Session** on the toolbar.
+2. Choose **Session > Save Session** or press `Shift+Ctrl+S`. In Folder Compare and Text Compare, click **★ Save Session** to save, or use its adjacent arrow for **Save Session As…**.
 3. If the session has no name yet, enter a name in the **Save Session** dialog and click **OK**.
 
 The session appears under **Saved sessions** on the Home view, and its name is shown in the tab title. Once a session has a name, **Save Session** updates it without asking again.
 
-To save a copy under a different name, choose **Session > Save Session As…**. If a saved session with that name already exists, it is replaced.
+To save a copy under a different name, choose **Session > Save Session As…** or the toolbar arrow. If a saved session with that name already exists, CompareCraft asks before replacing it. The comparison tab switches to the saved copy after a successful save.
 
 Every comparison view can be saved: Folder Compare, Folder Merge, Folder Sync, Text Compare, Text Merge, Table Compare, Hex Compare and Picture Compare.
 

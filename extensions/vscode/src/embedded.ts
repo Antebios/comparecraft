@@ -5,13 +5,15 @@ import path from "node:path";
 import { BackendError, type BackendManager } from "./backend";
 import {
   dialogFilters, DocumentGuard, isFileView, joinLines, parseSpec, pathKey, readBytes, readDataUrl, requireAbsolute, requireLines, requireObject, requireString,
-  textFileFromBuffer, titleOf, unsupportedCommand, VIEW_METHODS, type EmbeddedSpec, type FileView, type TextFileResult
+  deleteEmbeddedSession, readEmbeddedSessions, textFileFromBuffer, titleOf, unsupportedCommand, upsertEmbeddedSession,
+  VIEW_METHODS, type EmbeddedSessionRecord, type EmbeddedSpec, type FileView, type TextFileResult
 } from "./embeddedCore";
 
 export { specFromInputs } from "./embeddedCore";
 
 export const VIEW_TYPE = "comparecraft.textCompare";
 const SETTINGS_KEY = "comparecraft.embeddedSettings";
+const SESSIONS_KEY = "comparecraft.embeddedSessions";
 
 export interface EmbeddedHost {
   assertSupported(): void;
@@ -29,6 +31,7 @@ const eolOf = (document: vscode.TextDocument): "\n" | "\r\n" => document.eol ===
 /** Owns every embedded comparison panel, including panels restored after a window reload. */
 export class EmbeddedPanels implements vscode.Disposable {
   private readonly panels = new Set<EmbeddedPanel>();
+  private sessionWrites: Promise<void> = Promise.resolve();
   private disposing = false;
 
   constructor(readonly context: vscode.ExtensionContext, readonly backend: BackendManager, readonly host: EmbeddedHost) {
@@ -57,6 +60,34 @@ export class EmbeddedPanels implements vscode.Disposable {
 
   get isDisposing(): boolean {
     return this.disposing;
+  }
+
+  listSessions(): EmbeddedSessionRecord[] {
+    return readEmbeddedSessions(this.context.globalState.get<unknown>(SESSIONS_KEY));
+  }
+
+  findSession(name: string): EmbeddedSessionRecord | null {
+    const key = name.toLowerCase();
+    return this.listSessions().find(session => session.saved && session.name.toLowerCase() === key) ?? null;
+  }
+
+  saveSession(value: unknown): Promise<void> {
+    const write = this.sessionWrites.then(async () => {
+      const current = this.context.globalState.get<unknown>(SESSIONS_KEY);
+      const next = upsertEmbeddedSession(current, value);
+      await this.context.globalState.update(SESSIONS_KEY, next);
+    });
+    this.sessionWrites = write.catch(() => {});
+    return write;
+  }
+
+  deleteSession(id: string): Promise<void> {
+    const write = this.sessionWrites.then(async () => {
+      const current = this.context.globalState.get<unknown>(SESSIONS_KEY);
+      await this.context.globalState.update(SESSIONS_KEY, deleteEmbeddedSession(current, id));
+    });
+    this.sessionWrites = write.catch(() => {});
+    return write;
   }
 
   /** True when the installed helper has every method the read-only view needs. */
@@ -369,12 +400,16 @@ export class EmbeddedPanel {
       case "reset_settings":
         return state.update(SETTINGS_KEY, undefined);
       case "list_sessions":
-        return [];
+        return this.owner.listSessions();
       case "find_session":
+        return this.owner.findSession(requireString(args.name, "session name"));
       case "take_launch_spec":
         return null;
       case "save_session":
+        await this.owner.saveSession(args.session);
+        return null;
       case "delete_session":
+        await this.owner.deleteSession(requireString(args.id, "session id"));
         return null;
       default:
         throw unsupportedCommand(command);

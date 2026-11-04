@@ -31,3 +31,30 @@ export function SessionButtons(props: { tab: Tab }) {
     </>
   );
 }
+
+/** Primary smart-save action with an adjacent menu for explicit Save As. */
+export function SessionSaveButton(props: { tab: Tab; onSave: () => void }) {
+  const enabled = () => props.tab.paths.some(Boolean);
+  return (
+    <div class="session-save-split" role="group" aria-label="Save session">
+      <Btn
+        title={props.tab.sessionName && !props.tab.locked ? `Save changes to ${props.tab.sessionName}` : "Save this comparison as a named session"}
+        kbd={displayKeys("Shift+Ctrl+S")}
+        disabled={!enabled()}
+        onClick={props.onSave}
+      >
+        ★ Save Session
+      </Btn>
+      <button
+        class="tb-btn session-save-menu"
+        title="More session save options"
+        aria-label="More session save options"
+        aria-haspopup="menu"
+        disabled={!enabled()}
+        onClick={(event) => dropDown(event.currentTarget, props.tab.id, ["save-session", "-", "save-session-as"])}
+      >
+        ▾
+      </button>
+    </div>
+  );
+}

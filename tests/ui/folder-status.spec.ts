@@ -133,22 +133,96 @@ async function expectNames(names: Locator, expected: string[]) {
 }
 
 async function sortingPersistence(page: Page) {
-  const state = { settings: {} as Record<string, unknown>, sessions: [] as (Omit<Session, "options"> & { options: Record<string, unknown> })[] };
+  const state = {
+    settings: {} as Record<string, unknown>,
+    sessions: [] as (Omit<Session, "options"> & { options: Record<string, unknown> })[],
+    finds: 0,
+    saves: 0,
+    failSave: false,
+  };
   await page.route("**/test-invoke", async (route) => {
     const { cmd, args } = route.request().postDataJSON();
     let result: unknown;
     if (cmd === "load_settings") result = state.settings;
     else if (cmd === "save_settings") { state.settings = args.settings; result = null; }
     else if (cmd === "list_sessions") result = state.sessions;
-    else if (cmd === "find_session") result = state.sessions.find((session) => session.name === args.name) ?? null;
+    else if (cmd === "find_session") {
+      state.finds++;
+      result = state.sessions.find((session) => session.saved && session.name.toLowerCase() === String(args.name).toLowerCase()) ?? null;
+    }
     else if (cmd === "save_session") {
-      state.sessions = [...state.sessions.filter((session) => session.id !== args.session.id), args.session];
+      state.saves++;
+      if (state.failSave) { await route.fulfill({ status: 500, json: { error: "Session storage unavailable" } }); return; }
+      const session = args.session as typeof state.sessions[number];
+      state.sessions = [...state.sessions.filter((item) => item.id !== session.id
+        && !(session.saved && item.saved && item.name.toLowerCase() === session.name.toLowerCase())), session];
       result = null;
     } else { await route.continue(); return; }
     await route.fulfill({ json: result });
   });
   return state;
 }
+
+test("session save split button prompts once, updates in place, and offers confirmed Save As", async ({ page, folders }) => {
+  const state = await sortingPersistence(page);
+  await page.addInitScript(() => {
+    const target = window as Window & { __comparecraftAsks?: string[]; __comparecraftMessages?: string[] };
+    target.__comparecraftAsks = [];
+    target.__comparecraftMessages = [];
+    window.addEventListener("comparecraft-test-ask", (event) => target.__comparecraftAsks?.push((event as CustomEvent<{ text: string }>).detail.text));
+    window.addEventListener("comparecraft-test-message", (event) => target.__comparecraftMessages?.push((event as CustomEvent<{ text: string }>).detail.text));
+  });
+  await folders.pair("same.txt", "same", "same");
+  await folders.open(page);
+  const recentWrites = state.saves;
+  const save = page.locator(".session-save-split > button").first();
+  const menuButton = page.getByRole("button", { name: "More session save options" });
+  await expect(save).toBeEnabled();
+  await save.click();
+  const prompt = page.locator(".modal").filter({ hasText: "Save Session As" });
+  await expect(prompt).toBeVisible();
+  await prompt.getByLabel("Session name:").fill("Primary comparison");
+  await prompt.getByRole("button", { name: "OK", exact: true }).click();
+  await expect.poll(() => state.sessions.filter((session) => session.saved).length).toBe(1);
+  const original = state.sessions.find((session) => session.saved)!;
+  expect(original.name).toBe("Primary comparison");
+  expect(original.id).toBeTruthy();
+
+  await save.click();
+  await expect(page.locator(".modal").filter({ hasText: "Save Session As" })).toHaveCount(0);
+  await expect.poll(() => state.saves).toBe(recentWrites + 2);
+  expect(state.sessions.filter((session) => session.saved)).toHaveLength(1);
+  expect(state.sessions.find((session) => session.saved)?.id).toBe(original.id);
+
+  state.sessions.push({ ...original, id: "other-session", name: "Other comparison", modified: original.modified - 1 });
+  await page.evaluate(() => { (window as Window & { __comparecraftAskResult?: boolean }).__comparecraftAskResult = false; });
+  await menuButton.click();
+  const menu = page.getByRole("menu");
+  await expect(menu.getByRole("menuitem", { name: "Save Session Shift+Ctrl+S", exact: true })).toBeVisible();
+  await menu.getByRole("menuitem", { name: "Save Session As…", exact: true }).click();
+  const saveAs = page.locator(".modal").filter({ hasText: "Save Session As" });
+  await saveAs.getByLabel("Session name:").fill("other comparison");
+  await saveAs.getByRole("button", { name: "OK", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as Window & { __comparecraftAsks?: string[] }).__comparecraftAsks)).toContain("A saved session named “Other comparison” already exists. Replace it?");
+  expect(state.sessions.find((session) => session.id === "other-session")?.name).toBe("Other comparison");
+  await page.evaluate(() => { (window as Window & { __comparecraftAskResult?: boolean }).__comparecraftAskResult = true; });
+  await menuButton.click();
+  await page.getByRole("menu").getByRole("menuitem", { name: "Save Session As…", exact: true }).click();
+  const confirmedSaveAs = page.locator(".modal").filter({ hasText: "Save Session As" });
+  await confirmedSaveAs.getByLabel("Session name:").fill("other comparison");
+  const savesBeforeReplacement = state.saves;
+  await confirmedSaveAs.getByRole("button", { name: "OK", exact: true }).click();
+  await expect.poll(() => state.saves).toBe(savesBeforeReplacement + 1);
+  expect(state.sessions.find((session) => session.name === "other comparison")?.id).toBe("other-session");
+  await expect(page.locator(".tab.active")).toContainText("other comparison");
+  state.failSave = true;
+  const savedBeforeFailure = { ...state.sessions.find((session) => session.id === "other-session")! };
+  const savesBeforeFailure = state.saves;
+  await page.locator(".session-save-split > button").first().click();
+  await expect.poll(() => state.saves).toBe(savesBeforeFailure + 1);
+  await expect.poll(() => page.evaluate(() => (window as Window & { __comparecraftMessages?: string[] }).__comparecraftMessages)).toContain("Session storage unavailable");
+  expect(state.sessions.find((session) => session.id === "other-session")).toEqual(savedBeforeFailure);
+});
 
 async function openSorting(page: Page) {
   await page.locator('button[title^="Edit file filters"]').click();

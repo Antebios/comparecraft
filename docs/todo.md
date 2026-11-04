@@ -10,8 +10,8 @@ I need to add or fix these:
 - on left side gutter is a minimap that shows an overview of differences... - Done
   - Make sure there is a highlighted section that shows the visible area on the screen. - Done
   - Enable the ability to click and jump to that section on the visible files. - already working
-- When saving session...
-  - If a new session then be able to enter name
-  - When an existing session then overwrite the existing session
+- When saving a session, prompt for a name on first save, update the active named session on Save Session, and confirm before Save As replaces another saved session. - Done
+  - Save Session As is available from the comparison toolbar split button.
+  - VS Code embedded sessions persist in extension global state.
 
-Be sure to update the VS Studio extension of needed for any of these changes.
+The VS Code extension is updated for session persistence.

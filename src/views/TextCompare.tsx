@@ -13,7 +13,7 @@ import { textStatus, type ComparisonStatus } from "../comparisonStatus";
 import { textInfo } from "../components/InfoDialog";
 import { saveSession as saveNamedSession, sessionCommands } from "./sessionMenu";
 import { ReplacementDialog, RulesPanel } from "../components/RulesPanel";
-import { SessionButtons } from "../components/SessionTools";
+import { SessionButtons, SessionSaveButton } from "../components/SessionTools";
 
 type Side = 0 | 1;
 type Filter = "all" | "diffs" | "context" | "same";
@@ -1326,9 +1326,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
         <span class="sep" />
         <Btn title="Swap sides" onClick={swap}>⇄ Swap</Btn>
         <Btn title="Reload files" kbd={k("f5")} onClick={reload}>⟳ Refresh</Btn>
-        <Btn title="Save as named session" kbd="Shift+Ctrl+S" onClick={saveSession}>
-          ★ Save Session
-        </Btn>
+        <SessionSaveButton tab={tab()} onSave={saveSession} />
       </div>
       <Show when={findOpen()}>
         <FindBar

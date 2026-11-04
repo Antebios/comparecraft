@@ -148,9 +148,9 @@ export function reportComparison(tab: Tab, paths: readonly string[], result: Com
  * replaces the saved session of that name unless it is locked.
  */
 export async function persistSession(tab: Tab, name?: string) {
-  if (!tab.paths.some(Boolean)) return;
+  if (!tab.paths.some(Boolean)) return false;
   const saved = !!name;
-  const existing = name ? await api.findSession(name).catch(() => null) : null;
+  const existing = name ? await api.findSession(name) : null;
   if (existing?.locked) throw new Error(`The session “${existing.name}” is locked. Use Save Session As to save it under another name.`);
   const session: Session = {
     id: existing?.id ?? (saved ? uid() : tab.sessionId),
@@ -166,8 +166,11 @@ export async function persistSession(tab: Tab, name?: string) {
     await api.saveSession(session);
     if (saved) updateTab(tab.id, { sessionName: name, locked: false });
     setSessionsVersion((v) => v + 1);
+    return true;
   } catch (e) {
     console.error("save session failed", e);
+    if (saved) throw e;
+    return false;
   }
 }
 

@@ -253,6 +253,22 @@ button.link {
   padding: 2px 8px;
   white-space: nowrap;
 }
+.session-save-split {
+  display: inline-flex;
+  align-items: stretch;
+  flex: none;
+}
+.session-save-split > .tb-btn:first-child {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.session-save-split > .session-save-menu {
+  min-width: 24px;
+  padding-inline: 5px;
+  border-left: 0;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
 .tb-btn.active {
   background: var(--sel);
   border-color: var(--accent);

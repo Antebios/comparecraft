@@ -79,6 +79,73 @@ export interface EmbeddedSpec {
   readonly output?: string[] | null;
 }
 
+export interface EmbeddedSessionRecord {
+  id: string;
+  name: string;
+  kind: string;
+  paths: string[];
+  options: Record<string, unknown>;
+  modified: number;
+  saved: boolean;
+  locked?: boolean;
+}
+
+export function readEmbeddedSessions(value: unknown): EmbeddedSessionRecord[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is EmbeddedSessionRecord => {
+    if (!isRecord(item)) return false;
+    return typeof item.id === "string" && typeof item.name === "string" && typeof item.kind === "string"
+      && Array.isArray(item.paths) && item.paths.every(path => typeof path === "string")
+      && isRecord(item.options) && typeof item.modified === "number" && Number.isFinite(item.modified)
+      && typeof item.saved === "boolean" && (item.locked === undefined || typeof item.locked === "boolean");
+  }).sort((a, b) => b.modified - a.modified);
+}
+
+export function requireEmbeddedSession(value: unknown): EmbeddedSessionRecord {
+  const sessions = readEmbeddedSessions([value]);
+  const session = sessions[0];
+  if (!session) throw new Error("Invalid saved session.");
+  if (session.saved && !session.name.trim()) throw new Error("A saved session needs a name.");
+  return session;
+}
+
+export function upsertEmbeddedSession(value: unknown, input: unknown): EmbeddedSessionRecord[] {
+  const sessions = readEmbeddedSessions(value);
+  const session = requireEmbeddedSession(input);
+  const byId = sessions.find(item => item.id === session.id);
+  const byName = session.saved
+    ? sessions.find(item => item.saved && item.name.toLowerCase() === session.name.toLowerCase())
+    : undefined;
+  const existing = byId ?? byName;
+  if (byName?.locked && byName.id !== session.id) throw new Error(`The session “${byName.name}” is locked.`);
+  if (byId?.locked) {
+    const unlockOnly = session.locked === false && session.name === byId.name && session.kind === byId.kind
+      && session.saved === byId.saved && samePaths(session.paths, byId.paths)
+      && JSON.stringify(session.options) === JSON.stringify(byId.options);
+    if (!unlockOnly) throw new Error(`The session “${byId.name}” is locked.`);
+  }
+  const replacement = existing ? { ...session, id: existing.id } : session;
+  const next = sessions.filter(item => item.id !== replacement.id
+    && !(replacement.saved && item.saved && item.name.toLowerCase() === replacement.name.toLowerCase())
+    && !(!replacement.saved && !item.saved && item.kind === replacement.kind && samePaths(item.paths, replacement.paths)));
+  next.push(replacement);
+  next.sort((a, b) => b.modified - a.modified);
+  let recent = 0;
+  return next.filter(item => item.saved || ++recent <= 50);
+}
+
+export function deleteEmbeddedSession(value: unknown, id: string): EmbeddedSessionRecord[] {
+  return readEmbeddedSessions(value).filter(session => session.id !== id);
+}
+
+function samePaths(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((path, index) => path === right[index]);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 /** Desktop `TextFile` shape returned to the shared UI for `load_text`. */
 export interface TextFileResult {
   path: string;

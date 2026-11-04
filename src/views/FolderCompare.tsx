@@ -29,6 +29,7 @@ import { backupSpec, rememberFilter, setSetting, settings } from "../settings";
 import { openAuto, openTab, persistSession, setSessionsVersion, tabTitle, updateTab, type Tab } from "../store";
 import { folderInfo } from "../components/InfoDialog";
 import { ReportDialog, type ReportKind } from "../components/ReportDialog";
+import { SessionSaveButton } from "../components/SessionTools";
 import { saveSession as saveNamedSession, sessionCommands } from "./sessionMenu";
 import FolderSettingsDialog, { defaultViewSettings, filterText, parseFilterText, type FolderViewSettings, type SettingsTab } from "./folderSettings";
 import {
@@ -1629,9 +1630,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
         <Btn title="Comparison rules (Session Settings)" onClick={() => settingsDialog("comparison")}>⚖ Rules</Btn>
         <Btn title="Swap sides" onClick={swap}>⇄ Swap</Btn>
         <Btn title="Refresh" kbd="F5" onClick={refresh}>⟳ Refresh</Btn>
-        <Btn title="Save as named session" kbd={displayKeys("Shift+Ctrl+S")} onClick={saveSession}>
-          ★ Save Session
-        </Btn>
+        <SessionSaveButton tab={tab()} onSave={saveSession} />
       </div>
       <div class="filterbar">
         <label class="filter-combo" title="File filters: masks separated by ';'. Prefix a mask with '-' to exclude it; end it with '/' for folders.">
