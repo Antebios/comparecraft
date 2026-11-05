@@ -5,6 +5,7 @@ pub mod diff;
 pub mod fileio;
 pub mod folder;
 pub mod folder_merge;
+pub mod fonts;
 pub mod hex;
 pub mod merge;
 pub mod pix;
@@ -424,6 +425,11 @@ fn spawn_command(program: String, args: Vec<String>) -> CmdResult<()> {
 }
 
 #[tauri::command]
+async fn list_font_families() -> CmdResult<Vec<String>> {
+    blocking(fonts::list_families).await
+}
+
+#[tauri::command]
 async fn shell_integration_status() -> CmdResult<shell::ShellStatus> {
     blocking(|| Ok(shell::status())).await
 }
@@ -497,6 +503,7 @@ pub fn run(spec: cli::LaunchSpec, solo: bool) {
             read_settings_file,
             import_sessions,
             spawn_command,
+            list_font_families,
             shell_integration_status,
             set_shell_integration,
             usage

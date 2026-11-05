@@ -5,7 +5,7 @@ const harness = (page: Page) => page.evaluate(() => (window as unknown as { harn
 test.setTimeout(60_000);
 
 /** Mock only the platform transport: this exercises the actual bundled shared folder frontend. */
-async function openFolder(page: Page, config: { failOpen?: boolean; failSave?: boolean; earlyReceipt?: boolean; locked?: boolean } = {}) {
+async function openFolder(page: Page, config: { failOpen?: boolean; failSave?: boolean; earlyReceipt?: boolean; locked?: boolean; editorFont?: string } = {}) {
   await page.addInitScript((config) => {
     const w = window as unknown as {
       acquireVsCodeApi: () => unknown;
@@ -32,7 +32,7 @@ async function openFolder(page: Page, config: { failOpen?: boolean; failSave?: b
         if (m.method === "invoke") {
           const cmd = m.params?.cmd;
           const args = (m.params?.args ?? {}) as Record<string, unknown>;
-          if (cmd === "load_settings") result = { openWith: [{ name: "Dangerous external", command: "external %F" }] };
+          if (cmd === "load_settings") result = { editorFont: config.editorFont ?? "", openWith: [{ name: "Dangerous external", command: "external %F" }] };
           if (cmd === "list_sessions") result = [];
           if (cmd === "find_session") result = { id: "saved-id", name: "Saved Folder", kind: "folder", paths: ["/left", "/right"], options: {}, saved: true, locked: !!config.locked };
           if (cmd === "save_session" && config.failSave && (args.session as { saved: boolean }).saved) error = "Storage unavailable";
@@ -66,6 +66,16 @@ async function openFolder(page: Page, config: { failOpen?: boolean; failSave?: b
   await page.goto("/tests/ui/embedded.html");
   await expect(page.locator(".frow")).toBeVisible();
 }
+
+test("embedded font inheritance overrides desktop font settings without enumerating fonts", async ({ page }) => {
+  await openFolder(page, { editorFont: "serif" });
+  await page.evaluate(() => {
+    document.body.classList.add("vscode-light");
+    document.body.style.setProperty("--vscode-editor-font-family", '"Embedded Test Mono"');
+  });
+  await expect(page.locator(".path-input").first()).toHaveCSS("font-family", '"Embedded Test Mono", monospace');
+  expect((await harness(page)).calls.some((call) => call.method === "invoke" && call.params?.cmd === "list_font_families")).toBe(false);
+});
 
 test("embedded folder hides deferred commands, nested external apps, shortcuts and snapshot settings", async ({ page }) => {
   await openFolder(page);

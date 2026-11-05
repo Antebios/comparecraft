@@ -2,6 +2,7 @@ import { createRoot, createEffect, createSignal } from "solid-js";
 import { createStore, reconcile, unwrap } from "solid-js/store";
 import { api, type FolderOptions, type ViewKind } from "./api";
 import { defaultPresetSettings, normalizePresetSettings, type ComparisonPresetSettings } from "./comparisonPresets";
+import { editorFontCss } from "./editorFonts";
 
 /** One "Open With" application: `%1`/`%2` (or `%F`) stand for the selected file(s). */
 export interface OpenWithApp {
@@ -237,6 +238,8 @@ export function rememberFilter(mask: string) {
 /** Backup naming passed to the backend, or undefined when backups are off. */
 export const backupSpec = (enabled: boolean) => (enabled ? { kind: settings.backupKind, dir: settings.backupDir || null } : undefined);
 
+export const editorRowHeight = () => Math.max(20, Math.ceil(settings.editorFontSize * 1.4));
+
 // Applies appearance settings to the document.
 createRoot(() => {
   createEffect(() => {
@@ -249,8 +252,9 @@ createRoot(() => {
     }
     root.style.setProperty("--ui-font-size", `${settings.uiFontSize}px`);
     root.style.setProperty("--editor-font-size", `${settings.editorFontSize}px`);
+    root.style.setProperty("--editor-row-height", `${editorRowHeight()}px`);
     root.style.setProperty("--tab-size", String(settings.tabSize));
-    if (settings.editorFont.trim()) root.style.setProperty("--mono", `${settings.editorFont}, monospace`);
+    if (settings.editorFont.trim()) root.style.setProperty("--mono", editorFontCss(settings.editorFont));
     else root.style.removeProperty("--mono");
     root.classList.toggle("folder-stripes", settings.folderStripes);
     root.classList.toggle("no-hints", !settings.showHints);

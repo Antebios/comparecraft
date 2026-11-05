@@ -100,10 +100,18 @@ Click a color to change it. Once a color has been changed, a **Default** link ap
 | Setting | Range | Default |
 | --- | --- | --- |
 | **Interface font size:** | 9 to 24 px | 13 px |
-| **Editor font:** | Any installed font name; empty means the default monospace font | (default monospace) |
+| **Editor font:** | Editable installed-font dropdown; custom names and CSS fallback lists are also accepted | Default monospace |
 | **Editor font size:** | 8 to 28 px | 12 px |
 
-The editor font is used for the text of files in the comparison views.
+On the desktop, the dropdown lists font families installed on your local Windows, Linux, or macOS system. Type to filter the list, use the arrow keys and Enter to select, or enter a custom family name. All families are listed; monospace fonts are recommended for aligned text. Choose **Default monospace** or clear the field to restore CompareCraft's default font list.
+
+The preview changes as you type without changing open comparisons. **Apply** or **OK** applies and saves the font for comparison text; **Cancel** discards changes made since the last Apply. A CSS fallback list such as `"My Font", monospace` is also supported. Fonts selected from the dropdown are quoted so that names containing punctuation remain a single family.
+
+**Editor font** and **Editor font size** apply to file contents and folder listings, including open comparisons. Rows expand for larger editor sizes so that text does not overlap. **Interface font size** controls interface text, including the file and folder path boxes above the panes; those boxes retain the selected font family but use the interface size. Similar Nerd Font variants often differ mainly in their extra symbols, so ordinary text can look identical.
+
+Installed does not necessarily mean renderable by the app's WebView. Availability messages distinguish an unlisted family from a font whose local loading could not be verified; face names can differ from family names. A successful local lookup does not prove the requested family rendered: some systems resolve missing names through font aliases before reaching the monospace fallback. If a family or character cannot be rendered, the WebView uses a fallback. Legacy bitmap fonts, including original **Fixedsys**, may not render: try an installed scalable monospace font instead. CompareCraft does not install or bundle these fonts. If discovery fails, **Retry fonts** reloads the list; custom input and other options remain usable.
+
+In the VS Code extension, the editor font family follows VS Code's **Editor: Font Family** setting rather than the desktop font selector.
 
 ## Text Editing
 

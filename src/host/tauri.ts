@@ -8,6 +8,7 @@ import type { Host } from ".";
 
 export const tauriHost: Host = {
   name: "tauri",
+  listFontFamilies: () => invoke<string[]>("list_font_families"),
   invoke,
   listen,
   ask,

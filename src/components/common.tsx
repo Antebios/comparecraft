@@ -1,5 +1,7 @@
 import { open, save } from "../host";
 import { createEffect, createSignal, onCleanup, onMount, type JSX } from "solid-js";
+import { editorRowHeight } from "../settings";
+export { editorRowHeight };
 
 export function PathBar(props: {
   value: string;
@@ -83,8 +85,6 @@ export function Btn(props: {
   );
 }
 
-export const ROW_H = 20;
-
 /** Tracks size of a scroll container and computes a virtual window. */
 export function useViewport(el: () => HTMLElement | undefined) {
   const [height, setHeight] = createSignal(600);
@@ -97,7 +97,7 @@ export function useViewport(el: () => HTMLElement | undefined) {
     setHeight(e.clientHeight);
     onCleanup(() => ro.disconnect());
   });
-  const range = (count: number, rowH = ROW_H, overscan = 12) => {
+  const range = (count: number, rowH = editorRowHeight(), overscan = 12) => {
     const start = Math.max(0, Math.floor(scrollTop() / rowH) - overscan);
     const end = Math.min(count, Math.ceil((scrollTop() + height()) / rowH) + overscan);
     return { start, end };

@@ -19,7 +19,8 @@
   --same-fg: #2f7d32;
   --conflict-bg: #ffe9c7;
   --filler: repeating-linear-gradient(135deg, #eceef2 0 4px, #f6f7f9 4px 8px);
-  --mono: "JetBrains Mono", "Cascadia Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  --default-mono: "JetBrains Mono", "Cascadia Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  --mono: var(--default-mono);
   color-scheme: light;
 }
 
@@ -502,7 +503,7 @@ button.link {
   flex: 1;
   min-width: 0;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: inherit;
 }
 .path-title {
   flex: 1;
@@ -626,7 +627,7 @@ button.link {
   overflow: auto;
   background: var(--bg2);
   font-family: var(--mono);
-  font-size: min(var(--editor-font-size, 12.5px), 15px);
+  font-size: var(--editor-font-size, 12px);
   tab-size: var(--tab-size, 4);
 }
 .tpane-inner {
@@ -642,8 +643,8 @@ button.link {
   position: absolute;
   left: 0;
   right: 0;
-  height: 20px;
-  line-height: 20px;
+  height: var(--editor-row-height, 20px);
+  line-height: var(--editor-row-height, 20px);
   display: flex;
   white-space: pre;
 }
@@ -729,9 +730,9 @@ button.link {
 .line-edit {
   flex: 1;
   font-family: var(--mono);
-  font-size: 12.5px;
+  font-size: inherit;
   padding: 0 4px;
-  height: 20px;
+  height: var(--editor-row-height, 20px);
   border-radius: 0;
 }
 .details {
@@ -739,7 +740,7 @@ button.link {
   border-top: 1px solid var(--border);
   padding: 4px 8px;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--editor-font-size, 12px);
   min-height: 48px;
   background: var(--bg2);
   overflow-x: auto;
@@ -757,7 +758,7 @@ button.link {
   width: 100%;
   height: 60vh;
   font-family: var(--mono);
-  font-size: 12.5px;
+  font-size: var(--editor-font-size, 12px);
   white-space: pre;
 }
 
@@ -823,6 +824,8 @@ button.link {
   min-height: 0;
   overflow: auto;
   background: var(--bg2);
+  font-family: var(--mono);
+  font-size: var(--editor-font-size, 12px);
 }
 .fside {
   flex: 1;
@@ -946,7 +949,7 @@ button.link {
   overflow: auto;
   background: var(--bg2);
   font-family: var(--mono);
-  font-size: 12.5px;
+  font-size: var(--editor-font-size, 12px);
   position: relative;
 }
 .outbar {
@@ -999,7 +1002,7 @@ button.link {
   overflow: auto;
   background: var(--bg2);
   font-family: var(--mono);
-  font-size: 12.5px;
+  font-size: var(--editor-font-size, 12px);
 }
 .hrow {
   gap: 20px;
@@ -1040,7 +1043,8 @@ button.link {
   min-height: 0;
   overflow: auto;
   background: var(--bg2);
-  font-size: 12.5px;
+  font-family: var(--mono);
+  font-size: var(--editor-font-size, 12px);
 }
 .theader {
   display: flex;
@@ -1069,8 +1073,8 @@ button.link {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  height: 20px;
-  line-height: 20px;
+  height: var(--editor-row-height, 20px);
+  line-height: var(--editor-row-height, 20px);
 }
 .tcell.th {
   font-weight: 600;
@@ -1125,7 +1129,8 @@ button.link {
   overflow-x: auto;
   border-top: 1px solid var(--border);
   background: var(--bg2);
-  font-size: 12.5px;
+  font-family: var(--mono);
+  font-size: var(--editor-font-size, 12px);
 }
 .tdrow {
   display: flex;
@@ -1140,8 +1145,8 @@ button.link {
   width: 70px;
   flex: none;
   padding: 0 6px;
-  height: 20px;
-  line-height: 20px;
+  height: var(--editor-row-height, 20px);
+  line-height: var(--editor-row-height, 20px);
   color: var(--muted);
   background: var(--bg3);
 }
@@ -1781,6 +1786,69 @@ kbd {
 .options-page h3 {
   margin: 8px 0 10px;
   font-size: 1.15em;
+}
+.font-options,
+.editor-font-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.font-options .opt-num {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+}
+.font-options .opt-num input {
+  width: 5em;
+}
+.font-combobox {
+  position: relative;
+}
+.font-combobox-input {
+  display: flex;
+}
+.font-combobox-input input {
+  flex: 1;
+  min-width: 0;
+}
+.font-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  max-height: 180px;
+  overflow: auto;
+  background: var(--bg2);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 12px #0003;
+}
+.font-list [role="option"] {
+  padding: 4px 8px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.font-list [role="option"]:hover,
+.font-list [role="option"].active {
+  background: var(--sel);
+}
+.font-list [aria-selected="true"] {
+  font-weight: 600;
+}
+.font-status {
+  overflow-wrap: anywhere;
+}
+.editor-font-preview {
+  margin: 0;
+  padding: 8px;
+  min-height: 5em;
+  overflow: auto;
+  border: 1px solid var(--border);
+  background: var(--bg2);
+  color: var(--fg);
+  line-height: 1.5;
 }
 .opt-cmd-table {
   max-height: 330px;
@@ -2508,7 +2576,8 @@ kbd {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  font-size: 12px;
+  font-family: var(--mono);
+  font-size: var(--editor-font-size, 12px);
   outline: none;
 }
 .fm-row {

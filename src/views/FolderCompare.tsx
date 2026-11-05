@@ -19,7 +19,7 @@ import {
   type ViewKind,
   type ReportRequest,
 } from "../api";
-import { Btn, Modal, PathBar, ROW_H, useViewport } from "../components/common";
+import { Btn, editorRowHeight, Modal, PathBar, useViewport } from "../components/common";
 import type { ComparisonListener } from "../comparisonStatus";
 import { showContextMenu } from "../components/ContextMenu";
 import { externalCommands, shellWords, sideOf } from "../components/external";
@@ -1293,9 +1293,9 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
       if (s !== "both" && !n[s]) setSelSide(s === "left" ? "right" : "left");
     }
     setAnchor(rel);
-    const top = i * ROW_H;
+    const top = i * editorRowHeight();
     if (top < scroller.scrollTop) scroller.scrollTop = top;
-    else if (top + ROW_H > scroller.scrollTop + vp.height()) scroller.scrollTop = top + ROW_H - vp.height();
+    else if (top + editorRowHeight() > scroller.scrollTop + vp.height()) scroller.scrollTop = top + editorRowHeight() - vp.height();
   }
 
   function selectRel(rel: string) {
@@ -1307,7 +1307,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
     const i = flat().findIndex((r) => r.node.rel === rel);
     if (i >= 0) {
       selectIndex(i);
-      scroller.scrollTop = Math.max(0, i * ROW_H - vp.height() / 3);
+      scroller.scrollTop = Math.max(0, i * editorRowHeight() - vp.height() / 3);
     }
   }
 
@@ -1673,8 +1673,8 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
     { id: "up", menu: "Search", hidden: true, label: "Previous Row", keys: "Up", run: () => selectIndex(cursor() - 1) },
     { id: "sdown", menu: "Search", hidden: true, label: "Extend Selection Down", keys: "Shift+Down", run: () => selectIndex(cursor() + 1, true) },
     { id: "sup", menu: "Search", hidden: true, label: "Extend Selection Up", keys: "Shift+Up", run: () => selectIndex(cursor() - 1, true) },
-    { id: "pgdn", menu: "Search", hidden: true, label: "Page Down", keys: "PgDn", run: () => selectIndex(cursor() + Math.floor(vp.height() / ROW_H)) },
-    { id: "pgup", menu: "Search", hidden: true, label: "Page Up", keys: "PgUp", run: () => selectIndex(cursor() - Math.floor(vp.height() / ROW_H)) },
+    { id: "pgdn", menu: "Search", hidden: true, label: "Page Down", keys: "PgDn", run: () => selectIndex(cursor() + Math.floor(vp.height() / editorRowHeight())) },
+    { id: "pgup", menu: "Search", hidden: true, label: "Page Up", keys: "PgUp", run: () => selectIndex(cursor() - Math.floor(vp.height() / editorRowHeight())) },
     { id: "first", menu: "Search", hidden: true, label: "First Row", keys: "Home", run: () => selectIndex(0) },
     { id: "last", menu: "Search", hidden: true, label: "Last Row", keys: "End", run: () => selectIndex(flat().length - 1) },
     // Enter runs the bold default item: open/close a single folder, otherwise open.
@@ -1887,14 +1887,14 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
         <Show when={!left() || !right()}>
           <div class="empty">Choose a left and right folder to compare.</div>
         </Show>
-        <div data-filler="1" style={{ height: `${flat().length * ROW_H}px`, position: "relative" }}>
+        <div data-filler="1" style={{ height: `${flat().length * editorRowHeight()}px`, position: "relative" }}>
           <Index each={windowRows()}>
             {(item) => {
               const n = () => item().f.node;
               return (
                 <div
                   class={`frow fs-${statusOf(n())}${sel().has(n().rel) ? " sel" : ""}${item().i % 2 ? " odd" : ""}${n().dir && !settings.folderColorFolders ? " plain-dir" : ""}`}
-                  style={{ top: `${item().i * ROW_H}px` }}
+                  style={{ top: `${item().i * editorRowHeight()}px` }}
                   onMouseDown={(e) => (e.stopPropagation(), click(e, n().rel, item().i))}
                   onDblClick={() => activate(n())}
                   onContextMenu={(e) => showContextMenu(e, tab().id, ROW_MENU)}

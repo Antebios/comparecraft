@@ -221,17 +221,17 @@ All platforms need **Rust** (stable, via [rustup](https://rustup.rs)) and **Node
 
 **Arch / Omarchy / Manjaro**
 ```sh
-sudo pacman -S --needed webkit2gtk-4.1 base-devel curl wget file openssl appmenu-gtk-module libappindicator-gtk3 librsvg
+sudo pacman -S --needed webkit2gtk-4.1 base-devel curl wget file openssl appmenu-gtk-module libappindicator-gtk3 librsvg fontconfig freetype2
 ```
 
 **Debian / Ubuntu / Pop!_OS / Mint**
 ```sh
-sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libfontconfig1-dev libfreetype6-dev
 ```
 
 **Fedora**
 ```sh
-sudo dnf install webkit2gtk4.1-devel openssl-devel curl wget file libappindicator-gtk3-devel librsvg2-devel
+sudo dnf install webkit2gtk4.1-devel openssl-devel curl wget file libappindicator-gtk3-devel librsvg2-devel fontconfig-devel freetype-devel
 sudo dnf group install "c-development"
 ```
 

@@ -52,13 +52,17 @@ export default defineConfig({
           { client: { name: "ui-tests", version: "0" }, log: (line) => console.error(line) },
         );
         server.httpServer?.once("close", () => void backend.dispose());
+        server.middlewares.use("/test-fonts", (_request, response) => {
+          response.setHeader("Content-Type", "application/json");
+          response.end(JSON.stringify(["A Font", "Example Mono", "Other Font"]));
+        });
         server.middlewares.use("/test-invoke", async (request, response) => {
           try {
             let body = "";
             for await (const chunk of request) body += chunk;
             const { cmd, args = {} } = JSON.parse(body);
             const methods: Record<string, string> = {
-              path_info: "path.info", load_text: "text.load", diff_texts: "text.diff",
+              path_info: "path.info", load_text: "text.load", diff_texts: "text.diff", merge_texts: "text.merge",
               hex_align: "hex.align", compare_tables: "table.compare", pix_compare: "pix.compare", pix_image: "pix.image",
             };
             let result: unknown;

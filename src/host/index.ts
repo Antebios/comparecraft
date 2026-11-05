@@ -20,6 +20,7 @@ export interface Host {
   readonly name: "tauri" | "vscode";
   /** Restricts folder UI only; editable child file views retain their own capabilities. */
   readonly folderComparisonOnly?: boolean;
+  listFontFamilies?(): Promise<string[]>;
   openDesktopFolder?(): Promise<void>;
   invoke: typeof Core.invoke;
   listen: typeof Event.listen;

@@ -6,6 +6,12 @@ import "../../src/styles.css";
 
 setHost({
   name: "tauri",
+  listFontFamilies: async () => {
+    const response = await fetch("/test-fonts");
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error);
+    return data;
+  },
   invoke: async (cmd, args) => {
     if (cmd === "take_launch_spec") {
       const spec = new URLSearchParams(location.search).get("spec");

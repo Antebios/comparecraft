@@ -2,7 +2,7 @@ import { ask, emit, isEmbedded, listen, save as saveDialog } from "../host";
 import { settings } from "../settings";
 import { batch, createEffect, createMemo, createSignal, Index, onCleanup, onMount, Show } from "solid-js";
 import { api, errText, strictRules, type Chunk, type MergeResult, type Rules, type TextFile } from "../api";
-import { Btn, Modal, PathBar, ROW_H, useViewport } from "../components/common";
+import { Btn, editorRowHeight, Modal, PathBar, useViewport } from "../components/common";
 import { displayKeys, registerCommands } from "../commands";
 import { showContextMenu } from "../components/ContextMenu";
 import { persistSession, updateTab, type Tab } from "../store";
@@ -195,9 +195,9 @@ export default function TextMerge(props: { tab: Tab; active: boolean }) {
     setSel(ci);
     if (!scroll) return;
     const t = chunkTopStart()[ci];
-    if (t !== undefined) top.scrollTop = Math.max(0, t * ROW_H - vpTop.height() / 3);
+    if (t !== undefined) top.scrollTop = Math.max(0, t * editorRowHeight() - vpTop.height() / 3);
     const o = chunkOutStart()[ci];
-    if (o !== undefined) bottom.scrollTop = Math.max(0, o * ROW_H - vpBot.height() / 3);
+    if (o !== undefined) bottom.scrollTop = Math.max(0, o * editorRowHeight() - vpBot.height() / 3);
   }
 
   function nav(dir: 1 | -1, conflictsOnly: boolean) {
@@ -368,7 +368,7 @@ export default function TextMerge(props: { tab: Tab; active: boolean }) {
         ))}
       </div>
       <div class="mtop" ref={top} onScroll={(e) => vpTop.setScrollTop(e.currentTarget.scrollTop)}>
-        <div style={{ height: `${topRows().length * ROW_H}px`, position: "relative" }}>
+        <div style={{ height: `${topRows().length * editorRowHeight()}px`, position: "relative" }}>
           <Index each={winTop()}>
             {(it) => {
               const c = () => merge()!.chunks[it().ci];
@@ -376,7 +376,7 @@ export default function TextMerge(props: { tab: Tab; active: boolean }) {
                 <div
                   class="mrow"
                   classList={{ [kindClass(it().ci)]: true, sel: sel() === it().ci, cstart: it().j === 0 }}
-                  style={{ top: `${it().i * ROW_H}px` }}
+                  style={{ top: `${it().i * editorRowHeight()}px` }}
                   onMouseDown={() => selectChunk(it().ci, false)}
                   onDblClick={() => selectChunk(it().ci)}
                   onContextMenu={(e) => showContextMenu(e, tab().id, MERGE_MENU)}
@@ -395,13 +395,13 @@ export default function TextMerge(props: { tab: Tab; active: boolean }) {
         <PathBar value={outputPath()} title={tab().titles?.[3]} saveDialog onCommit={(p) => setPath(3, p)} dirty={dirty()} />
       </div>
       <div class="mbottom" ref={bottom} onScroll={(e) => vpBot.setScrollTop(e.currentTarget.scrollTop)}>
-        <div style={{ height: `${outRows().length * ROW_H}px`, position: "relative" }}>
+        <div style={{ height: `${outRows().length * editorRowHeight()}px`, position: "relative" }}>
           <Index each={winBot()}>
             {(it) => (
               <div
                 class="orow"
                 classList={{ [kindClass(it().r.ci)]: true, sel: sel() === it().r.ci, marker: !!it().r.marker, conflict: !!it().r.conflict }}
-                style={{ top: `${it().i * ROW_H}px` }}
+                style={{ top: `${it().i * editorRowHeight()}px` }}
                 onMouseDown={() => selectChunk(it().r.ci, false)}
                 onDblClick={() => selectChunk(it().r.ci)}
                 onContextMenu={(e) => showContextMenu(e, tab().id, MERGE_MENU)}

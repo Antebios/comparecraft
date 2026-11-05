@@ -1,6 +1,6 @@
 import { createMemo, createResource, createSignal, Index, onCleanup, onMount, Show } from "solid-js";
 import { api, errText, fmtSize, type HexAlign, type HexAlignment } from "../api";
-import { Btn, PathBar, ROW_H, useViewport } from "../components/common";
+import { Btn, editorRowHeight, PathBar, useViewport } from "../components/common";
 import { promptText } from "../components/Prompt";
 import { displayKeys, registerCommands } from "../commands";
 import { showContextMenu } from "../components/ContextMenu";
@@ -216,7 +216,7 @@ export default function HexCompare(props: { tab: Tab; active: boolean }) {
   function reveal(slot: number) {
     setCursor(slot);
     const row = rowOfSlot(slot);
-    if (row >= 0) scroller.scrollTop = Math.max(0, row * ROW_H - vp.height() / 3);
+    if (row >= 0) scroller.scrollTop = Math.max(0, row * editorRowHeight() - vp.height() / 3);
   }
 
   function gotoDiff(dir: 1 | -1) {
@@ -367,10 +367,10 @@ export default function HexCompare(props: { tab: Tab; active: boolean }) {
         <div class="banner">Files are too large to align in memory; showing a positional comparison.</div>
       </Show>
       <div class="hscroll" ref={scroller} onContextMenu={onContext} onScroll={(e) => vp.setScrollTop(e.currentTarget.scrollTop)}>
-        <div style={{ height: `${rows().count * ROW_H}px`, position: "relative" }}>
+        <div style={{ height: `${rows().count * editorRowHeight()}px`, position: "relative" }}>
           <Index each={win()}>
             {(i) => (
-              <div class="hrow" classList={{ hblock: floorIndex(rows().first, i()) >= 0 && rows().first[floorIndex(rows().first, i())] === i() && i() > 0 }} style={{ top: `${i() * ROW_H}px` }}>
+              <div class="hrow" classList={{ hblock: floorIndex(rows().first, i()) >= 0 && rows().first[floorIndex(rows().first, i())] === i() && i() > 0 }} style={{ top: `${i() * editorRowHeight()}px` }}>
                 {side(0, i())}
                 {side(1, i())}
               </div>

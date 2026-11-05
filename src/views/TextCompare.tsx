@@ -2,7 +2,7 @@ import { ask, emit, isEmbedded, listen, open as openDialog, save as saveDialog, 
 import { settings } from "../settings";
 import { batch, createEffect, createMemo, createSignal, For, Index, on, onCleanup, onMount, Show } from "solid-js";
 import { api, basename, defaultRules, errText, fmtSize, fmtTime, type DiffResult, type Row, type Rules, type TextFile } from "../api";
-import { Btn, Highlighted, Modal, PathBar, ROW_H, useViewport } from "../components/common";
+import { Btn, editorRowHeight, Highlighted, Modal, PathBar, useViewport } from "../components/common";
 import { showContextMenu } from "../components/ContextMenu";
 import { externalCommands, shellWords } from "../components/external";
 import FindBar from "../components/FindBar";
@@ -373,7 +373,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
       return hunkActive(index) && end > start ? [{ index, start, end, important: hunk.important }] : [];
     });
   });
-  const contentHeight = () => Math.max(vp.height(), visible().length * ROW_H);
+  const contentHeight = () => Math.max(vp.height(), visible().length * editorRowHeight());
   const maxScroll = () => Math.max(0, contentHeight() - vp.height());
   const overviewArea = createMemo(() => {
     const track = mapViewport.height();
@@ -382,7 +382,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
     return { top: maxScroll() ? scroll / maxScroll() * (track - height) : 0, height };
   });
 
-  createEffect(on([visible, vp.height], () => {
+  createEffect(on([visible, vp.height, editorRowHeight], () => {
     queueMicrotask(() => {
       if (paneL?.isConnected && paneR?.isConnected && paneL.clientHeight > 0) scrollPanes(paneL.scrollTop);
     });
@@ -433,8 +433,8 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
   function overviewKey(event: KeyboardEvent) {
     let target: number;
     switch (event.key) {
-      case "ArrowUp": target = vp.scrollTop() - ROW_H; break;
-      case "ArrowDown": target = vp.scrollTop() + ROW_H; break;
+      case "ArrowUp": target = vp.scrollTop() - editorRowHeight(); break;
+      case "ArrowDown": target = vp.scrollTop() + editorRowHeight(); break;
       case "PageUp": target = vp.scrollTop() - vp.height(); break;
       case "PageDown": target = vp.scrollTop() + vp.height(); break;
       case "Home": target = 0; break;
@@ -448,7 +448,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
 
   function scrollToRow(ri: number) {
     const vi = lowerBound(visible(), ri);
-    scrollPanes(vi * ROW_H - vp.height() / 3);
+    scrollPanes(vi * editorRowHeight() - vp.height() / 3);
   }
 
   function goHunk(h: number) {
@@ -466,7 +466,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
     if (h < 0) {
       // Start from the current scroll position.
       const vis = visible();
-      const vi = Math.floor(vp.scrollTop() / ROW_H);
+      const vi = Math.floor(vp.scrollTop() / editorRowHeight());
       const ri = vis[Math.min(vi, vis.length - 1)] ?? 0;
       h = dir === 1 ? -1 : res.hunks.length;
       for (let i = 0; i < res.hunks.length; i++) {
@@ -763,8 +763,8 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
     });
     if (!visible().includes(ri)) setFilter("all");
     const vi = lowerBound(visible(), ri);
-    const top = vi * ROW_H;
-    if (top < paneL.scrollTop || top > paneL.scrollTop + vp.height() - ROW_H * 2) scrollToRow(ri);
+    const top = vi * editorRowHeight();
+    if (top < paneL.scrollTop || top > paneL.scrollTop + vp.height() - editorRowHeight() * 2) scrollToRow(ri);
   }
 
   /** Up/Down (Shift extends the line selection). */
@@ -1172,7 +1172,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
       >
         <div
           class="tpane-inner"
-          style={{ height: `${visible().length * ROW_H}px`, width: `calc(${(s === 0 ? maxL() : maxR()) + 2}ch + 82px)` }}
+          style={{ height: `${visible().length * editorRowHeight()}px`, width: `calc(${(s === 0 ? maxL() : maxR()) + 2}ch + 82px)` }}
         >
           <Index each={windowRows()}>
             {(item) => {
@@ -1204,7 +1204,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
                     "align-from": alignFrom()?.side === s && alignFrom()?.line === idx(),
                     "kb-target": item().ri === selRow() && s === selSide(),
                   }}
-                  style={{ top: `${item().vi * ROW_H}px` }}
+                  style={{ top: `${item().vi * editorRowHeight()}px` }}
                   onMouseDown={(e) => {
                     const ri = item().ri;
                     // Keep a line selection for its context menu.
