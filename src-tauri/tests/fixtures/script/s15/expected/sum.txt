@@ -16,6 +16,7 @@ same.txt                  12 <TS>
 
 Left Orphan Files (29) Size  Modified
 ---------------------------------------------------
+names/.hidden              2 <TS>
 names/10.txt               2 <TS>
 names/9.txt                2 <TS>
 names/A2.txt               2 <TS>
@@ -33,7 +34,6 @@ names/e.txt                2 <TS>
 names/é.txt                2 <TS>
 names/f.txt                2 <TS>
 names/#h                   2 <TS>
-names/.hidden              2 <TS>
 names/(p)                  2 <TS>
 names/~x.txt               2 <TS>
 names/xy                   2 <TS>

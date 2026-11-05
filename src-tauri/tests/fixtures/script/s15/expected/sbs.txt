@@ -9,6 +9,7 @@ Name             Size  Modified                  Name             Size  Modified
 names               50 <TS>
 +dira                0 <TS>
 +dirB                0 <TS>
++.hidden             2 <TS> >>
 +10.txt              2 <TS> >>
 +9.txt               2 <TS> >>
 +A2.txt              2 <TS> >>
@@ -26,7 +27,6 @@ names               50 <TS>
 +é.txt               2 <TS> >>
 +f.txt               2 <TS> >>
 +#h                  2 <TS> >>
-+.hidden             2 <TS> >>
 +(p)                 2 <TS> >>
 +~x.txt              2 <TS> >>
 +xy                  2 <TS> >>

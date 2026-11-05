@@ -25,6 +25,13 @@
 			</foldercomp>
 			<filecomp status="ltonly">
 				<lt>
+					<name>.hidden</name>
+					<size>2</size>
+					<modified><TS></modified>
+				</lt>
+			</filecomp>
+			<filecomp status="ltonly">
+				<lt>
 					<name>10.txt</name>
 					<size>2</size>
 					<modified><TS></modified>
@@ -138,13 +145,6 @@
 			<filecomp status="ltonly">
 				<lt>
 					<name>#h</name>
-					<size>2</size>
-					<modified><TS></modified>
-				</lt>
-			</filecomp>
-			<filecomp status="ltonly">
-				<lt>
-					<name>.hidden</name>
 					<size>2</size>
 					<modified><TS></modified>
 				</lt>
