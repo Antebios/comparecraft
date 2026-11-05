@@ -403,7 +403,7 @@ function folderProbe(panel: EmbeddedPanel) {
         row.dispatchEvent(new MouseEvent("dblclick", {bubbles:true,button:0}));
       }
       if (m.action === "compare") document.querySelector(".preset-run-wrap button")?.click();
-      if (m.action === "selectAll") window.dispatchEvent(new KeyboardEvent("keydown", {key:"a",code:"KeyA",ctrlKey:true,bubbles:true}));
+      if (m.action === "selectAll") window.dispatchEvent(new KeyboardEvent("keydown", {key:"a",code:"KeyA",ctrlKey:${process.platform !== "darwin"},metaKey:${process.platform === "darwin"},bubbles:true}));
       if (m.action === "refresh") {
         [...document.querySelectorAll("button")].find(b => /Refresh/i.test(b.title + " " + b.getAttribute("aria-label")))?.click();
       }
