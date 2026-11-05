@@ -2,7 +2,7 @@ import { writeText } from "../host";
 import { batch, createEffect, createMemo, createSignal, For, Index, on, onCleanup, onMount, Show } from "solid-js";
 import { createStore } from "solid-js/store";
 import { api, errText, type TableOptions, type TableResult, type TableRow } from "../api";
-import { Btn, PathBar, ROW_H, useViewport } from "../components/common";
+import { Btn, editorRowHeight, PathBar, useViewport } from "../components/common";
 import { displayKeys, registerCommands, type Command, type MenuRef } from "../commands";
 import { showContextMenu } from "../components/ContextMenu";
 import { externalCommands } from "../components/external";
@@ -155,8 +155,8 @@ export default function TableCompare(props: { tab: Tab; active: boolean }) {
   function reveal(ri: number) {
     const vis = rows().indexOf(ri);
     if (vis < 0) return;
-    const top = vis * ROW_H;
-    if (top < scroller.scrollTop || top + ROW_H > scroller.scrollTop + vp.height() - ROW_H) scroller.scrollTop = Math.max(0, top - vp.height() / 3);
+    const top = vis * editorRowHeight();
+    if (top < scroller.scrollTop || top + editorRowHeight() > scroller.scrollTop + vp.height() - editorRowHeight()) scroller.scrollTop = Math.max(0, top - vp.height() / 3);
   }
 
   function select(ri: number, extend = false) {
@@ -467,12 +467,12 @@ export default function TableCompare(props: { tab: Tab; active: boolean }) {
                 <div class="theader" style={{ width: `${gridWidth()}px` }}>
                   {headerSide()}
                 </div>
-                <div style={{ height: `${rows().length * ROW_H}px`, position: "relative", width: `${gridWidth()}px` }}>
+                <div style={{ height: `${rows().length * editorRowHeight()}px`, position: "relative", width: `${gridWidth()}px` }}>
                   <Index each={win()}>
                     {(it) => {
                       const r = () => result()!.rows[it().ri];
                       return (
-                        <div class="trow2" classList={{ [`k-${r().k}`]: true, sel: selSet().has(it().ri) }} style={{ top: `${it().i * ROW_H}px` }}>
+                        <div class="trow2" classList={{ [`k-${r().k}`]: true, sel: selSet().has(it().ri) }} style={{ top: `${it().i * editorRowHeight()}px` }}>
                           {side(s, it().ri)}
                         </div>
                       );

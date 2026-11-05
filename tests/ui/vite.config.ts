@@ -1,16 +1,16 @@
 import { defineConfig } from "vite";
 import solid from "vite-plugin-solid";
 import { readFile, readdir, stat, writeFile } from "node:fs/promises";
-import { resolve, join, extname } from "node:path";
+import { resolve, join, extname, sep } from "node:path";
 import { BackendClient } from "../../extensions/vscode/src/backend";
 import type { FNode, FolderResult, Summary } from "../../src/api";
 
-async function folderResult(left: string, right: string): Promise<FolderResult> {
+async function folderResult(left: string, right: string, options: { dotNamesFirst?: boolean }): Promise<FolderResult> {
   const summary: Summary = { files: 0, same: 0, similar: 0, diff: 0, leftOnly: 0, rightOnly: 0, errors: 0 };
   const walk = async (rel: string): Promise<FNode[]> => {
     const names = [...new Set([...await readdir(join(left, rel)), ...await readdir(join(right, rel))])].sort();
-    return Promise.all(names.map(async (name) => {
-      const path = join(rel, name);
+    const nodes = await Promise.all(names.map(async (name): Promise<FNode> => {
+      const path = rel ? `${rel}/${name}` : name;
       const [l, r] = await Promise.all([left, right].map(async (base) => {
         try { return await stat(join(base, path)); }
         catch (error) {
@@ -27,12 +27,16 @@ async function folderResult(left: string, right: string): Promise<FolderResult> 
         else summary[status]++;
       }
       return {
-        name, rel: path, dir, status,
+        name, rel: path.split(sep).join("/"), dir, status,
         left: l ? { name, size: l.size, modified: l.mtimeMs } : undefined,
         right: r ? { name, size: r.size, modified: r.mtimeMs } : undefined,
         children: dir && l && r ? await walk(path) : undefined,
       };
     }));
+    const collator = new Intl.Collator("en", { ignorePunctuation: true, sensitivity: "base" });
+    return nodes.sort((first, second) => Number(second.dir) - Number(first.dir)
+      || (options.dotNamesFirst === false ? 0 : Number(second.name.startsWith(".")) - Number(first.name.startsWith(".")))
+      || collator.compare(first.name, second.name));
   };
   return { root: { name: "", rel: "", dir: true, status: "same", children: await walk("") }, summary };
 }
@@ -48,17 +52,21 @@ export default defineConfig({
           { client: { name: "ui-tests", version: "0" }, log: (line) => console.error(line) },
         );
         server.httpServer?.once("close", () => void backend.dispose());
+        server.middlewares.use("/test-fonts", (_request, response) => {
+          response.setHeader("Content-Type", "application/json");
+          response.end(JSON.stringify(["A Font", "Example Mono", "Other Font"]));
+        });
         server.middlewares.use("/test-invoke", async (request, response) => {
           try {
             let body = "";
             for await (const chunk of request) body += chunk;
             const { cmd, args = {} } = JSON.parse(body);
             const methods: Record<string, string> = {
-              path_info: "path.info", load_text: "text.load", diff_texts: "text.diff",
+              path_info: "path.info", load_text: "text.load", diff_texts: "text.diff", merge_texts: "text.merge",
               hex_align: "hex.align", compare_tables: "table.compare", pix_compare: "pix.compare", pix_image: "pix.image",
             };
             let result: unknown;
-            if (cmd === "compare_folders") result = await folderResult(args.left, args.right);
+            if (cmd === "compare_folders") result = await folderResult(args.left, args.right, args.options ?? {});
             else if (cmd === "load_settings") result = {};
             else if (cmd === "list_sessions") result = [];
             else if (cmd === "find_session") result = null;

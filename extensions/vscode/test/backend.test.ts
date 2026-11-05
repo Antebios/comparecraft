@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, before, test } from "node:test";
 import { BackendClient, BackendError, BackendManager, ErrorCode, type BackendOptions } from "../src/backend";
 import { discoverBackend, InstallationError } from "../src/discovery";
+import { FOLDER_METHODS } from "../src/embeddedCore";
 
 // A scriptable stand-in for comparecraft-backend; FAKE_MODE selects the misbehaviour under test.
 const FAKE = String.raw`
@@ -201,6 +202,7 @@ test("the real comparecraft-backend matches the protocol contract", { skip: !exi
   const client = await BackendClient.start(realBackend, {
     client: { name: "test", version: "0" }, requiredMethods: ["path.info", "text.load", "text.diff", "text.merge"], log: line => lines.push(line)
   });
+
   try {
     assert.equal(client.info.server.name, "comparecraft-backend");
     const file = path.join(directory, "real.txt");
@@ -219,4 +221,37 @@ test("the real comparecraft-backend matches the protocol contract", { skip: !exi
     await client.dispose();
   }
   assert.equal(client.alive, false);
+});
+
+test("real folder methods preserve tree, item ordering, verdicts and readonly validation", { skip: !existsSync(realBackend) }, async context => {
+  const client = await BackendClient.start(realBackend, { client: { name: "folder-test", version: "0" } });
+  try {
+    if (!client.supports(...FOLDER_METHODS) && !process.env.COMPARECRAFT_BACKEND) {
+      context.skip("Set COMPARECRAFT_BACKEND to the newly built folder helper.");
+      return;
+    }
+    assert.ok(client.supports(...FOLDER_METHODS));
+    const left = path.join(directory, "folder-left"), right = path.join(directory, "folder-right");
+    await mkdir(left);
+    await mkdir(right);
+    await writeFile(path.join(left, "same.txt"), "same\n");
+    await writeFile(path.join(right, "same.txt"), "same\n");
+    await writeFile(path.join(left, "left.bin"), Buffer.from([0, 1]));
+    const options = { criteria: "binary", include: "*.txt", dotNamesFirst: false };
+    const scan = await client.request<{ summary: { files: number; same: number } }>("folder.compare", { left, right, options });
+    assert.equal(scan.summary.files, 1);
+    assert.equal(scan.summary.same, 1);
+    const items = await client.request<({ name: string } | null)[]>("folder.compareItems", { left, right, rels: ["missing.txt", "same.txt"], options });
+    assert.equal(items[0], null);
+    assert.equal(items[1]?.name, "same.txt");
+    assert.equal(await client.request("file.quickCompare", { left: path.join(left, "same.txt"), right: path.join(right, "same.txt"), mode: "binary" }), 1);
+    for (const params of [
+      { left: "relative", right }, { left, right, options: { criteria: "bogus" } },
+      { left, right, options: { extra: true } }
+    ]) await assert.rejects(client.request("folder.compare", params), (error: BackendError) => error.code === ErrorCode.invalidParams);
+    await assert.rejects(client.request("folder.compareItems", { left, right, rels: ["../escape"] }), (error: BackendError) => error.code === ErrorCode.invalidParams);
+    assert.equal(client.supports("execute_actions"), false);
+  } finally {
+    await client.dispose();
+  }
 });

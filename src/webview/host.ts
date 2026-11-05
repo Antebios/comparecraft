@@ -64,6 +64,8 @@ const dialogOptions = (options: unknown) => (typeof options === "string" ? { tit
 
 export const vscodeHost: Host = {
   name: "vscode",
+  folderComparisonOnly: true,
+  openDesktopFolder: () => request("desktopFolder"),
   invoke: (cmd, args) => request("invoke", { cmd, args: args ?? {} }),
   listen: async <T>(event: string, handler: EventCallback<T>): Promise<UnlistenFn> => {
     const set = listeners.get(event) ?? new Set();

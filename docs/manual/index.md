@@ -4,7 +4,7 @@ CompareCraft compares, merges and synchronizes files and folders. It shows exact
 
 CompareCraft runs on Linux, Windows and macOS.
 
-![A Text Compare session showing two versions of a file side by side](images/text-compare.jpg)
+![A Text Compare session with highlighted changes and a difference map showing the current viewport](images/text-compare-current.png)
 
 ## Comparison types
 
@@ -43,4 +43,3 @@ CompareCraft can also be started from a terminal and driven by scripts:
 
 !!! tip "Help inside the app"
     Press `F1` in any view to open this manual at the page for that view. Press `Shift+F1` for a list of the keyboard shortcuts available in the current view.
-

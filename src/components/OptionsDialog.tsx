@@ -1,10 +1,11 @@
-import { open as openDialog } from "../host";
+import { host, isEmbedded, open as openDialog } from "../host";
 import { createMemo, createSignal, For, type JSX, Match, onMount, Show, Switch } from "solid-js";
 import { createStore, unwrap } from "solid-js/store";
 import { api, errText, type ShellItem, type ShellStatus } from "../api";
 import { allCommands, chordOf, displayKeys, labelOf } from "../commands";
 import { COLOR_VARS, DEFAULT_SETTINGS, replaceSettings, snapshotSettings, type BackupKind, type Settings } from "../settings";
 import { trapFocus } from "./common";
+import EditorFontPicker from "./EditorFontPicker";
 
 export type OptionsPage =
   | "startup" | "tabs" | "colors" | "text" | "nextdiff" | "backups" | "fileops" | "archives" | "shortcuts" | "openwith" | "tweaks";
@@ -12,7 +13,7 @@ export type OptionsPage =
 const PAGES: { id: OptionsPage; label: string; keywords: string }[] = [
   { id: "startup", label: "Startup", keywords: "workspace quick compare file manager integration nautilus dolphin thunar explorer finder context menu" },
   { id: "tabs", label: "Tabs", keywords: "tab window close warn hide single" },
-  { id: "colors", label: "Colors, Fonts", keywords: "theme dark light color font stripes background text size" },
+  { id: "colors", label: "Colors, Fonts", keywords: "theme dark light color font stripes background text size folder sort dot names first" },
   { id: "text", label: "Text Editing", keywords: "context lines tab size find word indent" },
   { id: "nextdiff", label: "Next Difference", keywords: "next difference first load copy wrap message" },
   { id: "backups", label: "Backups", keywords: "backup bak tilde save copy folder" },
@@ -369,6 +370,7 @@ export default function OptionsDialog(props: { page?: OptionsPage; onClose: () =
                 {group(
                   "Folder views",
                   <>
+                    {check("folderDotNamesFirst", "Dot-prefixed names first")}
                     {check(
                       "folderStripes",
                       "Alternate row background (stripes)",
@@ -381,21 +383,15 @@ export default function OptionsDialog(props: { page?: OptionsPage; onClose: () =
                 )}
                 {group(
                   "Fonts",
-                  <>
+                  <div class="font-options">
                     {num("uiFontSize", "Interface font size:", 9, 24, "px")}
-                    <label class="opt-row">
-                      Editor font:{" "}
-                      <input
-                        type="text"
-                        placeholder="(default monospace)"
-                        value={draft.editorFont}
-                        onChange={(e) =>
-                          set("editorFont")(e.currentTarget.value)
-                        }
-                      />
-                    </label>
+                    <Show when={!isEmbedded()} fallback={<p>Editor font family follows VS Code's Editor: Font Family setting.</p>}>
+                      <Show when={host().listFontFamilies} fallback={<p role="alert">Installed font selection is unavailable in this host.</p>}>
+                        {(listFamilies) => <EditorFontPicker value={draft.editorFont} size={draft.editorFontSize} onChange={set("editorFont")} listFamilies={listFamilies()} />}
+                      </Show>
+                    </Show>
                     {num("editorFontSize", "Editor font size:", 8, 28, "px")}
-                  </>,
+                  </div>,
                 )}
               </Match>
 

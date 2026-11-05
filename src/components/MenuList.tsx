@@ -128,7 +128,9 @@ export function MenuList(props: MenuListProps) {
               ref={(b) => (itemEls[i()] = b)}
               class="menu-item"
               classList={{ hi: hi() === i(), bold: !!c.isDefault?.(), open: sub()?.i === i() }}
-              role="menuitem"
+              role={c.checked ? "menuitemcheckbox" : "menuitem"}
+              aria-label={labelOf(c)}
+              aria-checked={c.checked?.()}
               aria-haspopup={c.submenu ? "menu" : undefined}
               disabled={!isEnabled(c, props.scope)}
               onMouseEnter={() => {

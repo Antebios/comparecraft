@@ -8,6 +8,12 @@ export interface ComparisonStatus {
 
 export type ComparisonListener = (paths: readonly string[], result: ComparisonStatus) => void;
 
+/** Host-issued folder child completion. Verdicts describe saved files, not editor buffers. */
+export interface ComparisonReceipt {
+  paths: string[];
+  result: ComparisonStatus;
+}
+
 export function contentStatus(important: boolean, unimportant = false, binary = false): ComparisonStatus {
   return important
     ? { status: "diff", content: binary ? "differentBinary" : "different" }

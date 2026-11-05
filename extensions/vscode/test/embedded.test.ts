@@ -18,7 +18,7 @@ test("read-only view specs keep their kind, files, titles and options only", () 
   assert.deepEqual(parseSpec({ kind: "patch", paths: [a] }), { kind: "patch", paths: [a], titles: [], readOnly: [true], options: {} });
   for (const bad of [{ kind: "hex", paths: [bin, png, bin] }, { kind: "table", paths: ["rel.csv"] }, { kind: "picture", paths: [png], titles: [1] },
     { kind: "picture", paths: [png], options: [] }, { kind: "patch", paths: [] }, { kind: "patch", paths: [a, b] }, { kind: "patch", paths: [""] },
-    { kind: "folder", paths: [a, b] }, { kind: "edit", paths: [a] }]) {
+    { kind: "folder", paths: [] }, { kind: "edit", paths: [a] }]) {
     assert.throws(() => parseSpec(bad), Error, JSON.stringify(bad));
   }
   assert.equal(titleOf(parseSpec({ kind: "hex", paths: [bin, path.resolve("c.bin")] })), "Hex: a.bin ↔ c.bin");
@@ -27,6 +27,21 @@ test("read-only view specs keep their kind, files, titles and options only", () 
   assert.equal(titleOf(parseSpec({ kind: "patch", paths: [path.resolve("fix.patch")] })), "Patch: fix.patch");
   assert.deepEqual(VIEW_METHODS.patch, []);
   assert.deepEqual(VIEW_METHODS.picture, ["pix.compare", "pix.image"]);
+});
+
+test("folder specs persist only local paths, options and session identity", () => {
+  const spec = parseSpec({ kind: "folder", paths: [a, ""], options: { include: "*.txt" },
+    sessionId: "one", sessionName: "Work", locked: true });
+  assert.equal(spec.kind, "folder");
+  assert.equal(spec.sessionId, "one");
+  assert.equal(spec.sessionName, "Work");
+  assert.equal(spec.locked, true);
+  assert.match(titleOf(spec), /^Folder:/);
+  for (const invalid of [
+    { kind: "folder", paths: ["", ""] }, { kind: "folder", paths: ["relative", a] },
+    { kind: "folder", paths: [a, b], restore: [["dirty"], null] },
+    { kind: "folder", paths: [a, b], locked: "yes" }
+  ]) assert.throws(() => parseSpec(invalid));
 });
 
 test("file pairs pick the view of the first existing file; text and folders stay text", () => {

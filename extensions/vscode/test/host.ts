@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import assert from "node:assert/strict";
 import { mkdir, writeFile, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
-import type { EmbeddedPanels } from "../src/embedded";
+import type { EmbeddedPanel, EmbeddedPanels } from "../src/embedded";
 import { pathKey } from "../src/embeddedCore";
 
 export async function run(): Promise<void> {
@@ -19,6 +19,7 @@ export async function run(): Promise<void> {
     "compareSelected", "compareSelectedDesktop", "compareSelectedEmbedded",
     "selectLeft", "compareWithLeft", "clearLeft", "compareFileWith", "compareFolderWith",
     "compareParentFolderWith", "openDesktop", "locateDesktop",
+    "openSavedFolderSession",
     "compareWithSaved", "compareWithClipboard", "selectLeftText", "compareTextWithLeft", "compareActiveDiff",
     "gitCompareHead", "gitCompareIndex", "gitCompareHeadIndex", "gitCompareRevision",
     "gitResolveConflict", "gitResolveConflictEmbedded", "gitStageResolved", "configureGitTools", "removeGitTools", "checkBackend"
@@ -182,6 +183,15 @@ async function embeddedPanels(api: { embedded: EmbeddedPanels }, tempDirectory: 
   const c = path.join(directory, "embedded c.txt");
   await writeFile(c, "alpha\r\nbeta\r\n");
   const invoke = (cmd: string, args: Record<string, unknown>) => panel.handle("invoke", { cmd, args });
+  const textSession = { id: "text-session", name: "Saved text comparison", kind: "text", paths: [a, b],
+    options: {}, modified: Date.now(), saved: true };
+  await invoke("save_session", { session: textSession });
+  assert.deepEqual(await invoke("find_session", { name: textSession.name.toUpperCase() }), textSession);
+  assert.ok((await invoke("list_sessions", {}) as typeof textSession[]).some(session => session.id === textSession.id));
+  assert.equal(panels.folderSessions().some(session => session.id === textSession.id), false);
+  await invoke("delete_session", { id: textSession.id });
+  assert.equal(await invoke("find_session", { name: textSession.name }), null);
+  console.log("PASS: existing embedded text sessions save, find, list and delete independently of folder sessions.");
   const loaded = await invoke("load_text", { path: c }) as { lines: string[]; eol: string; finalNewline: boolean };
   assert.deepEqual([loaded.lines, loaded.eol, loaded.finalNewline], [["alpha", "beta"], "CRLF", true]);
   await invoke("save_text", { path: c, lines: ["alpha", "BETA"], finalNewline: true });
@@ -213,7 +223,7 @@ async function embeddedPanels(api: { embedded: EmbeddedPanels }, tempDirectory: 
   const created = path.join(directory, "embedded new.txt");
   await invoke("save_text", { path: created, lines: ["new"], finalNewline: true });
   assert.equal(await readText(created), "new\n");
-  await assert.rejects(invoke("compare_folders", {}), /not available in the embedded comparison/);
+  await assert.rejects(invoke("compare_folders", {}), /Invalid left folder/);
   await assert.rejects(panel.handle("openUrl", { url: "file:///etc/passwd" }), /Refusing/);
   console.log("PASS: embedded saves go through VS Code documents, keep CRLF, use unsaved buffers, and reject stale writes after editor or disk changes.");
 
@@ -250,6 +260,8 @@ async function embeddedPanels(api: { embedded: EmbeddedPanels }, tempDirectory: 
   console.log("PASS: embedded merge writes only its result, keeps CRLF, and refuses to replace unsaved edits from another editor.");
 
   await fileViews(panels, directory);
+  await folderViews(panels, directory);
+  await folderUi(panels, directory);
 
   // Backend failures are reported to the view, not swallowed.
   const config = vscode.workspace.getConfiguration("comparecraft");
@@ -264,4 +276,240 @@ async function embeddedPanels(api: { embedded: EmbeddedPanels }, tempDirectory: 
   panels.dispose();
   await until("panels to close", () => panels.count === 0);
   console.log("PASS: embedded panels closed on dispose.");
+}
+
+async function folderViews(panels: EmbeddedPanels, directory: string): Promise<void> {
+  const left = path.join(directory, "embedded-folder-left"), right = path.join(directory, "embedded-folder-right");
+  await mkdir(left);
+  await mkdir(right);
+  const a = path.join(left, "item.txt"), b = path.join(right, "item.txt");
+  await writeFile(a, "same\n");
+  await writeFile(b, "same\n");
+  await writeFile(path.join(left, "excluded.bin"), Buffer.from([0, 1]));
+  const before = new Set(panels.all);
+  await vscode.commands.executeCommand("comparecraft.compareSelectedEmbedded", vscode.Uri.file(left), [vscode.Uri.file(left), vscode.Uri.file(right)]);
+  const parent = await until("an embedded folder panel", () => panels.all.find(panel => !before.has(panel)));
+  assert.equal(parent.state.spec.kind, "folder");
+  await until("folder webview to scan through the real helper", () => parent.received.includes("compare_folders"), 30000);
+  assert.match(parent.panel.title, /^Folder:/);
+  const invoke = (cmd: string, args: Record<string, unknown>) => parent.handle("invoke", { cmd, args });
+  const options = { criteria: "size", timeToleranceSecs: 2, include: "*.txt", exclude: "", ignoreCaseNames: true, followSymlinks: false };
+  const scan = await invoke("compare_folders", { left, right, options }) as { summary: { files: number; same: number } };
+  assert.equal(scan.summary.files, 1);
+  assert.equal(scan.summary.same, 1);
+  assert.equal(await invoke("quick_compare", { left: a, right: b, mode: "binary" }), 1);
+  const nestedLeft = path.join(left, "nested"), nestedRight = path.join(right, "nested");
+  await mkdir(nestedLeft);
+  await mkdir(nestedRight);
+  await writeFile(path.join(nestedLeft, "item.txt"), "nested\n");
+  await writeFile(path.join(nestedRight, "item.txt"), "nested\n");
+  let existing = new Set(panels.all);
+  await parent.handle("openTab", { kind: "folder", paths: [nestedLeft, nestedRight], options: {} });
+  const nested = await until("nested folder panel", () => panels.all.find(panel => !existing.has(panel)));
+  await until("nested folder scan", () => nested.received.includes("compare_folders"));
+  assert.deepEqual(nested.state.spec.paths, [nestedLeft, nestedRight]);
+  nested.panel.dispose();
+  existing = new Set(panels.all);
+  await parent.handle("openTab", { kind: "folder", paths: [nestedLeft, ""], options: {} });
+  const orphan = await until("orphan folder chooser", () => panels.all.find(panel => !existing.has(panel)));
+  await until("orphan panel initialization", () => orphan.received.includes("init"));
+  await new Promise(resolve => setTimeout(resolve, 500));
+  assert.equal(orphan.received.includes("compare_folders"), false, "an empty side is a chooser, not a scan of an empty path");
+  orphan.panel.dispose();
+  await assert.rejects(parent.handle("openTab", { kind: "folder", paths: [a, right], options: {} }), /Not a folder/);
+  for (const command of ["execute_actions", "plan_sync", "compare_folder_merge", "make_report", "save_snapshot", "rename_item", "touch_items", "save_text"]) {
+    await assert.rejects(invoke(command, {}), /not available/);
+  }
+  const session = { id: `test-${Date.now()}`, name: "Integration folder", kind: "folder", paths: [left, right],
+    options: { comparisonPresets: { activePresetId: "builtin:all:binary", pinnedPresetIds: [] } }, modified: Date.now(), saved: true };
+  await invoke("save_session", { session });
+  const found = await invoke("find_session", { name: session.name.toUpperCase() }) as typeof session;
+  assert.deepEqual(found.paths, session.paths);
+  assert.deepEqual(found.options, session.options);
+  await assert.rejects(invoke("save_session", { session: { ...session, kind: "text" } }), /Only folder/);
+  await invoke("save_session", { session: { ...session, locked: true } });
+  await assert.rejects(invoke("save_session", { session: { ...session, options: { changed: true } } }), /locked/);
+  await assert.rejects(invoke("save_session", { session: { ...session, name: "Renamed while locked", locked: false } }), /locked/);
+  await invoke("save_session", { session: { ...session, locked: false } });
+  assert.equal((await invoke("find_session", { name: session.name }) as { locked?: boolean }).locked, false);
+  const recent = { ...session, id: "folder-recent-one", saved: false };
+  await invoke("save_session", { session: recent });
+  await invoke("save_session", { session: { ...recent, id: "folder-recent-two" } });
+  const listed = await invoke("list_sessions", {}) as typeof session[];
+  assert.equal(listed.filter(item => !item.saved && item.paths[0] === left && item.paths[1] === right).length, 1);
+  assert.ok(listed.some(item => item.saved && item.id === session.id));
+  const storage = panels.context.globalState;
+  const update = storage.update.bind(storage);
+  storage.update = () => Promise.reject(new Error("simulated persistence failure"));
+  try {
+    await assert.rejects(invoke("save_session", { session }), /simulated persistence failure/);
+  } finally {
+    storage.update = update;
+  }
+  const messages: { event: string; payload: unknown }[] = [];
+  const notify = parent.notify.bind(parent);
+  parent.notify = (event, payload) => { messages.push({ event, payload }); notify(event, payload); };
+  const opened = new Set(panels.all);
+  const origin = await parent.handle("openTab", { kind: "text", paths: [a, b], titles: [], readOnly: [], options: {}, origin: true }) as { originToken: string };
+  assert.ok(origin.originToken);
+  const child = await until("originating text child", () => panels.all.find(panel => !opened.has(panel)));
+  await until("saved-disk result delivered to parent", () => messages.find(message => message.event === "folder-comparison"), 30000);
+  const first = messages.find(message => message.event === "folder-comparison")!.payload as { token: string; receipt: { result: { status: string; content?: string } } };
+  assert.equal(first.token, origin.originToken);
+  assert.equal(first.receipt.result.status, "same");
+  assert.equal(first.receipt.result.content, "same");
+  const document = await vscode.workspace.openTextDocument(vscode.Uri.file(a));
+  const edit = new vscode.WorkspaceEdit();
+  edit.insert(document.uri, new vscode.Position(0, 0), "unsaved ");
+  assert.ok(await vscode.workspace.applyEdit(edit));
+  messages.length = 0;
+  await child.handle("invoke", { cmd: "load_text", args: { path: a } });
+  await until("disk result after unsaved reload", () => messages.find(message => message.event === "folder-comparison"), 30000);
+  const unsaved = messages.find(message => message.event === "folder-comparison")!.payload as typeof first;
+  assert.equal(unsaved.receipt.result.status, "same", "unsaved text is not a disk verdict");
+  messages.length = 0;
+  assert.ok(await document.save());
+  await until("saved changed verdict", () => messages.find(message => message.event === "folder-comparison" &&
+    (message.payload as typeof first).receipt.result.content === "different"), 30000);
+  await assert.rejects(parent.handle("openTab", { kind: "text", paths: [a, path.join(directory, "elsewhere.txt")], options: {}, origin: true }), /does not belong/);
+  await invoke("delete_session", { id: session.id });
+  parent.panel.dispose();
+  await child.handle("invoke", { cmd: "load_text", args: { path: a } });
+  child.panel.dispose();
+  console.log("PASS: embedded folder tree/filter/preset transport, read-only host gates, sessions and disk-only child results; child survives parent closure.");
+}
+
+function folderProbe(panel: EmbeddedPanel) {
+  const replies = new Map<number, { gutter: string; notice: boolean; summary: string; theme: string; body: string }>();
+  let id = 0;
+  const listener = panel.panel.webview.onDidReceiveMessage(message => {
+    if (message?.type === "folder-test-result") replies.set(message.id, message.value);
+  });
+  const html = panel.panel.webview.html;
+  const nonce = /script[^>]+nonce="([^"]+)"/.exec(html)?.[1];
+  assert.ok(nonce, "The real webview has a CSP nonce");
+  // Test-only instrumentation of this isolated panel; no production eval/message hook.
+  const script = `<script nonce="${nonce}">
+    const acquire = window.acquireVsCodeApi;
+    let testApi;
+    window.acquireVsCodeApi = () => (testApi = acquire());
+    window.addEventListener("message", event => {
+      const m = event.data;
+      if (m?.type !== "folder-test-probe" || !testApi) return;
+      const row = [...document.querySelectorAll(".frow")].find(r => r.textContent.includes("item.txt"));
+      if (m.action === "open" && row) {
+        row.dispatchEvent(new MouseEvent("mousedown", {bubbles:true,button:0}));
+        row.dispatchEvent(new MouseEvent("click", {bubbles:true,button:0}));
+        row.dispatchEvent(new MouseEvent("dblclick", {bubbles:true,button:0}));
+      }
+      if (m.action === "compare") document.querySelector(".preset-run-wrap button")?.click();
+      if (m.action === "selectAll") window.dispatchEvent(new KeyboardEvent("keydown", {key:"a",code:"KeyA",ctrlKey:${process.platform !== "darwin"},metaKey:${process.platform === "darwin"},bubbles:true}));
+      if (m.action === "refresh") {
+        [...document.querySelectorAll("button")].find(b => /Refresh/i.test(b.title + " " + b.getAttribute("aria-label")))?.click();
+      }
+      testApi.postMessage({type:"folder-test-result",id:m.id,value:{
+        gutter:row?.querySelector(".fstatus")?.textContent?.trim() ?? "",
+        notice:document.body.textContent.includes("Folder comparison reads saved files on disk."),
+        summary:document.querySelector(".statusbar")?.textContent ?? "",
+        theme:document.body.className,
+        body:document.body.innerText.slice(0, 2000)
+      }});
+    });
+  </script>`;
+  const instrumented = html.replace("</head>", `${script}</head>`);
+  panel.panel.webview.html = instrumented;
+  return {
+    async request(action = "snapshot") {
+      const token = ++id;
+      return until(`folder UI probe ${action}`, async () => {
+        if (replies.has(token)) return replies.get(token);
+        await panel.panel.webview.postMessage({ type: "folder-test-probe", id: token, action });
+        return replies.get(token);
+      }, 30000);
+    },
+    reload() { panel.panel.webview.html = instrumented.replace("</body>", `<!-- test reload ${Date.now()} --></body>`); },
+    dispose() { listener.dispose(); }
+  };
+}
+
+async function folderUi(panels: EmbeddedPanels, directory: string): Promise<void> {
+  const left = path.join(directory, "ui-folder-left"), right = path.join(directory, "ui-folder-right");
+  await mkdir(left);
+  await mkdir(right);
+  const a = path.join(left, "item.txt"), b = path.join(right, "item.txt");
+  await writeFile(a, "same\n");
+  await writeFile(b, "same\n");
+  const parent = panels.open({ kind: "folder", paths: [left, right], titles: [], readOnly: [true, true], options: {} });
+  await until("folder panel HTML", () => parent.panel.webview.html.includes('nonce="'));
+  const probe = folderProbe(parent);
+  const workbench = vscode.workspace.getConfiguration("workbench");
+  const theme = workbench.inspect<string>("colorTheme")?.globalValue;
+  try {
+    try {
+      await until("real folder UI row", async () => (await probe.request()).gutter === "=");
+    } catch (error) {
+      throw new Error(`${String(error)}\nFolder webview: ${(await probe.request()).body}`);
+    }
+    assert.equal((await probe.request()).notice, true);
+    await probe.request("selectAll");
+    await until("keyboard selection in the folder UI", async () => /selected/i.test((await probe.request()).summary));
+    await workbench.update("colorTheme", "Default Light Modern", vscode.ConfigurationTarget.Global);
+    await until("VS Code light theme", async () => (await probe.request()).theme.includes("vscode-light"));
+    await workbench.update("colorTheme", "Default High Contrast", vscode.ConfigurationTarget.Global);
+    await until("VS Code high contrast theme", async () => (await probe.request()).theme.includes("vscode-high-contrast"));
+    await workbench.update("colorTheme", theme, vscode.ConfigurationTarget.Global);
+    await probe.request("compare");
+    await until("preset to call the real helper", () => parent.received.includes("quick_compare"));
+    const before = new Set(panels.all);
+    await probe.request("open");
+    const child = await until("file child opened by actual row interaction", () => panels.all.find(panel => !before.has(panel)));
+    await until("child UI disk comparison", () => child.received.includes("diff_texts"));
+    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(b));
+    const replace = async (text: string) => {
+      const edit = new vscode.WorkspaceEdit();
+      edit.replace(document.uri, new vscode.Range(document.positionAt(0), document.positionAt(document.getText().length)), text);
+      assert.ok(await vscode.workspace.applyEdit(edit));
+    };
+    await replace("different\n");
+    await child.handle("invoke", { cmd: "load_text", args: { path: b } });
+    await new Promise(resolve => setTimeout(resolve, 700));
+    assert.equal((await probe.request()).gutter, "=", "unsaved child text does not change the disk gutter");
+    assert.ok(await document.save());
+    await until("actual gutter to receive saved difference", async () => (await probe.request()).gutter === "≠");
+    await replace("same\n");
+    assert.ok(await document.save());
+    await until("same origin to deliver another saved result", async () => (await probe.request()).gutter === "=");
+    const epoch = parent.folderEpoch;
+    await probe.request("refresh");
+    await until("actual refresh to invalidate origins", () => parent.folderEpoch > epoch);
+    const reloadEpoch = parent.folderEpoch;
+    probe.reload();
+    await until("folder panel reload to rescan", () => parent.folderEpoch > reloadEpoch);
+    await until("reloaded metadata tree", async () => ["=", "≠"].includes((await probe.request()).gutter));
+    assert.deepEqual(parent.state.spec.paths, [left, right]);
+    const session = { id: `ui-${Date.now()}`, name: "UI saved folder", kind: "folder", paths: [left, right],
+      options: parent.state.spec.options, modified: Date.now(), saved: true };
+    await parent.handle("invoke", { cmd: "save_session", args: { session } });
+    const existing = new Set(panels.all);
+    const picking = vscode.commands.executeCommand("comparecraft.openSavedFolderSession");
+    await new Promise(resolve => setTimeout(resolve, 500));
+    await vscode.commands.executeCommand("workbench.action.acceptSelectedQuickOpenItem");
+    const restored = await until("saved folder Quick Pick to open a panel", () => panels.all.find(panel => !existing.has(panel)));
+    await picking;
+    assert.equal(restored.state.spec.sessionId, session.id);
+    assert.equal(restored.state.spec.sessionName, session.name);
+    await until("saved session to recompute tree", () => restored.received.includes("compare_folders"));
+    await until("restored session to record a distinct recent", () => panels.folderSessions().some(item =>
+      !item.saved && item.id === `recent:${session.id}`));
+    assert.ok(panels.folderSessions().some(item => item.saved && item.id === session.id),
+      "automatic restoration must not replace the named folder session");
+    await parent.handle("invoke", { cmd: "delete_session", args: { id: session.id } });
+    restored.panel.dispose();
+    child.panel.dispose();
+    console.log("PASS: actual folder UI presets, row drill-down, repeated saved-disk gutter callbacks, unsaved isolation, refresh invalidation, panel reload and saved-session Quick Pick.");
+  } finally {
+    await workbench.update("colorTheme", theme, vscode.ConfigurationTarget.Global);
+    probe.dispose();
+    parent.panel.dispose();
+  }
 }

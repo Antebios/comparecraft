@@ -1,6 +1,8 @@
-import { createRoot, createEffect } from "solid-js";
+import { createRoot, createEffect, createSignal } from "solid-js";
 import { createStore, reconcile, unwrap } from "solid-js/store";
 import { api, type FolderOptions, type ViewKind } from "./api";
+import { defaultPresetSettings, normalizePresetSettings, type ComparisonPresetSettings } from "./comparisonPresets";
+import { editorFontCss } from "./editorFonts";
 
 /** One "Open With" application: `%1`/`%2` (or `%F`) stand for the selected file(s). */
 export interface OpenWithApp {
@@ -42,6 +44,7 @@ export interface Settings {
   colors: Record<string, string>;
   folderStripes: boolean;
   folderColorFolders: boolean;
+  folderDotNamesFirst: boolean;
   uiFontSize: number;
   editorFont: string;
   editorFontSize: number;
@@ -84,6 +87,7 @@ export interface Settings {
   /** Session defaults for new folder comparisons ("Also update session defaults"). */
   folderDefaults: Partial<FolderOptions> | null;
   filterHistory: string[];
+  comparisonPresets: ComparisonPresetSettings;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -102,6 +106,7 @@ export const DEFAULT_SETTINGS: Settings = {
   colors: {},
   folderStripes: false,
   folderColorFolders: true,
+  folderDotNamesFirst: true,
   uiFontSize: 13,
   editorFont: "",
   editorFontSize: 12,
@@ -140,6 +145,7 @@ export const DEFAULT_SETTINGS: Settings = {
   folderColumns: { size: true, modified: true },
   folderDefaults: null,
   filterHistory: [],
+  comparisonPresets: defaultPresetSettings(),
 };
 
 /** Colors that can be changed on the Appearance page: CSS variable -> label. */
@@ -161,11 +167,15 @@ const [settings, setSettingsStore] = createStore<Settings>(clone(DEFAULT_SETTING
 export { settings };
 
 let loaded = false;
+export const [comparisonPresetWarnings, setComparisonPresetWarnings] = createSignal<string[]>([]);
 
 /** Merges stored values over the defaults; settings saved by older versions keep working. */
 function normalize(raw: unknown): Settings {
   const s = { ...clone(DEFAULT_SETTINGS), ...((raw && typeof raw === "object" ? raw : {}) as Partial<Settings>) };
   s.folderColumns = { ...DEFAULT_SETTINGS.folderColumns, ...(s.folderColumns ?? {}) };
+  const presets = normalizePresetSettings(s.comparisonPresets);
+  s.comparisonPresets = presets.value;
+  setComparisonPresetWarnings(presets.warnings);
   return s;
 }
 
@@ -178,12 +188,14 @@ function migrateLocal(s: Settings): Settings {
   return s;
 }
 
-export async function loadSettings() {
+export async function loadSettings(preserveOnError = false) {
   try {
     const raw = await api.loadSettings();
     const empty = !raw || Object.keys(raw).length === 0;
     setSettingsStore(reconcile(empty ? migrateLocal(normalize({})) : normalize(raw)));
-  } catch {
+  } catch (e) {
+    // A broadcast reload must not wipe the current library/defaults on a transient host failure.
+    if (preserveOnError) throw e;
     setSettingsStore(reconcile(migrateLocal(normalize({}))));
   }
   loaded = true;
@@ -211,6 +223,11 @@ export function setSetting<K extends keyof Settings>(key: K, value: Settings[K])
 
 export const snapshotSettings = (): Settings => clone(unwrap(settings));
 
+export async function saveComparisonPresetSettings(value: ComparisonPresetSettings) {
+  await api.saveSettings({ ...snapshotSettings(), comparisonPresets: value });
+  setSetting("comparisonPresets", value);
+}
+
 /** Remembers a filter string in the most-recently-used list of the Filters box. */
 export function rememberFilter(mask: string) {
   const m = mask.trim();
@@ -220,6 +237,8 @@ export function rememberFilter(mask: string) {
 
 /** Backup naming passed to the backend, or undefined when backups are off. */
 export const backupSpec = (enabled: boolean) => (enabled ? { kind: settings.backupKind, dir: settings.backupDir || null } : undefined);
+
+export const editorRowHeight = () => Math.max(20, Math.ceil(settings.editorFontSize * 1.4));
 
 // Applies appearance settings to the document.
 createRoot(() => {
@@ -233,8 +252,9 @@ createRoot(() => {
     }
     root.style.setProperty("--ui-font-size", `${settings.uiFontSize}px`);
     root.style.setProperty("--editor-font-size", `${settings.editorFontSize}px`);
+    root.style.setProperty("--editor-row-height", `${editorRowHeight()}px`);
     root.style.setProperty("--tab-size", String(settings.tabSize));
-    if (settings.editorFont.trim()) root.style.setProperty("--mono", `${settings.editorFont}, monospace`);
+    if (settings.editorFont.trim()) root.style.setProperty("--mono", editorFontCss(settings.editorFont));
     else root.style.removeProperty("--mono");
     root.classList.toggle("folder-stripes", settings.folderStripes);
     root.classList.toggle("no-hints", !settings.showHints);

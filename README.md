@@ -35,9 +35,9 @@
 <br>
 
 <p align="center">
-  <img src="docs/manual/images/text-compare.jpg" alt="CompareCraft Text Compare: two versions of a file side by side, with changed lines and the changed characters within them highlighted" width="100%">
+  <img src="docs/manual/images/text-compare-current.png" alt="CompareCraft Text Compare: highlighted text changes, four difference-map marks and a blue viewport highlight showing the visible lines" width="100%">
   <br>
-  <sub>Text Compare: line alignment, highlighting within lines, and important (red) vs. unimportant (blue) differences.</sub>
+  <sub>Text Compare: aligned lines, highlighting within lines, and a difference map showing changes and the current viewport.</sub>
 </p>
 
 ## Features
@@ -46,9 +46,16 @@
 
 Use the [CompareCraft VS Code extension](extensions/vscode/README.md) to open file,
 folder, unsaved-text, clipboard and Git comparisons (including merge/rebase
-conflict resolution and optional `git mergetool`/`difftool` setup) in the
-installed desktop app. Embedded views are planned in
-[incremental phases](docs/vscode-extension/plan.md).
+conflict resolution and optional `git mergetool`/`difftool` setup) inside VS Code
+or the installed desktop app. Local embedded folder panels are comparison-only;
+they include content comparison presets, dot-name sorting, named sessions and
+editable file drill-down, with folder results based on saved disk contents.
+See the [folder roadmap](docs/vscode-extension/folder-comparison-roadmap.md) for
+full local and remote workflow phases.
+
+![Folder comparison inside VS Code with expanded trees, content presets and a saved-disk notice](extensions/vscode/media/screenshots/04-folder-comparison.png)
+
+*Local folder comparison in a VS Code tab. Use the desktop app for folder operations.*
 
 CompareCraft opens the right view for whatever you give it: two files, two folders, three files to merge, or a saved session.
 
@@ -214,17 +221,17 @@ All platforms need **Rust** (stable, via [rustup](https://rustup.rs)) and **Node
 
 **Arch / Omarchy / Manjaro**
 ```sh
-sudo pacman -S --needed webkit2gtk-4.1 base-devel curl wget file openssl appmenu-gtk-module libappindicator-gtk3 librsvg
+sudo pacman -S --needed webkit2gtk-4.1 base-devel curl wget file openssl appmenu-gtk-module libappindicator-gtk3 librsvg fontconfig freetype2
 ```
 
 **Debian / Ubuntu / Pop!_OS / Mint**
 ```sh
-sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libfontconfig1-dev libfreetype6-dev
 ```
 
 **Fedora**
 ```sh
-sudo dnf install webkit2gtk4.1-devel openssl-devel curl wget file libappindicator-gtk3-devel librsvg2-devel
+sudo dnf install webkit2gtk4.1-devel openssl-devel curl wget file libappindicator-gtk3-devel librsvg2-devel fontconfig-devel freetype-devel
 sudo dnf group install "c-development"
 ```
 

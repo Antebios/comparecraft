@@ -9,6 +9,7 @@ import { setSetting, settings } from "../settings";
 import { createEffect, createMemo, createSignal, For, type JSX, Show } from "solid-js";
 import { errText, fmtSize, fmtTime } from "../api";
 import { Modal } from "../components/common";
+import type { ContentMode } from "../comparisonPresets";
 
 export type SideName = "left" | "right";
 export interface SideCount {
@@ -437,7 +438,7 @@ export function FolderDialog(props: {
 
 /* ---------- Compare Contents ---------- */
 
-export type ContentMode = "crc" | "binary" | "rules";
+export type { ContentMode } from "../comparisonPresets";
 
 export function ContentsDialog(props: { counts: Counts; onStart: (mode: ContentMode, showResults: boolean) => void; onClose: () => void }) {
   const [mode, setMode] = createSignal<ContentMode>((localStorage.getItem("comparecraft.contentsMode") as ContentMode) || "rules");

@@ -2,7 +2,7 @@ import { ask, emit, isEmbedded, listen, open as openDialog, save as saveDialog, 
 import { settings } from "../settings";
 import { batch, createEffect, createMemo, createSignal, For, Index, on, onCleanup, onMount, Show } from "solid-js";
 import { api, basename, defaultRules, errText, fmtSize, fmtTime, type DiffResult, type Row, type Rules, type TextFile } from "../api";
-import { Btn, Highlighted, Modal, PathBar, ROW_H, useViewport } from "../components/common";
+import { Btn, editorRowHeight, Highlighted, Modal, PathBar, useViewport } from "../components/common";
 import { showContextMenu } from "../components/ContextMenu";
 import { externalCommands, shellWords } from "../components/external";
 import FindBar from "../components/FindBar";
@@ -13,7 +13,7 @@ import { textStatus, type ComparisonStatus } from "../comparisonStatus";
 import { textInfo } from "../components/InfoDialog";
 import { saveSession as saveNamedSession, sessionCommands } from "./sessionMenu";
 import { ReplacementDialog, RulesPanel } from "../components/RulesPanel";
-import { SessionButtons } from "../components/SessionTools";
+import { SessionButtons, SessionSaveButton } from "../components/SessionTools";
 
 type Side = 0 | 1;
 type Filter = "all" | "diffs" | "context" | "same";
@@ -150,6 +150,8 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
   let paneL!: HTMLDivElement;
   let paneR!: HTMLDivElement;
   const vp = useViewport(() => paneL);
+  let overview!: HTMLDivElement;
+  const mapViewport = useViewport(() => overview);
 
   const lines = (s: Side) => (s === 0 ? L() : R());
   const setLines = (s: Side, v: string[]) => (s === 0 ? setL(v) : setR(v));
@@ -362,6 +364,30 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
     return out;
   });
 
+  const overviewMarks = createMemo(() => {
+    if (filter() === "same") return [];
+    const displayed = visible();
+    return (result()?.hunks ?? []).flatMap((hunk, index) => {
+      const start = lowerBound(displayed, hunk.start);
+      const end = lowerBound(displayed, hunk.end);
+      return hunkActive(index) && end > start ? [{ index, start, end, important: hunk.important }] : [];
+    });
+  });
+  const contentHeight = () => Math.max(vp.height(), visible().length * editorRowHeight());
+  const maxScroll = () => Math.max(0, contentHeight() - vp.height());
+  const overviewArea = createMemo(() => {
+    const track = mapViewport.height();
+    const height = Math.min(track, Math.max(4, track * vp.height() / Math.max(1, contentHeight())));
+    const scroll = Math.max(0, Math.min(vp.scrollTop(), maxScroll()));
+    return { top: maxScroll() ? scroll / maxScroll() * (track - height) : 0, height };
+  });
+
+  createEffect(on([visible, vp.height, editorRowHeight], () => {
+    queueMicrotask(() => {
+      if (paneL?.isConnected && paneR?.isConnected && paneL.clientHeight > 0) scrollPanes(paneL.scrollTop);
+    });
+  }));
+
   const windowRows = createMemo(() => {
     const vis = visible();
     const { start, end } = vp.range(vis.length);
@@ -388,12 +414,41 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
     vp.setScrollTop(src.scrollTop);
   };
 
+  function scrollPanes(top: number) {
+    const clamped = Math.max(0, Math.min(top, paneL.scrollHeight - paneL.clientHeight));
+    paneL.scrollTop = clamped;
+    paneR.scrollTop = clamped;
+    vp.setScrollTop(paneL.scrollTop);
+  }
+
+  function jumpOverview(event: MouseEvent) {
+    if (event.button !== 0 || !visible().length) return;
+    const bounds = overview.getBoundingClientRect();
+    if (!bounds.height) return;
+    const fraction = Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height));
+    overview.focus({ preventScroll: true });
+    scrollPanes(fraction * contentHeight() - vp.height() / 2);
+  }
+
+  function overviewKey(event: KeyboardEvent) {
+    let target: number;
+    switch (event.key) {
+      case "ArrowUp": target = vp.scrollTop() - editorRowHeight(); break;
+      case "ArrowDown": target = vp.scrollTop() + editorRowHeight(); break;
+      case "PageUp": target = vp.scrollTop() - vp.height(); break;
+      case "PageDown": target = vp.scrollTop() + vp.height(); break;
+      case "Home": target = 0; break;
+      case "End": target = maxScroll(); break;
+      default: return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    scrollPanes(target);
+  }
+
   function scrollToRow(ri: number) {
     const vi = lowerBound(visible(), ri);
-    const top = Math.max(0, vi * ROW_H - vp.height() / 3);
-    paneL.scrollTop = top;
-    paneR.scrollTop = top;
-    vp.setScrollTop(top);
+    scrollPanes(vi * editorRowHeight() - vp.height() / 3);
   }
 
   function goHunk(h: number) {
@@ -411,7 +466,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
     if (h < 0) {
       // Start from the current scroll position.
       const vis = visible();
-      const vi = Math.floor(vp.scrollTop() / ROW_H);
+      const vi = Math.floor(vp.scrollTop() / editorRowHeight());
       const ri = vis[Math.min(vi, vis.length - 1)] ?? 0;
       h = dir === 1 ? -1 : res.hunks.length;
       for (let i = 0; i < res.hunks.length; i++) {
@@ -708,8 +763,8 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
     });
     if (!visible().includes(ri)) setFilter("all");
     const vi = lowerBound(visible(), ri);
-    const top = vi * ROW_H;
-    if (top < paneL.scrollTop || top > paneL.scrollTop + vp.height() - ROW_H * 2) scrollToRow(ri);
+    const top = vi * editorRowHeight();
+    if (top < paneL.scrollTop || top > paneL.scrollTop + vp.height() - editorRowHeight() * 2) scrollToRow(ri);
   }
 
   /** Up/Down (Shift extends the line selection). */
@@ -1111,12 +1166,13 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
     return (
       <div
         class="tpane"
+        id={`text-pane-${tab().id}-${s}`}
         ref={(el) => (s === 0 ? (paneL = el) : (paneR = el))}
         onScroll={(e) => onScroll(e.currentTarget, s === 0 ? paneR : paneL)}
       >
         <div
           class="tpane-inner"
-          style={{ height: `${visible().length * ROW_H}px`, width: `calc(${(s === 0 ? maxL() : maxR()) + 2}ch + 82px)` }}
+          style={{ height: `${visible().length * editorRowHeight()}px`, width: `calc(${(s === 0 ? maxL() : maxR()) + 2}ch + 82px)` }}
         >
           <Index each={windowRows()}>
             {(item) => {
@@ -1148,7 +1204,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
                     "align-from": alignFrom()?.side === s && alignFrom()?.line === idx(),
                     "kb-target": item().ri === selRow() && s === selSide(),
                   }}
-                  style={{ top: `${item().vi * ROW_H}px` }}
+                  style={{ top: `${item().vi * editorRowHeight()}px` }}
                   onMouseDown={(e) => {
                     const ri = item().ri;
                     // Keep a line selection for its context menu.
@@ -1270,9 +1326,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
         <span class="sep" />
         <Btn title="Swap sides" onClick={swap}>⇄ Swap</Btn>
         <Btn title="Reload files" kbd={k("f5")} onClick={reload}>⟳ Refresh</Btn>
-        <Btn title="Save as named session" kbd="Shift+Ctrl+S" onClick={saveSession}>
-          ★ Save Session
-        </Btn>
+        <SessionSaveButton tab={tab()} onSave={saveSession} />
       </div>
       <Show when={findOpen()}>
         <FindBar
@@ -1303,22 +1357,35 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
         <PathBar value={tab().paths[1] ?? ""} title={tab().titles?.[1]} onCommit={(p) => changePath(1, p)} readOnly={readOnly(1)} dirty={dirty()[1]} info={sideInfo(1)} onSave={() => saveSide(1)} saveTitle="Save right file" />
       </div>
       <div class="tcompare">
-        <div class="overview" title="Difference map">
-          <For each={result()?.hunks ?? []}>
-            {(h, i) => {
-              const total = () => Math.max(1, result()!.rows.length);
-              return (
-                <Show when={hunkActive(i())}>
-                  <div
-                    class="ov-mark"
-                    classList={{ imp: h.important, cur: cur() === i() }}
-                    style={{ top: `${(h.start / total()) * 100}%`, height: `max(2px, ${((h.end - h.start) / total()) * 100}%)` }}
-                    onClick={() => goHunk(i())}
-                  />
-                </Show>
-              );
-            }}
+        <div
+          class="overview"
+          ref={overview}
+          title="Difference map"
+          role="scrollbar"
+          aria-label="Difference map"
+          aria-orientation="vertical"
+          aria-controls={`text-pane-${tab().id}-0 text-pane-${tab().id}-1`}
+          aria-valuemin={0}
+          aria-valuemax={maxScroll()}
+          aria-valuenow={Math.max(0, Math.min(vp.scrollTop(), maxScroll()))}
+          aria-disabled={!maxScroll()}
+          tabIndex={visible().length ? 0 : -1}
+          onClick={jumpOverview}
+          onKeyDown={overviewKey}
+        >
+          <For each={overviewMarks()}>
+            {(mark) => (
+              <div
+                class="ov-mark"
+                classList={{ imp: mark.important, cur: cur() === mark.index }}
+                style={{ top: `${mark.start / Math.max(1, visible().length) * 100}%`, height: `max(2px, ${(mark.end - mark.start) / Math.max(1, visible().length) * 100}%)` }}
+                onClick={(event) => { event.stopPropagation(); if (event.button === 0) goHunk(mark.index); }}
+              />
+            )}
           </For>
+          <Show when={visible().length}>
+            <div class="ov-viewport" style={{ top: `${overviewArea().top}px`, height: `${overviewArea().height}px` }} />
+          </Show>
         </div>
         <Pane side={0} />
         <div class="divider" />

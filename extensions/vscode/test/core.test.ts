@@ -9,9 +9,41 @@ import { comparisonArguments, launchDesktop } from "../src/process";
 import type { LaunchMode, LocalResource, ResourceKind, SideInput } from "../src/contracts";
 import { assertSavedResources } from "../src/resources";
 import { SnapshotStore, type SnapshotSession } from "../src/snapshots";
+import { deleteEmbeddedSession, readEmbeddedSessions, upsertEmbeddedSession } from "../src/embeddedCore";
 
 const file = (name: string): LocalResource => ({ path: path.resolve(name), kind: "file" });
 const folder = (name: string): LocalResource => ({ path: path.resolve(name), kind: "folder" });
+
+test("embedded sessions replace by id or case-insensitive saved name and preserve lock state", () => {
+  const saved = { id: "one", name: "Project", kind: "folder", paths: ["left", "right"], options: {}, modified: 1, saved: true };
+  const replaced = upsertEmbeddedSession([saved], { ...saved, paths: ["new-left", "new-right"], modified: 2 });
+  assert.equal(replaced.length, 1);
+  const updated = replaced[0]!;
+  assert.equal(updated.id, "one");
+  assert.deepEqual(updated.paths, ["new-left", "new-right"]);
+  const caseReplaced = upsertEmbeddedSession(replaced, { ...saved, id: "two", name: "PROJECT", modified: 3 });
+  assert.equal(caseReplaced.length, 1);
+  assert.equal(caseReplaced[0]!.id, "one");
+  const locked = [{ ...saved, locked: true }];
+  assert.throws(() => upsertEmbeddedSession(locked, { ...saved, id: "other" }), /locked/);
+  assert.throws(() => upsertEmbeddedSession(locked, { ...saved, paths: ["changed", "right"], locked: false }), /locked/);
+  assert.equal(upsertEmbeddedSession(locked, { ...saved, locked: false })[0]!.locked, false);
+  assert.deepEqual(readEmbeddedSessions(locked), locked);
+  assert.deepEqual(deleteEmbeddedSession(caseReplaced, "one"), []);
+});
+
+test("embedded sessions reject invalid entries, refresh recent duplicates, and keep only fifty recents", () => {
+  assert.deepEqual(readEmbeddedSessions({ sessions: [] }), []);
+  assert.deepEqual(readEmbeddedSessions([{ id: "bad" }]), []);
+  const recent = { id: "recent", name: "Folder: left ↔ right", kind: "folder", paths: ["left", "right"], options: {}, modified: 1, saved: false };
+  const refreshed = upsertEmbeddedSession([recent], { ...recent, modified: 2 });
+  assert.equal(refreshed.length, 1);
+  assert.equal(refreshed[0]!.modified, 2);
+  let sessions = Array.from({ length: 55 }, (_, index) => ({ ...recent, id: `recent-${index}`, modified: index }));
+  sessions = upsertEmbeddedSession(sessions, { ...recent, id: "new", paths: ["different-left", "different-right"], modified: 100 });
+  assert.equal(sessions.length, 50);
+  assert.ok(sessions.some(session => session.id === "new"));
+});
 
 class FakeHost implements ComparisonHost {
   mode: LaunchMode = "desktop";
@@ -136,18 +168,18 @@ test("embedded/default mode opens two files in the embedded panel without launch
   assert.equal(host.embedded.length, 2);
 });
 
-test("embedded folder comparisons never silently fall back to the desktop", async () => {
+test("embedded folder comparisons open panels without desktop prompts or dirty-folder guards", async () => {
   const host = new FakeHost(), left = folder("left"), right = folder("right");
   host.add(left, right);
   host.mode = "embedded";
+  host.dirty = true;
   const controller = new ComparisonController(host);
   await controller.compare([left.path, right.path]);
-  assert.equal(host.embeddedNotices, 1);
+  assert.equal(host.embeddedNotices, 0);
   assert.equal(host.launches.length, 0);
-  host.embeddedAccepted = true;
   await controller.compare([left.path, right.path], "embedded");
-  assert.deepEqual(host.launches, [["--", left.path, right.path]]);
-  assert.equal(host.embedded.length, 0);
+  assert.deepEqual(host.launches, []);
+  assert.deepEqual(host.embedded, [[left.path, right.path], [left.path, right.path]]);
 });
 
 test("embedded mode shows two-sided content comparisons in the panel; merges ask before the desktop", async () => {

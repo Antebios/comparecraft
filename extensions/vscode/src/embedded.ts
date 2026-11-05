@@ -4,14 +4,18 @@ import { access, constants, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { BackendError, type BackendManager } from "./backend";
 import {
-  dialogFilters, DocumentGuard, isFileView, joinLines, parseSpec, pathKey, readBytes, readDataUrl, requireAbsolute, requireLines, requireObject, requireString,
-  textFileFromBuffer, titleOf, unsupportedCommand, VIEW_METHODS, type EmbeddedSpec, type FileView, type TextFileResult
+  dialogFilters, DocumentGuard, FOLDER_METHODS, isFileView, joinLines, parseSpec, pathKey, readBytes, readDataUrl, requireAbsolute, requireLines, requireObject, requireString,
+  deleteEmbeddedSession, readEmbeddedSessions, textFileFromBuffer, titleOf, unsupportedCommand, upsertEmbeddedSession,
+  VIEW_METHODS, type EmbeddedSessionRecord, type EmbeddedSpec, type FileView, type TextFileResult
 } from "./embeddedCore";
+import { FOLDER_SESSIONS_KEY, parseFolderSession, type FolderSession } from "./folderSessions";
+import { diskVerdict, withinFolder } from "./folderReceipts";
 
 export { specFromInputs } from "./embeddedCore";
 
 export const VIEW_TYPE = "comparecraft.textCompare";
 const SETTINGS_KEY = "comparecraft.embeddedSettings";
+const SESSIONS_KEY = "comparecraft.embeddedSessions";
 
 export interface EmbeddedHost {
   assertSupported(): void;
@@ -29,6 +33,8 @@ const eolOf = (document: vscode.TextDocument): "\n" | "\r\n" => document.eol ===
 /** Owns every embedded comparison panel, including panels restored after a window reload. */
 export class EmbeddedPanels implements vscode.Disposable {
   private readonly panels = new Set<EmbeddedPanel>();
+  private sessionWrites: Promise<void> = Promise.resolve();
+  private readonly origins = new Map<EmbeddedPanel, { token: string; parent: EmbeddedPanel; paths: string[]; epoch: number }>();
   private disposing = false;
 
   constructor(readonly context: vscode.ExtensionContext, readonly backend: BackendManager, readonly host: EmbeddedHost) {
@@ -36,10 +42,13 @@ export class EmbeddedPanels implements vscode.Disposable {
       deserializeWebviewPanel: async (panel, state) => {
         try {
           const spec = parseSpec(state);
-          this.attach(panel, { ...spec, output: null });
+          host.assertSupported();
+          if (spec.kind === "folder") await this.validateFolder(spec);
+          this.attach(panel, spec.kind === "folder" ? spec : { ...spec, output: null });
           if (spec.kind === "merge" && spec.output) void this.offerMergedText(spec);
         } catch (error) {
           host.log(`Discarded an embedded comparison that could not be restored: ${errorText(error)}`);
+          void vscode.window.showWarningMessage(`CompareCraft could not restore the comparison: ${errorText(error)}`);
           panel.dispose();
         }
       }
@@ -59,10 +68,112 @@ export class EmbeddedPanels implements vscode.Disposable {
     return this.disposing;
   }
 
+  listSessions(): EmbeddedSessionRecord[] {
+    return readEmbeddedSessions(this.context.globalState.get<unknown>(SESSIONS_KEY));
+  }
+
+  findSession(name: string): EmbeddedSessionRecord | null {
+    const key = name.toLowerCase();
+    return this.listSessions().find(session => session.saved && session.name.toLowerCase() === key) ?? null;
+  }
+
+  saveSession(value: unknown): Promise<void> {
+    const write = this.sessionWrites.then(async () => {
+      const current = this.context.globalState.get<unknown>(SESSIONS_KEY);
+      const next = upsertEmbeddedSession(current, value);
+      await this.context.globalState.update(SESSIONS_KEY, next);
+    });
+    this.sessionWrites = write.catch(() => {});
+    return write;
+  }
+
+  deleteSession(id: string): Promise<void> {
+    const write = this.sessionWrites.then(async () => {
+      const current = this.context.globalState.get<unknown>(SESSIONS_KEY);
+      await this.context.globalState.update(SESSIONS_KEY, deleteEmbeddedSession(current, id));
+    });
+    this.sessionWrites = write.catch(() => {});
+    return write;
+  }
+
   /** True when the installed helper has every method the read-only view needs. */
   async supportsView(kind: FileView): Promise<boolean> {
     const methods = VIEW_METHODS[kind];
     return methods.length === 0 || (await this.backend.get()).supports(...methods);
+  }
+
+  async validateFolder(spec: EmbeddedSpec): Promise<void> {
+    this.host.assertSupported();
+    if (!(await this.supportsFolder())) throw new Error("Update CompareCraft: the installed backend lacks embedded folder comparison support.");
+    for (const file of spec.paths.filter(Boolean)) {
+      if (!(await stat(requireAbsolute(file))).isDirectory()) throw new Error(`Not a folder: ${file}`);
+    }
+
+  }
+
+  async supportsFolder(): Promise<boolean> {
+    return (await this.backend.get()).supports(...FOLDER_METHODS);
+  }
+
+  folderSessions(): FolderSession[] {
+    const value = this.context.globalState.get<unknown>(FOLDER_SESSIONS_KEY) ?? [];
+    if (!Array.isArray(value)) throw new Error("Invalid stored folder session library.");
+    return value.map(parseFolderSession).sort((a, b) => b.modified - a.modified);
+  }
+
+  private storageWrite: Promise<void> = Promise.resolve();
+  updateSessions(update: (sessions: FolderSession[]) => FolderSession[]): Promise<void> {
+    const write = this.storageWrite.then(() =>
+      this.context.globalState.update(FOLDER_SESSIONS_KEY, update(this.folderSessions())));
+    this.storageWrite = write.catch(error => this.host.log(`Folder session persistence failed: ${errorText(error)}`));
+    return write;
+  }
+
+  broadcastSettings(): void {
+    for (const panel of this.panels) panel.notify("settings-changed", null);
+  }
+
+  bindOrigin(parent: EmbeddedPanel, child: EmbeddedPanel): string {
+    const bases = parent.state.spec.paths, paths = child.state.spec.paths;
+    if (parent.state.spec.kind !== "folder" || paths.length !== 2 ||
+      !paths.every((file, side) => withinFolder(bases[side] ?? "", file))) {
+      throw new Error("The file comparison does not belong to this folder panel.");
+    }
+    if (this.origins.size >= 256) throw new Error("Too many originating file comparisons. Close some child panels first.");
+    const token = randomBytes(24).toString("hex");
+    this.origins.set(child, { token, parent, paths: [...paths], epoch: parent.folderEpoch });
+    return token;
+  }
+
+  releaseOrigins(panel: EmbeddedPanel): void {
+    for (const [child, origin] of this.origins) {
+      if (child === panel || origin.parent === panel) {
+        origin.parent.notify("folder-origin-disposed", { token: origin.token });
+        this.origins.delete(child);
+      }
+    }
+  }
+
+  async completeOrigin(child: EmbeddedPanel): Promise<void> {
+    const origin = this.origins.get(child);
+    if (!origin || origin.epoch !== origin.parent.folderEpoch || !this.panels.has(origin.parent)) return;
+    const spec = child.state.spec;
+    if (!origin.paths.every((file, side) => pathKey(file) === pathKey(spec.paths[side] ?? ""))) return;
+    const sequence = child.completionSequence;
+    try {
+      const verdict = await diskVerdict(spec, <T>(method: string, params: unknown) =>
+        this.backend.get().then(client => client.request<T>(method, params)));
+      if (this.origins.get(child) !== origin || origin.epoch !== origin.parent.folderEpoch || child.completionSequence !== sequence) return;
+      origin.parent.notify("folder-comparison", { token: origin.token, receipt: {
+        paths: [...origin.paths], result: { status: verdict === "same" || verdict === "sameBinary" ? "same" :
+          verdict === "similar" ? "similar" : "diff", content: verdict }
+      } });
+    } catch (error) {
+      this.host.log(`Saved-disk comparison failed: ${errorText(error)}`);
+      if (this.origins.get(child) === origin && origin.epoch === origin.parent.folderEpoch && child.completionSequence === sequence) {
+        origin.parent.notify("folder-comparison", { token: origin.token, receipt: { paths: [...origin.paths], result: { status: "error", error: errorText(error) } } });
+      }
+    }
   }
 
   open(spec: EmbeddedSpec): EmbeddedPanel {
@@ -118,6 +229,10 @@ export class EmbeddedPanels implements vscode.Disposable {
 
 /** One webview comparison. VS Code documents are the source of truth for every editable side. */
 export class EmbeddedPanel {
+  folderEpoch = 0;
+  completionSequence = 0;
+  private completionTimer: NodeJS.Timeout | undefined;
+  private isDisposed = false;
   readonly guard = new DocumentGuard();
   /** Requests received from the webview (invoke commands by name), oldest first; for diagnostics and tests. */
   readonly received: string[] = [];
@@ -136,6 +251,9 @@ export class EmbeddedPanel {
     this.disposables.push(
       panel.webview.onDidReceiveMessage(message => void this.onMessage(message)),
       vscode.workspace.onDidChangeTextDocument(event => this.documentChanged(event.document)),
+      vscode.workspace.onDidSaveTextDocument(document => {
+        if (this.spec.paths.some(file => pathKey(file) === pathKey(document.uri.fsPath))) this.scheduleCompletion();
+      }),
       panel.onDidDispose(() => this.disposed())
     );
     this.updateTitle();
@@ -190,11 +308,16 @@ export class EmbeddedPanel {
   }
 
   private post(message: unknown): void {
+    if (this.isDisposed) return;
     void this.panel.webview.postMessage(message);
   }
 
   private postEvent(event: string, payload: unknown): void {
     this.post({ type: "event", event, payload });
+  }
+
+  notify(event: string, payload: unknown): void {
+    this.postEvent(event, payload);
   }
 
   private async onMessage(message: unknown): Promise<void> {
@@ -203,6 +326,7 @@ export class EmbeddedPanel {
       try {
         const state = requireObject(message.state, "state");
         this.spec = parseSpec(state);
+        if (this.spec.kind !== "folder") this.scheduleCompletion();
         const dirty = state.dirty;
         this.dirty = Array.isArray(dirty) ? [dirty[0] === true, dirty[1] === true] : [false, false];
         this.updateTitle();
@@ -228,6 +352,7 @@ export class EmbeddedPanel {
 
   /** Handles one validated webview request. Public so integration tests can drive real documents. */
   async handle(method: string, params: unknown): Promise<unknown> {
+    this.owner.host.assertSupported();
     const p = isObject(params) ? params : {};
     switch (method) {
       case "init":
@@ -285,11 +410,20 @@ export class EmbeddedPanel {
       case "close":
         this.panel.dispose();
         return null;
+      case "desktopFolder":
+        if (this.spec.kind !== "folder") throw new Error("This action requires a folder panel.");
+        await this.owner.host.openInDesktop("folder", this.spec.paths);
+        return null;
       case "openTab": {
         const kind = requireString(p.kind, "view kind");
-        if (kind === "text") {
-          this.owner.open(parseSpec({ paths: p.paths, titles: p.titles, readOnly: p.readOnly, options: p.options }));
+        if (kind === "folder") {
+          const spec = parseSpec(p);
+          await this.owner.validateFolder(spec);
+          this.owner.open(spec);
           return null;
+        }
+        if (kind === "text") {
+          return this.openChild(parseSpec({ paths: p.paths, titles: p.titles, readOnly: p.readOnly, options: p.options }), p.origin);
         }
         const paths = Array.isArray(p.paths) ? p.paths.filter((item): item is string => typeof item === "string" && path.isAbsolute(item)) : [];
         if (kind === "edit") {
@@ -299,8 +433,7 @@ export class EmbeddedPanel {
         }
         if (isFileView(kind)) {
           if (await this.owner.supportsView(kind)) {
-            this.owner.open(parseSpec({ kind, paths: p.paths, titles: p.titles, options: p.options }));
-            return null;
+            return this.openChild(parseSpec({ kind, paths: p.paths, titles: p.titles, options: p.options }), p.origin);
           }
           await this.owner.host.openInDesktop(kind, paths, `The installed CompareCraft backend is too old for the embedded ${kind} view. Update CompareCraft to show it in VS Code.`);
           return null;
@@ -317,16 +450,45 @@ export class EmbeddedPanel {
     return (await this.owner.backend.get()).request<T>(method, params);
   }
 
+  private openChild(spec: EmbeddedSpec, origin: unknown): { originToken: string } | null {
+    if (origin !== undefined && origin !== true) throw new Error("Invalid file comparison origin.");
+    if (origin === true && (this.spec.kind !== "folder" || !spec.paths.every((file, side) => withinFolder(this.spec.paths[side] ?? "", file)))) {
+      throw new Error("The file comparison does not belong to this folder panel.");
+    }
+    const child = this.owner.open(spec);
+    try {
+      if (origin !== true) return null;
+      const originToken = this.owner.bindOrigin(this, child);
+      child.scheduleCompletion();
+      return { originToken };
+    } catch (error) {
+      child.panel.dispose();
+      throw error;
+    }
+  }
+
+  private scheduleCompletion(): void {
+    this.completionSequence++;
+    clearTimeout(this.completionTimer);
+    this.completionTimer = setTimeout(() => void this.owner.completeOrigin(this), 300);
+  }
+
   private async invoke(command: string, args: Record<string, unknown>): Promise<unknown> {
     const state = this.owner.context.globalState;
     switch (command) {
       case "load_text":
-        return this.loadText(requireAbsolute(args.path));
+        {
+          const result = await this.loadText(requireAbsolute(args.path));
+          this.scheduleCompletion();
+          return result;
+        }
       case "save_text": {
+        if (this.spec.kind === "folder") throw unsupportedCommand(command);
         const file = requireAbsolute(args.path);
         const merge = this.spec.kind === "merge";
         if (merge && pathKey(file) !== pathKey(this.spec.paths[3] ?? "")) throw new Error("A merge can only write its result file.");
         const info = await this.saveText(args);
+        this.scheduleCompletion();
         if (merge) void this.owner.host.afterMergeSaved(file).catch(error => this.owner.host.log(`Merge follow-up failed: ${errorText(error)}`));
         return info;
       }
@@ -341,6 +503,23 @@ export class EmbeddedPanel {
         });
       case "path_info":
         return this.backendRequest("path.info", { path: requireAbsolute(args.path) });
+      case "compare_folders":
+        this.folderEpoch++;
+        this.owner.releaseOrigins(this);
+        return this.backendRequest("folder.compare", {
+          left: requireAbsolute(args.left, "left folder"), right: requireAbsolute(args.right, "right folder"),
+          options: requireObject(args.options, "folder options")
+        });
+      case "compare_items":
+        return this.backendRequest("folder.compareItems", {
+          left: requireAbsolute(args.left, "left folder"), right: requireAbsolute(args.right, "right folder"),
+          rels: requireLines(args.rels, "relative items"), options: requireObject(args.options, "folder options")
+        });
+      case "quick_compare": {
+        const mode = requireString(args.mode, "comparison mode");
+        if (!["size", "crc", "binary", "rules"].includes(mode)) throw new Error("Invalid comparison mode.");
+        return this.backendRequest("file.quickCompare", { left: requireAbsolute(args.left), right: requireAbsolute(args.right), mode });
+      }
       case "read_bytes":
         return readBytes(requireAbsolute(args.path), requireCount(args.offset, "offset"), requireCount(args.len, "length"));
       case "read_data_url":
@@ -365,17 +544,36 @@ export class EmbeddedPanel {
       case "load_settings":
         return state.get<Record<string, unknown>>(SETTINGS_KEY) ?? {};
       case "save_settings":
-        return state.update(SETTINGS_KEY, requireObject(args.settings, "settings"));
+        await state.update(SETTINGS_KEY, requireObject(args.settings, "settings"));
+        this.owner.broadcastSettings();
+        return null;
       case "reset_settings":
-        return state.update(SETTINGS_KEY, undefined);
+        await state.update(SETTINGS_KEY, undefined);
+        this.owner.broadcastSettings();
+        return null;
       case "list_sessions":
-        return [];
+        return this.spec.kind === "folder" ? this.owner.folderSessions() : this.owner.listSessions();
       case "find_session":
+        return this.spec.kind === "folder"
+          ? this.owner.folderSessions().find(session => session.saved && session.name.toLowerCase() === requireString(args.name, "session name").toLowerCase()) ?? null
+          : this.owner.findSession(requireString(args.name, "session name"));
       case "take_launch_spec":
         return null;
-      case "save_session":
-      case "delete_session":
+      case "save_session": {
+        if (this.spec.kind !== "folder") {
+          await this.owner.saveSession(args.session);
+          return null;
+        }
+        const session = parseFolderSession(args.session);
+        await this.owner.updateSessions(sessions => upsertEmbeddedSession(sessions, session).map(parseFolderSession));
         return null;
+      }
+      case "delete_session": {
+        const id = requireString(args.id, "session ID");
+        if (this.spec.kind === "folder") await this.owner.updateSessions(sessions => sessions.filter(session => session.id !== id));
+        else await this.owner.deleteSession(id);
+        return null;
+      }
       default:
         throw unsupportedCommand(command);
     }
@@ -482,6 +680,9 @@ export class EmbeddedPanel {
   }
 
   private disposed(): void {
+    this.isDisposed = true;
+    clearTimeout(this.completionTimer);
+    this.owner.releaseOrigins(this);
     for (const disposable of [...this.disposables, ...this.watchers.values()]) disposable.dispose();
     this.watchers.clear();
     if (!this.owner.isDisposing && (this.dirty[0] || this.dirty[1])) {

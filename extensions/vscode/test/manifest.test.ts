@@ -79,7 +79,8 @@ test("manifest declares the isolated build/test scripts and local trusted extens
 
 test("all context menu commands exist and executable settings cannot be workspace settings", () => {
   const commands = new Set(manifest.contributes.commands.map((command: { command: string }) => command.command));
-  assert.equal(commands.size, 26);
+  assert.equal(commands.size, 27);
+  assert.ok(commands.has("comparecraft.openSavedFolderSession"));
   const menus: Record<string, { command?: string; submenu?: string; when?: string }[]> = manifest.contributes.menus;
   for (const entries of Object.values(menus)) {
     for (const entry of entries) if (entry.command) assert.ok(commands.has(entry.command), entry.command);

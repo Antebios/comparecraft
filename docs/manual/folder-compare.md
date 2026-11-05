@@ -2,7 +2,7 @@
 
 Folder Compare shows two folder trees side by side and marks which files and folders are the same, different, or present on one side only. From here you can open file comparisons, copy and move items between the sides, delete, rename and touch files, and synchronize the folders.
 
-![Folder Compare with two folder trees side by side](images/folder-compare.jpg)
+![Folder Compare with expanded folder trees, the comparison preset split-button and same, different and one-sided files](images/folder-compare-current.png)
 
 ## Start a folder comparison
 
@@ -12,6 +12,42 @@ Folder Compare shows two folder trees side by side and marks which files and fol
 
 Until both folders are set, the view shows "Choose a left and right folder to compare."
 
+Once both paths are set, a progress strip appears below the path bars. **Scanning folders...** indicates that CompareCraft is discovering the files included by the current filters. Once discovery finishes, the strip shows **Comparing files** and a completed/total file counter, such as **428 / 2,310 files**, with a progress bar.
+
+The counter includes one-sided files; folders themselves are not counted. It measures files processed, not bytes or estimated time remaining, so a large file can take longer than several small files. The strip disappears when the comparison completes or fails. The usual status summary or an error message then shows the outcome.
+
+![Folder scanning progress strip showing Scanning folders and seven files found](images/folder-progress-scanning.png)
+
+*Example scanning stage in the shared desktop UI.*
+
+![Folder comparison progress strip showing Comparing files and four of seven files processed](images/folder-progress-comparing.png)
+
+*Example comparison stage. The file counter and bar advance as files are processed.*
+
+### In the VS Code extension
+
+Use **CompareCraft: Compare Folder With...** or select two local folders and
+choose **Compare Selected in VS Code**. Embedded folder panels reuse the tree,
+filters, presets, refresh and file drill-down, but do not provide folder
+copy/move/delete/rename/touch, synchronization, folder merge, snapshots or reports.
+Use **Open Folder Comparison in Desktop App** for full folder operations.
+
+Folder gutter results reflect saved disk contents, not unsaved editor buffers.
+Child text comparisons remain editable; saving or reloading can re-evaluate the
+originating disk pair. Presets and named folder sessions are stored separately
+from desktop settings. Use **CompareCraft: Open Saved Folder Session...** to
+reopen a named extension session. Remote SSH, WSL and Dev Containers are not
+supported. See the [extension guide](https://github.com/Antebios/comparecraft/blob/main/extensions/vscode/README.md) for
+helper requirements and limitations.
+
+Embedded comparisons show an indeterminate progress indicator. The desktop
+progress strip also provides the scanning and completed/total file counts
+described above.
+
+![Folder comparison in VS Code showing expanded trees and a notice that comparisons read saved files on disk](images/vscode-folder-compare.png)
+
+*The comparison-only VS Code panel provides a desktop handoff for folder operations.*
+
 !!! tip "Snapshots"
     You can enter a snapshot file (`.ccsnap`) instead of a folder on either side. This compares a folder with the state it had when the snapshot was saved. See [Save Snapshot](options.md#save-snapshot).
 
@@ -19,13 +55,25 @@ Until both folders are set, the view shows "Choose a left and right folder to co
 
 From top to bottom, the Folder Compare window has:
 
-- The **toolbar**, with expand and collapse buttons, display filters, copy and delete buttons, Sync, Rules, Swap, Refresh and Save Session.
+- The **toolbar**, with expand and collapse buttons, display filters, comparison presets, copy and delete buttons, Sync, Rules, Swap, Refresh and Save Session.
 - The **filter bar**, with the **Filters:** box and the **⛃ Filters** and **👁 Peek** buttons. See [Filters](filters.md).
 - The **path bars** for the left and right base folders.
 - The **two trees**. Each side has the columns **Name**, **Size** and **Modified**. A narrow status column between the sides shows a symbol for each row.
 - The **status bar**, with the number of files and how many are same, similar, different, left-only and right-only (plus errors, if any). When items are selected, it also shows how many are selected on each side.
 
 To hide the Size or Modified column, use **View > Columns**.
+
+## Name sorting
+
+Folders appear before files. By default, dot-prefixed names come first within each group: dot-prefixed folders, other folders, dot-prefixed files, then other files. This is based on the name, not the Windows Hidden attribute, and does not change file filters.
+
+Change **Dot-prefixed names first** under **Tools > Options > Colors, Fonts > Folder views** to set the global default. In **Session Settings > Handling > Sorting**, choose **Use global default**, **First**, or **Alphabetical** for the current comparison. Both panes share the same order. **Alphabetical** uses the existing name sorting, which initially ignores punctuation.
+
+The session choice is retained when saving and reopening a named session. **Use global default** continues to follow global changes. Selecting **Also update session defaults** with **First** or **Alphabetical** also changes the global default; selecting it with **Use global default** leaves the global default unchanged.
+
+![Folder Compare Session Settings Handling tab with Dot-prefixed names set to First](images/folder-name-sorting.png)
+
+*Set the session's dot-name order under **Handling > Sorting**.*
 
 ## Colors and status symbols
 
@@ -99,6 +147,50 @@ The **View** menu has four modes for how folders are shown and compared:
 By default, files are compared by size and timestamp, with a timestamp tolerance of 2 seconds. To change how files are compared, click **⚖ Rules** on the toolbar, or choose **Session > Session Settings…** and open the **Comparison** tab. See [Session Settings](#session-settings).
 
 To check the contents of some files without changing the criteria, select them and choose **Actions > Compare Contents…**. See [Compare contents](#compare-contents).
+
+## Comparison presets
+
+The comparison split-button provides a faster way to check contents without selecting everything or opening a dialog:
+
+1. Open the arrow beside **Compare All: Rules-based**.
+2. Choose **All included files** or **Selected items**, then **CRC**, **Binary**, or **Rules-based**. Choosing an item only changes the button; it does not start comparison.
+3. Click the main button to run. Results update the gutter, folder totals, and status bar without opening a results dialog.
+
+![Comparison preset split-button menu with All included files expanded to CRC, Binary and Rules-based choices](images/comparison-presets.png)
+
+*Shown in VS Code; the desktop view provides the same preset picker.*
+
+**All included files** checks paired files throughout the loaded folder tree, including collapsed folders and items hidden by display filters such as **Diffs** or **Same**. Configured session filters still apply, even when **Peek** or **Suppress Filters** temporarily reveals excluded items. Current counterpart mappings are preserved, including aligned names and flattened folder views. One-sided files keep their orphan status.
+
+**Selected items** uses the existing selection, including descendants of selected folders. It never silently switches to All when nothing is selected. Running either scope does not select all, clear your selection, or change the permanent comparison criteria.
+
+Progress and completion counts appear in the status bar; same, similar, different, and failed comparisons are counted separately. Unreadable files are errors, not differences. Quick presets require two folders with file contents; they do not compare snapshot bytes that are unavailable. Execution buttons are disabled while a comparison is running.
+
+### Named presets and pinned buttons
+
+Choose **Manage Comparison Presets…** from the comparison dropdown or the **Actions** menu to open the preset editor.
+
+- Use **New** or **Duplicate** to create a named preset containing a method and scope. Names must be nonempty and unique, ignoring case.
+- Built-in presets cannot be edited or deleted.
+- Check **Pin in this folder session** to add a direct-run toolbar button. Extra pins move into **More** when space is limited. Clicking a pin runs that preset without changing the main button's choice.
+- **Save** commits editing and pin changes but never runs a comparison. **Cancel** discards the draft.
+- Deleting a shared preset asks for confirmation. Sessions referencing deleted presets remove those pins, reset an unavailable active choice to **Compare All: Rules-based**, and report the change.
+
+![Comparison Presets dialog with the named Release check preset, Binary method, All included files scope and session pin enabled](images/comparison-presets-dialog.png)
+
+*Shown in VS Code. Saving the preset editor does not run a comparison.*
+
+Named presets form an application-wide library. Each folder session remembers its own active choice and pins. Use **Save Session** to retain those choices in a named session; workspace restoration also retains them. Locked sessions keep their normal Save/Save As protections.
+
+To initialize future folder sessions with the current main-button choice and the edited pins, check **Use the current comparison choice and these pins as defaults for new folder sessions** before saving. Changing a session does not automatically change these defaults.
+
+Presets are not recorded macros: they do not save custom text rules, file filters, paths, or copy/delete operations. Rules-based uses the existing comparison engine behavior.
+
+### Keyboard access and the existing dialog
+
+Tab to the comparison dropdown and press `Down` or `Enter` to open it. Use the arrow keys to navigate, `Enter` to choose, and `Esc` to close and restore focus. The main button and pinned buttons run with `Enter` or `Space`.
+
+The context-menu and **Actions > Compare Contents…** dialog remain available, including their remembered method and **Show results dialog** option. Their preferences are separate from quick presets. The comparison dropdown also links to this dialog when a selection is available.
 
 ## Navigate and find
 

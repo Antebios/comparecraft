@@ -62,13 +62,15 @@ export const VIEW_METHODS: Record<FileView, readonly string[]> = {
   patch: [],
 };
 
+export const FOLDER_METHODS = ["folder.compare", "folder.compareItems", "file.quickCompare"] as const;
+
 /** Initial state of an embedded text comparison; also the persisted webview state. */
 export interface EmbeddedSpec {
   /**
    * Defaults to a two-sided text comparison. A merge has paths [current, incoming, base, result].
    * Hex, table and picture compare two files read-only; a patch shows one file.
    */
-  readonly kind?: "text" | "merge" | FileView;
+  readonly kind?: "text" | "merge" | "folder" | FileView;
   readonly paths: string[];
   readonly titles: (string | null)[];
   readonly readOnly: boolean[];
@@ -77,6 +79,76 @@ export interface EmbeddedSpec {
   readonly restore?: [string[] | null, string[] | null];
   /** Unsaved merged text of a merge, kept only to offer it back when the panel closes. */
   readonly output?: string[] | null;
+  readonly sessionId?: string;
+  readonly sessionName?: string;
+  readonly locked?: boolean;
+}
+
+export interface EmbeddedSessionRecord {
+  id: string;
+  name: string;
+  kind: string;
+  paths: string[];
+  options: Record<string, unknown>;
+  modified: number;
+  saved: boolean;
+  locked?: boolean;
+}
+
+export function readEmbeddedSessions(value: unknown): EmbeddedSessionRecord[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is EmbeddedSessionRecord => {
+    if (!isRecord(item)) return false;
+    return typeof item.id === "string" && typeof item.name === "string" && typeof item.kind === "string"
+      && Array.isArray(item.paths) && item.paths.every(path => typeof path === "string")
+      && isRecord(item.options) && typeof item.modified === "number" && Number.isFinite(item.modified)
+      && typeof item.saved === "boolean" && (item.locked === undefined || typeof item.locked === "boolean");
+  }).sort((a, b) => b.modified - a.modified);
+}
+
+export function requireEmbeddedSession(value: unknown): EmbeddedSessionRecord {
+  const sessions = readEmbeddedSessions([value]);
+  const session = sessions[0];
+  if (!session) throw new Error("Invalid saved session.");
+  if (session.saved && !session.name.trim()) throw new Error("A saved session needs a name.");
+  return session;
+}
+
+export function upsertEmbeddedSession(value: unknown, input: unknown): EmbeddedSessionRecord[] {
+  const sessions = readEmbeddedSessions(value);
+  const session = requireEmbeddedSession(input);
+  const byId = sessions.find(item => item.id === session.id);
+  const byName = session.saved
+    ? sessions.find(item => item.saved && item.name.toLowerCase() === session.name.toLowerCase())
+    : undefined;
+  const existing = byId ?? byName;
+  if (byName?.locked && byName.id !== session.id) throw new Error(`The session “${byName.name}” is locked.`);
+  if (byId?.locked) {
+    const unlockOnly = session.locked === false && session.name === byId.name && session.kind === byId.kind
+      && session.saved === byId.saved && samePaths(session.paths, byId.paths)
+      && JSON.stringify(session.options) === JSON.stringify(byId.options);
+    if (!unlockOnly) throw new Error(`The session “${byId.name}” is locked.`);
+  }
+  const replacement = existing ? { ...session, id: existing.id } : session;
+  const next = sessions.filter(item => item.id !== replacement.id
+    && !(replacement.saved && item.saved && item.name.toLowerCase() === replacement.name.toLowerCase())
+    && !(!replacement.saved && !item.saved && item.kind === replacement.kind && samePaths(item.paths, replacement.paths)));
+  next.push(replacement);
+  next.sort((a, b) => b.modified - a.modified);
+  let recent = 0;
+  return next.filter(item => item.saved || ++recent <= 50);
+}
+
+export function deleteEmbeddedSession(value: unknown, id: string): EmbeddedSessionRecord[] {
+  return readEmbeddedSessions(value).filter(session => session.id !== id);
+}
+
+function samePaths(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((path, index) => path === right[index]);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /** Desktop `TextFile` shape returned to the shared UI for `load_text`. */
@@ -101,6 +173,21 @@ export function parseSpec(value: unknown): EmbeddedSpec {
   if (!isObject(value)) throw new Error("Invalid embedded comparison state.");
   const { paths, titles = [], readOnly = [], options = {}, restore, kind = "text", output } = value;
   if (isFileView(kind)) return fileViewSpec(kind, paths, titles, options);
+  if (kind === "folder") {
+    if (!Array.isArray(paths) || paths.length !== 2 || !paths.every(item =>
+      typeof item === "string" && (item === "" || path.isAbsolute(item))) || !paths.some(Boolean)) {
+      throw new Error("Folder comparisons need two absolute sides and at least one folder.");
+    }
+    if (!Array.isArray(titles) || !titles.every(item => item === null || typeof item === "string")) throw new Error("Invalid comparison titles.");
+    if (!isObject(options)) throw new Error("Invalid folder options.");
+    if (restore !== undefined || output !== undefined) throw new Error("Folders cannot restore editor text.");
+    const sessionId = value.sessionId, sessionName = value.sessionName, locked = value.locked;
+    if (sessionId !== undefined && typeof sessionId !== "string") throw new Error("Invalid folder session identity.");
+    if (sessionName !== undefined && typeof sessionName !== "string") throw new Error("Invalid folder session name.");
+    if (locked !== undefined && typeof locked !== "boolean") throw new Error("Invalid folder session lock.");
+    return { paths, titles, options, readOnly: [true, true], kind, ...(typeof sessionId === "string" ? { sessionId } : {}),
+      ...(typeof sessionName === "string" ? { sessionName } : {}), ...(typeof locked === "boolean" ? { locked } : {}) };
+  }
   if (kind !== "text" && kind !== "merge") throw new Error("Invalid embedded view kind.");
   const merge = kind === "merge";
   if (!Array.isArray(paths) || paths.length > (merge ? 4 : 2) || !paths.every(item => typeof item === "string" && (item === "" || path.isAbsolute(item)))) {
@@ -258,7 +345,7 @@ export function titleOf(spec: EmbeddedSpec): string {
   if (spec.kind === "patch") return `Patch: ${spec.titles[0] || path.basename(spec.paths[0] ?? "") || "Untitled"}`;
   const names = [0, 1].map(side => spec.titles[side] || (spec.paths[side] ? path.basename(spec.paths[side]!) : "Untitled"));
   const pair = names[0] === names[1] ? names[0]! : `${names[0]} ↔ ${names[1]}`;
-  const prefix = { hex: "Hex", table: "Table", picture: "Picture" }[spec.kind as string];
+  const prefix = { hex: "Hex", table: "Table", picture: "Picture", folder: "Folder" }[spec.kind as string];
   return prefix ? `${prefix}: ${pair}` : pair;
 }
 

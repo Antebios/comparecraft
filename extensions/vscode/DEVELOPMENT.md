@@ -111,7 +111,14 @@ npm run test:integration
 `COMPARECRAFT_BACKEND` also makes `npm test` run the client contract test against
 that helper instead of the repository's debug build. If neither exists, the
 real-helper contract test is skipped. To build the debug helper, run
-`cargo build --bin comparecraft-backend` from `src-tauri`.
+`cargo build --bin comparecraft-backend` from `src-tauri`. On Windows, first run
+`node scripts\build-windows-shell-extension.mjs` from the repository root to
+generate the shell-extension resources required by the Tauri build.
+
+For folder integration checks, point `COMPARECRAFT_BACKEND` at the helper built
+from the same source as the webview. Folder method capabilities alone do not
+establish support for newly added options such as `dotNamesFirst`. Do not count
+skipped real-helper tests as successful folder verification.
 
 ## Package and verify the VSIX
 
@@ -158,6 +165,30 @@ created, the workflow uses the release's tagged source. The tag must use `vN.N.N
 `N.N.N` before testing and packaging, without committing those changes. Only
 release creation publishes the tested artifact, after every platform passes.
 Native installer, signing, menus, and desktop GUI checks remain separate from CI.
+
+## Documentation screenshots
+
+Keep extension screenshots in [media/screenshots](media/screenshots), with a
+relative image link for every PNG in the [README](README.md). `test:vsix`
+checks that each image is packaged and its README link points to the extension
+subdirectory in the repository.
+
+The folder, preset, saved-session and difference-map screenshots were captured
+from a real Extension Development Host using an isolated profile, a local
+helper and synthetic release files. Do not capture personal workspaces,
+credentials or unrelated windows. Use the same demo data for related images,
+dismiss notifications, and crop menus or dialogs without changing their content.
+
+The [manual image directory](../../docs/manual/images) contains copies of the
+extension images needed by the standalone manual. Refresh those copies together
+with their originals. The light-theme folder, sorting and text images show the
+actual shared frontend in its browser UI harness with a real backend helper,
+not native desktop window chrome. The two progress examples use deterministic
+test progress events to hold each transient stage for capture; they illustrate
+the desktop UI, not measured performance or detailed progress support in VS Code.
+Write captures outside the watched manual directory first to avoid hot reload
+resetting the view during capture. Validate with the root `npm run docs:build`,
+`npm run build`, then extension `npm run package` and `npm run test:vsix`.
 
 ## Publish to the Visual Studio Marketplace
 

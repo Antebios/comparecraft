@@ -82,7 +82,13 @@ JSON-RPC 2.0. Requests carry `id` (number or string), `method`, and optional
    {
      "protocolVersion": 1,
      "server": { "name": "comparecraft-backend", "version": "0.1.0" },
-     "capabilities": { "methods": ["path.info", "text.load", "text.diff", "text.merge", "hex.align", "table.compare", "pix.compare", "pix.image"] },
+     "capabilities": {
+       "methods": [
+         "path.info", "text.load", "text.diff", "text.merge", "hex.align",
+         "table.compare", "pix.compare", "pix.image", "folder.compare",
+         "folder.compareItems", "file.quickCompare"
+       ]
+     },
      "limits": { "maxMessageBytes": 67108864, "maxConcurrentRequests": 4, "maxQueuedRequests": 64, "maxLinesPerSide": 2000000 }
    }
    ```
@@ -140,10 +146,53 @@ document APIs (decision for T010).
 | `table.compare` | `{ left, right, options? }` (absolute files; desktop `TableOptions`) | desktop `TableResult` |
 | `pix.compare` | `{ left, right, options?, leftData?, rightData? }` (absolute files; `*Data` is an already decoded image as base64 or a data URL) | desktop `PixResult` with a PNG difference image as a data URL |
 | `pix.image` | `{ path }` (absolute file) | PNG data URL of the decoded picture (for formats the webview can't show) |
+| `folder.compare` | `{ left, right, options? }` (absolute existing directories) | desktop `FolderResult`: `{ root: Node, summary: { files, same, similar, diff, leftOnly, rightOnly, errors } }` |
+| `folder.compareItems` | `{ left, right, rels, options? }` (absolute existing directories; `rels` is an array of safe relative item paths) | `Array<Node | null>` with `null` for each item no longer present or filtered out; results retain the input order |
+| `file.quickCompare` | `{ left, right, mode }` (absolute existing files; `mode` is `rules`, `size`, `crc` or `binary`) | Integer verdict from the desktop quick engine |
 
-Methods after the first four were added in T012 (Phase 5). They appear in
-`capabilities.methods` only for helpers built from that release onward; the
-extension checks for them and falls back to the text view or the desktop app.
+`FolderResult` and each non-null folder item use the shared desktop shapes.
+`Node` contains `name`, `rel`, `dir`, and `status`, with optional `children`,
+`left`/`right` sides (`{ name, size, modified }`), `leftPath`/`rightPath`,
+`newer`, `error`, and `content`. Status values are `same`, `similar`, `diff`,
+`left`, `right` and `error`; content verdicts are `sameBinary`, `same`,
+`similar`, `different` and `differentBinary`.
+
+`folder.compare` and `folder.compareItems` accept the desktop `FolderOptions`
+object. Its optional fields are `criteria` (`timesize`, `size`, `binary`,
+`crc` or `rules`), `timeToleranceSecs`, `include`, `exclude`, `includeFolders`,
+`otherFilters`, `excludeHidden`, `flatten`, `ignoreDst`, `ignoreTz`,
+`ignoreCaseNames`, `followSymlinks`, `dotNamesFirst`, and `align`.
+`dotNamesFirst` defaults to `true`: folders sort before files, with dot-prefixed
+names first within each group. Set it to `false` for alphabetical sorting within
+each group; item comparisons still retain the requested item order.
+`timeToleranceSecs` must be between zero and
+`i64::MAX / 1000` (the engine stores timestamps in milliseconds). Each `otherFilters` entry
+accepts `kind` (`date`, `size` or `content`), `enabled`, `newer`, `days`,
+`date`, `larger`, `size`, `notContaining`, `text`, `caseSensitive`,
+`wholeWords` and `regex`. Each `align` entry accepts `parent`, `left` and
+`right`. Omitted options and fields use the engine's defaults. Unknown fields,
+unsupported enum values, out-of-range `timeToleranceSecs`, malformed content
+filter regular expressions (including disabled filters), and unsafe alignment or item paths are invalid params. Relative
+item paths use slash-separated segments and may not be absolute, empty, `.`,
+`..`, contain empty segments, backslashes, drive prefixes or control
+characters.
+
+`file.quickCompare` preserves the quick engine's integer verdicts: `1` means
+binary-identical, `2` means rules-equivalent, `11` means binary-different,
+`12` means similar under rules, `13` means rules-different, and `100` means an
+engine I/O/error result. The request mode is required and must be one of the
+four listed values.
+
+All three methods require the expected path kind (directories for folder
+methods, regular files for quick comparison). Nonexistent or inaccessible paths
+return `-32020`; wrong path kinds and malformed params return `-32602`.
+Folder methods are read-only and use the existing comparison engines. They add
+no per-tree or per-item cap; the existing worker/queue and message/response
+limits still apply.
+
+Methods beyond the initial four were added incrementally in protocol 1. They
+appear in `capabilities.methods` only for helpers built from a release that
+implements them; clients must check capabilities before calling them.
 
 `rules` uses the desktop `Rules` shape (camelCase, every field optional). An
 omitted field takes the engine default. Unknown fields are rejected as

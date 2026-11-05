@@ -5,6 +5,7 @@ pub mod diff;
 pub mod fileio;
 pub mod folder;
 pub mod folder_merge;
+pub mod fonts;
 pub mod hex;
 pub mod merge;
 pub mod pix;
@@ -86,8 +87,22 @@ async fn merge_texts(
 }
 
 #[tauri::command]
-async fn compare_folders(left: String, right: String, options: folder::FolderOptions) -> CmdResult<folder::FolderResult> {
-    blocking(move || folder::compare_folders(&left, &right, &options).map_err(s)).await
+async fn compare_folders(window: tauri::WebviewWindow, left: String, right: String, options: folder::FolderOptions, request_id: Option<String>) -> CmdResult<folder::FolderResult> {
+    blocking(move || {
+        if let Some(request_id) = request_id {
+            folder::compare_folders_with_progress(&left, &right, &options, &|progress| {
+                let _ = window.emit_to(window.label(), "folder-comparison-progress", serde_json::json!({
+                    "requestId": request_id,
+                    "phase": progress.phase,
+                    "completed": progress.completed,
+                    "total": progress.total,
+                    "discovered": progress.discovered,
+                }));
+            }).map_err(s)
+        } else {
+            folder::compare_folders(&left, &right, &options).map_err(s)
+        }
+    }).await
 }
 
 #[tauri::command]
@@ -410,6 +425,11 @@ fn spawn_command(program: String, args: Vec<String>) -> CmdResult<()> {
 }
 
 #[tauri::command]
+async fn list_font_families() -> CmdResult<Vec<String>> {
+    blocking(fonts::list_families).await
+}
+
+#[tauri::command]
 async fn shell_integration_status() -> CmdResult<shell::ShellStatus> {
     blocking(|| Ok(shell::status())).await
 }
@@ -483,6 +503,7 @@ pub fn run(spec: cli::LaunchSpec, solo: bool) {
             read_settings_file,
             import_sessions,
             spawn_command,
+            list_font_families,
             shell_integration_status,
             set_shell_integration,
             usage

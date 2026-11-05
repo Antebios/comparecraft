@@ -107,8 +107,7 @@ export class ComparisonController {
     if (key(left.path) === key(right.path)) throw new Error("Choose two different files or folders.");
     if ((mode ?? this.host.defaultMode()) === "embedded") {
       this.host.assertSupported();
-      if (left.kind === "file") return this.host.openEmbedded([{ kind: "path", path: left.path }, { kind: "path", path: right.path }]);
-      if (!(await this.host.confirmDesktop())) return;
+      return this.host.openEmbedded([{ kind: "path", path: left.path }, { kind: "path", path: right.path }]);
     }
     this.host.assertSupported();
     if (left.kind === "folder") await this.host.assertSaved([left, right]);

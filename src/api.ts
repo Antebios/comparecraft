@@ -132,6 +132,7 @@ export interface FolderOptions {
   exclude: string;
   ignoreCaseNames: boolean;
   followSymlinks: boolean;
+  dotNamesFirst?: boolean;
   /** Items compared with each other although their names differ ("Align With"). */
   align?: Alignment[];
   /** Folder-name masks; empty or "*" includes all folders. */
@@ -145,6 +146,13 @@ export interface FolderOptions {
   ignoreDst?: boolean;
   /** Timestamps a whole number of hours apart are equal. */
   ignoreTz?: boolean;
+}
+export interface FolderComparisonProgress {
+  requestId: string;
+  phase: "scanning" | "comparing";
+  completed: number;
+  total: number | null;
+  discovered: number;
 }
 /** Excludes files by date, size or content ("Other Filters"). */
 export interface OtherFilter {
@@ -358,8 +366,8 @@ export const api = {
   diffTexts: (left: string[], right: string[], rules: Rules) => invoke<DiffResult>("diff_texts", { left, right, rules }),
   mergeTexts: (base: string[], left: string[], right: string[], rules: Rules) =>
     invoke<MergeResult>("merge_texts", { base, left, right, rules }),
-  compareFolders: (left: string, right: string, options: FolderOptions) =>
-    invoke<FolderResult>("compare_folders", { left, right, options }),
+  compareFolders: (left: string, right: string, options: FolderOptions, requestId?: string) =>
+    invoke<FolderResult>("compare_folders", { left, right, options, requestId }),
   planSync: (left: string, right: string, options: FolderOptions, mode: string) =>
     invoke<Action[]>("plan_sync", { left, right, options, mode }),
   compareFolderMerge: (left: string, right: string, base: string | null, output: string | null, options: FolderOptions) =>
