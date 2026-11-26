@@ -93,7 +93,8 @@ Right-click the gutter to see the copy commands for that side.
 ## Select lines
 
 - Click a line to select it and make its pane the current side.
-- `Shift`+click, or `Shift+Up` and `Shift+Down`, extends the selection to a range of lines.
+- `Shift`+click, or `Shift`+Up and `Shift`+Down, extends the selection to a range of lines.
+- Dragging over text with the mouse selects every line the selection touches, so the gutter arrows and the copy commands act on those lines rather than on the whole difference section. Copying works line by line, so a selection that starts or ends in the middle of a line copies that entire line.
 - **Edit > Select Section** (`Ctrl+D`) selects every line of the current difference section.
 
 ## Edit the text

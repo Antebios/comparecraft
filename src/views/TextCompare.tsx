@@ -283,6 +283,12 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
     if (lp || rp) void persistSession(tab());
   });
 
+  onMount(() => {
+    // Selecting text with the mouse selects the lines it touches (see trackTextSelection).
+    document.addEventListener("selectionchange", trackTextSelection);
+    onCleanup(() => document.removeEventListener("selectionchange", trackTextSelection));
+  });
+
   if (isEmbedded()) {
     // The embedding host reports edits to a side's source document made outside this view.
     let unlisten: (() => void) | undefined;
@@ -552,6 +558,38 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
     return out;
   }
   const curHunk = () => (cur() >= 0 ? cur() : result()?.rows[selRow()]?.h ?? -1);
+
+  /** Row a DOM node belongs to, when it is rendered inside one of the two panes. */
+  function rowAt(node: Node | null): { side: Side; ri: number } | null {
+    const el = node instanceof Element ? node : (node?.parentElement ?? null);
+    const row = el?.closest<HTMLElement>(".trow");
+    const pane = row?.closest<HTMLElement>(".tpane");
+    const ri = Number(row?.dataset.ri);
+    if (!row || !pane || (pane !== paneL && pane !== paneR) || !Number.isFinite(ri)) return null;
+    return { side: pane === paneL ? 0 : 1, ri };
+  }
+
+  /**
+   * Text selected with the mouse also selects the lines it touches, so the gutter
+   * arrows and Copy to Left/Right act on that selection instead of the whole
+   * difference section. A selection crossing the divider has no side to copy from.
+   */
+  function trackTextSelection() {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount) return;
+    const range = sel.getRangeAt(0);
+    const start = rowAt(range.startContainer);
+    const end = rowAt(range.endContainer);
+    if (!start || !end || start.side !== end.side) return;
+    const [a, b] = start.ri <= end.ri ? [start.ri, end.ri] : [end.ri, start.ri];
+    if (selSide() === start.side && selAnchor() === a && selRow() === b) return;
+    batch(() => {
+      setSelSide(start.side);
+      setSelAnchor(a);
+      setSelRow(b);
+      setCur(result()?.rows[b]?.h ?? -1);
+    });
+  }
 
   /** Replaces a side's lines, keeping manual alignment points in place. */
   function editLines(s: Side, next: string[]) {
@@ -1195,6 +1233,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
               return (
                 <div
                   class="trow"
+                  data-ri={item().ri}
                   classList={{
                     [`k-${k()}`]: true,
                     filler: idx() === undefined,
