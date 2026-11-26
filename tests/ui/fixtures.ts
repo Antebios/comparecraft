@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, rm, writeFile, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
-interface Folders {
+export interface Folders {
   left: string;
   right: string;
   pair(name: string, l: string | Buffer, r: string | Buffer, sameTime?: boolean): Promise<void>;

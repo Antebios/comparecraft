@@ -57,7 +57,7 @@ full local and remote workflow phases.
 
 *Local folder comparison in a VS Code tab. Use the desktop app for folder operations.*
 
-CompareCraft opens the right view for whatever you give it: two files, two folders, three files to merge, or a saved session.
+CompareCraft opens the right view for whatever you give it: two files, two folders, three files to merge, a saved session, or items dragged onto the window.
 
 <table>
 <tr>
