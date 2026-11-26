@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "CompareCraft",
-  "version": "0.1.0",
+  "version": "../package.json",
   "identifier": "dev.comparecraft.app",
   "build": {
     "beforeDevCommand": "node scripts/build-windows-shell-extension.mjs && node scripts/build-linux-shell-extensions.mjs && npm run dev",

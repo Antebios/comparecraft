@@ -285,11 +285,28 @@ Installers go to `src-tauri/target/release/bundle/`. The bare binaries are `src-
 - **Desktop entry:** the Arch package installs [`packaging/linux/comparecraft.desktop`](packaging/linux/comparecraft.desktop);
   the `.deb`, `.rpm` and AppImage bundles generate their own.
 
+### Releasing
+
+`package.json` holds the only version number. `src-tauri/tauri.conf.json` uses `"version": "../package.json"`,
+so Tauri stamps that number into every installer name and into the app metadata. On a clean working tree:
+
+```sh
+npm version minor                    # or patch, major, or a literal 1.2.3
+git push --follow-tags               # the v1.2.3 tag starts the release build
+```
+
+npm's `version` hook runs `node scripts/version.mjs set`, which carries the number into `src-tauri/Cargo.toml`
+and `Cargo.lock` (what `ccomp --version` and the backend report), the Arch `PKGBUILD` and the VS Code extension
+manifests; `npm version` then commits and tags all of them together.
+
 ### Continuous integration
 
 [`.github/workflows/build.yml`](.github/workflows/build.yml) runs the type check and Rust tests on every push
-and pull request. Pushing a `v*` tag builds installers for Linux, Windows and macOS (Intel and Apple Silicon)
-and attaches them to a draft release.
+and pull request, including `npm run version:check`, which fails when those manifests disagree or when
+`tauri.conf.json` stops reading the version from `package.json`. Pushing a `v*` tag builds installers for Linux,
+Windows and macOS (Intel and Apple Silicon) and attaches them to a draft release; the build also refuses a tag
+that is not `v` plus the version in the tagged `package.json`, so installer version numbers always match the
+release.
 
 ## Command line
 

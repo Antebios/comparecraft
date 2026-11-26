@@ -7,6 +7,7 @@ import {
   existsSync,
 } from "node:fs";
 import { resolve } from "node:path";
+import { readVersion } from "./version.mjs";
 
 const test = process.argv.includes("--test");
 if (process.platform !== "darwin") {
@@ -28,12 +29,13 @@ const bundle = resolve(output, "CompareCraftFinder.appex");
 const contents = resolve(bundle, "Contents");
 const executable = resolve(contents, "MacOS/CompareCraftFinder");
 mkdirSync(resolve(contents, "MacOS"), { recursive: true });
-const config = JSON.parse(readFileSync("src-tauri/tauri.conf.json", "utf8"));
+// package.json holds the release version (tauri.conf.json points at it), so the extension plist
+// cannot drift from the .app it is embedded in.
 writeFileSync(
   resolve(contents, "Info.plist"),
   readFileSync("packaging/macos/finder/Info.plist", "utf8").replaceAll(
     "@VERSION@",
-    config.version,
+    readVersion(),
   ),
 );
 const sources = [

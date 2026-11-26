@@ -19,6 +19,8 @@
     "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
     "test:menus": "node scripts/build-linux-shell-extensions.mjs --test",
     "test:finder": "node scripts/build-macos-finder-extension.mjs --test",
+    "version": "node scripts/version.mjs set && git add src-tauri/Cargo.toml src-tauri/Cargo.lock packaging/arch/PKGBUILD extensions/vscode/package.json extensions/vscode/package-lock.json",
+    "version:check": "node scripts/version.mjs check",
     "test:ui": "cargo build --manifest-path src-tauri/Cargo.toml --bin comparecraft-backend && playwright test",
     "test": "npm run typecheck && npm run test:ui && npm run test:rust",
     "parity": "bash scripts/parity.sh",

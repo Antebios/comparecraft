@@ -9,6 +9,7 @@ import { flushSettings, loadSettings, setSetting, settings } from "./settings";
 import { Modal } from "./components/common";
 import { HelpViewer } from "./components/HelpViewer";
 import { ONLINE_MANUAL, pageForView } from "./help/manual";
+import { version as APP_VERSION } from "../package.json";
 import MenuBar, { ShortcutList } from "./components/MenuBar";
 import { PromptHost } from "./components/Prompt";
 import { ReplaceHost } from "./views/folderOps";
@@ -301,7 +302,7 @@ export default function App() {
       </Show>
       <Show when={dialog() === "about"}>
         <Modal title="About CompareCraft" onClose={() => setDialog(null)}>
-          <p><b>CompareCraft 0.1.0</b>: compare, merge and synchronize files and folders.</p>
+          <p><b>CompareCraft {APP_VERSION}</b>: compare, merge and synchronize files and folders.</p>
           <p class="muted">Tauri + SolidJS · MIT License</p>
         </Modal>
       </Show>
