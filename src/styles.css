@@ -516,6 +516,11 @@ button.link {
 .pathbar.dirty .path-input {
   border-color: var(--diff-fg);
 }
+/* The side that would take a drop, set while a drag is over the window (see dropOpen.ts). */
+.pathbar.drop-target .path-input {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+}
 .badge {
   font-size: 10px;
   padding: 0 4px;
@@ -2626,4 +2631,32 @@ kbd {
 }
 .paths.fm-output {
   grid-template-columns: 1fr;
+}
+
+/* A hint over the whole window while files or folders are dragged in. It never takes the pointer,
+   so the drop still reaches the view underneath. */
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  outline: 2px dashed var(--accent);
+  outline-offset: -6px;
+  /* Light enough that the marked side shows through: the drop fills a side, not the window. */
+  background: color-mix(in srgb, var(--sel) 22%, transparent);
+}
+.drop-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 16px 22px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg2);
+  color: var(--fg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
 }

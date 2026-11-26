@@ -1,5 +1,6 @@
 import { open, save } from "../host";
 import { createEffect, createSignal, onCleanup, onMount, type JSX } from "solid-js";
+import { PATH_DROP_EVENT } from "../dropOpen";
 import { editorRowHeight } from "../settings";
 export { editorRowHeight };
 
@@ -19,6 +20,14 @@ export function PathBar(props: {
 }) {
   const [text, setText] = createSignal(props.value);
   createEffect(() => setText(props.value));
+  let root!: HTMLDivElement;
+  // A file dropped on this side of a comparison fills this side: the drop routing resolves the
+  // pointer to one of the .paths bars and dispatches on it (see dropOpen.ts).
+  onMount(() => {
+    const fill = (e: Event) => props.onCommit((e as CustomEvent<string>).detail);
+    root.addEventListener(PATH_DROP_EVENT, fill);
+    onCleanup(() => root.removeEventListener(PATH_DROP_EVENT, fill));
+  });
   const browse = async () => {
     const picked = props.saveDialog
       ? await save({ defaultPath: props.value || undefined })
@@ -29,7 +38,7 @@ export function PathBar(props: {
     }
   };
   return (
-    <div class="pathbar" classList={{ dirty: !!props.dirty }}>
+    <div class="pathbar" classList={{ dirty: !!props.dirty }} ref={root}>
       {props.title ? (
         <div class="path-title" title={props.value}>
           {props.title}

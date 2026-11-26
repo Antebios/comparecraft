@@ -116,6 +116,16 @@ The following are not implemented yet:
 - media, registry and version-information compare; picture metadata compare
 - archives as folders; FTP/SFTP and cloud locations
 
+## Building from source cannot find glib-2.0
+
+The shell menu library links GLib directly, so a Linux build needs the GLib development files as well as the WebKitGTK ones. Without them the Rust link step stops with:
+
+```
+rust-lld: error: unable to find library -lglib-2.0
+```
+
+Install the development package: `libglib2.0-dev` on Debian, Ubuntu and Mint, `glib2-devel` on Fedora, or `glib2` on Arch. [Getting Started](getting-started.md#build-from-source) lists the full set of prerequisites.
+
 ## Report a problem
 
 Report bugs and suggest features in the [CompareCraft issue tracker](https://github.com/Antebios/comparecraft/issues). Include your operating system, the CompareCraft version (**Help > About CompareCraft**) and the steps to reproduce the problem.

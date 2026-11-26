@@ -43,7 +43,7 @@ If no installer fits your system, you can build CompareCraft yourself. You need:
 - On Linux, the WebKitGTK 4.1 development files and a C toolchain. For example, on Debian and Ubuntu:
 
   ```sh
-  sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+  sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libglib2.0-dev
   ```
 
 - On Windows, the Microsoft C++ Build Tools ("Desktop development with C++") and WebView2. WebView2 is preinstalled on Windows 10 (1803 or later) and Windows 11.
@@ -112,6 +112,27 @@ You can make Quick compare show a one-line result first ("Files are binary same"
 ### From a folder comparison
 
 In a [Folder Compare](folder-compare.md), double-click a file, or select it and press `Enter`, to open the two versions in the matching file comparison.
+
+### By dragging files onto the window
+
+Drag one or more files or folders from your file manager and drop them anywhere on the CompareCraft window. A hint covers the window while you drag.
+
+A single item dropped on an open comparison fills the side you drop it on: drop on the left half and the left file or folder is replaced, drop on the right half and the right side is. The side that would take the drop marks its path bar while you drag, so you can see the target before you let go. The side keeps its own rules, so it asks before discarding unsaved changes, and the comparison reloads in place. Views with a single path (an editor, a patch) keep their file and are not retargeted by a drop.
+
+Anything else opens a new tab:
+
+| Dropped | Opens |
+| --- | --- |
+| One item, not over a comparison | That item on its own side, ready for you to choose the other side |
+| One item, over a comparison | The left or right side under the pointer |
+| Two files | The view chosen by file type, as in Quick compare |
+| Two folders | A Folder Compare |
+| Three files | A Text Merge: two changed files against a base |
+| Four files | A Text Merge whose fourth file is written as the output |
+
+More than four items, or a drop that mixes a folder with files, compares the first two and says so. A drop only opens or reloads a comparison: it never copies, moves or deletes anything.
+
+Dropping needs a file-system path, which the desktop app always has. The VS Code webview opens comparisons through its extension instead and does not accept drops.
 
 ## Choose files and folders
 

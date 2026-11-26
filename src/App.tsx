@@ -1,7 +1,8 @@
-import { listen, getCurrentWindow, ask, open as openDialog, openUrl } from "./host";
+import { listen, getCurrentWindow, ask, open as openDialog, openUrl, type DropPosition } from "./host";
 import { createEffect, createSignal, For, Match, onCleanup, onMount, Show, Switch } from "solid-js";
-import { api, type LaunchSpec } from "./api";
+import { api, errText, type LaunchSpec } from "./api";
 import { dispatchKey, IS_MAC, registerCommands } from "./commands";
+import { clearDropTarget, dropOntoPathBar, installFileDrop, openDroppedPaths, previewDropTarget } from "./dropOpen";
 import OptionsDialog, { type OptionsPage } from "./components/OptionsDialog";
 import { ExportDialog, FileFormatsDialog, ImportDialog, ProfilesDialog, restoreFactoryDefaults, SnapshotDialog } from "./components/ToolsDialogs";
 import { flushSettings, loadSettings, setSetting, settings } from "./settings";
@@ -81,11 +82,23 @@ export default function App() {
   const [optionsPage, setOptionsPage] = createSignal<OptionsPage | undefined>();
   const [helpPage, setHelpPage] = createSignal<string>();
   const [toast, setToast] = createSignal("");
+  const [dropping, setDropping] = createSignal(false);
+  let lastDrop = { key: "", at: 0 };
   let toastTimer: number | undefined;
   const notify = (m: string) => {
     setToast(m);
     clearTimeout(toastTimer);
     toastTimer = window.setTimeout(() => setToast(""), 5000);
+  };
+  /** A drop is reported once by the native handler and once per DOM event in hosts that fire both. */
+  const openDropped = (paths: string[], position?: DropPosition) => {
+    const key = paths.join("\n");
+    if (key && key === lastDrop.key && Date.now() - lastDrop.at < 1000) return;
+    lastDrop = { key, at: Date.now() };
+    // One item dropped on the left or right side of an open comparison fills that side; anything
+    // else opens a new tab.
+    if (paths.length === 1 && paths[0] && dropOntoPathBar(position, paths[0])) return;
+    openDroppedPaths(paths, notify).catch((e) => notify(errText(e)));
   };
   const openOptions = (page?: OptionsPage) => {
     setOptionsPage(page);
@@ -205,6 +218,20 @@ export default function App() {
 
   onMount(async () => {
     window.addEventListener("keydown", onKey);
+    const unDrop = installFileDrop((event) => {
+      if (event.type === "drop") {
+        setDropping(false);
+        openDropped(event.paths, event.position);
+      } else if (event.type === "leave") {
+        setDropping(false);
+        clearDropTarget();
+      } else {
+        setDropping(true);
+        // Which side would take the drop is shown as the pointer moves, not on release.
+        previewDropTarget(event.position);
+      }
+    });
+    onCleanup(unDrop);
     await loadSettings();
     restoreWorkspace();
     const unlisten = await listen<LaunchSpec>("launch", (e) => void openSpec(e.payload));
@@ -298,6 +325,14 @@ export default function App() {
       </Show>
       <Show when={dialog() === "profiles"}>
         <ProfilesDialog onClose={() => setDialog(null)} onDone={notify} />
+      </Show>
+      <Show when={dropping()}>
+        <div class="drop-overlay">
+          <div class="drop-card">
+            <span>Drop to compare</span>
+            <span class="muted small">Two or more open a comparison · one fills the side you drop it on</span>
+          </div>
+        </div>
       </Show>
       <Show when={toast()}>
         <div class="toast" onClick={() => setToast("")}>{toast()}</div>

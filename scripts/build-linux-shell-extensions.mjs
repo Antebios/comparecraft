@@ -13,6 +13,15 @@ function run(command, args) {
 const release = process.argv.includes("--release");
 const test = process.argv.includes("--test");
 const target = resolve("src-tauri/target");
+// The library links GLib directly (#[link(name = "glib-2.0")]), and a missing development package
+// otherwise surfaces only as a rust-lld "unable to find library" dump, so name the fix up front.
+if (spawnSync("pkg-config", ["--exists", "glib-2.0"]).status !== 0) {
+  console.warn(
+    "GLib development files not found; the shell menu library may fail to link.\n" +
+      "  Debian/Ubuntu: sudo apt install libglib2.0-dev\n" +
+      "  Fedora: sudo dnf install glib2-devel   Arch: sudo pacman -S glib2",
+  );
+}
 run("cargo", [
   "build",
   "--manifest-path",

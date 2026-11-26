@@ -16,6 +16,18 @@ export interface HostWindow {
   onCloseRequested(handler: (event: CloseRequest) => void | Promise<void>): Promise<() => void>;
 }
 
+/** A pointer position in CSS pixels, so it can be compared with DOM rects. */
+export interface DropPosition {
+  x: number;
+  y: number;
+}
+
+/** A drag or drop over the window, reported as file-system paths. */
+export type FileDropEvent =
+  | { type: "enter" | "over"; paths: string[]; position?: DropPosition }
+  | { type: "drop"; paths: string[]; position?: DropPosition }
+  | { type: "leave" };
+
 export interface Host {
   readonly name: "tauri" | "vscode";
   /** Restricts folder UI only; editable child file views retain their own capabilities. */
@@ -34,6 +46,8 @@ export interface Host {
   openPath: typeof Opener.openPath;
   revealItemInDir: typeof Opener.revealItemInDir;
   window(): HostWindow;
+  /** Native drag and drop: the only source of real paths for a desktop drop, in CSS pixels. */
+  onFileDrop?(handler: (event: FileDropEvent) => void): Promise<() => void>;
   /** Publishes view state to an embedding host (VS Code). Desktop leaves this undefined. */
   emit?(event: string, payload: unknown): void;
 }
@@ -70,3 +84,14 @@ export const openPath: typeof Opener.openPath = (path, openWith) => host().openP
 export const revealItemInDir: typeof Opener.revealItemInDir = (path) => host().revealItemInDir(path);
 export const getCurrentWindow = (): HostWindow => host().window();
 export const emit = (event: string, payload: unknown): void => current?.emit?.(event, payload);
+
+/**
+ * A native drop point in CSS pixels. wry reports the point in physical pixels on Windows (Win32
+ * client coordinates) but in the window's own logical units on macOS (points) and Linux (GTK widget
+ * coordinates), which already match CSS pixels, so only Windows needs the scale factor removed.
+ * Dividing twice is what made a drop on the right side resolve to the left one on a scaled screen.
+ */
+export function dropPoint(position: DropPosition, platform: string, pixelRatio: number): DropPosition {
+  if (!/windows/i.test(platform)) return { x: position.x, y: position.y };
+  return { x: position.x / pixelRatio, y: position.y / pixelRatio };
+}
