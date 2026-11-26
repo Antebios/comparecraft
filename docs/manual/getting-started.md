@@ -43,7 +43,7 @@ If no installer fits your system, you can build CompareCraft yourself. You need:
 - On Linux, the WebKitGTK 4.1 development files and a C toolchain. For example, on Debian and Ubuntu:
 
   ```sh
-  sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+  sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libglib2.0-dev
   ```
 
 - On Windows, the Microsoft C++ Build Tools ("Desktop development with C++") and WebView2. WebView2 is preinstalled on Windows 10 (1803 or later) and Windows 11.
