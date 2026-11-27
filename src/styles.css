@@ -571,6 +571,10 @@ button.link {
 .st-orphan {
   color: var(--orphan-fg);
 }
+.st-moved {
+  color: var(--orphan-fg);
+  font-style: italic;
+}
 
 /* Text compare */
 .tcompare {
@@ -896,6 +900,10 @@ button.link {
 }
 .fside.orphan {
   color: var(--orphan-fg);
+}
+.fside.orphan.moved {
+  font-style: italic;
+  opacity: 0.75;
 }
 .fside.error {
   color: var(--diff-fg);

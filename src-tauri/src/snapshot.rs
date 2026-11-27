@@ -112,9 +112,10 @@ pub fn save_snapshot(dir: &str, out: &str, crc: bool, empty_dirs: bool, options:
         return Err(io::Error::other(format!("Folder not found: {dir}")));
     }
     let defaults = FolderOptions::default();
-    let cx = Ctx::new(options.unwrap_or(&defaults));
+    let loc = Loc::Disk(root.clone());
+    let cx = Ctx::for_roots(options.unwrap_or(&defaults), &[&loc]);
     let mut items = vec![];
-    walk(&Loc::Disk(root.clone()), "", &cx, &mut items)?;
+    walk(&loc, "", &cx, &mut items)?;
     let mut entries: Vec<SnapEntry> = items
         .into_iter()
         .map(|(rel, m)| SnapEntry {

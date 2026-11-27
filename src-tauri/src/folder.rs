@@ -3,6 +3,8 @@
 use crate::fileio::{make_backup, modified_ms, BackupSpec};
 use crate::quick::{crc32_file, files_binary_equal, rules_verdict, BINARY_DIFFERENT, BINARY_SAME, RULES_SAME, SIMILAR};
 use crate::snapshot::{self, Snapshot};
+use ignore::gitignore::{Gitignore, GitignoreBuilder};
+use ignore::Match;
 use serde::{Deserialize, Serialize};
 use std::cell::{Cell, RefCell};
 use std::cmp::Ordering;
@@ -49,6 +51,10 @@ pub struct FolderOptions {
     pub dot_names_first: bool,
     /// Items forced to be compared with each other although their names differ ("Align With").
     pub align: Vec<Alignment>,
+    /// Exclude items ignored by either side's .gitignore files (and the `.git` folder itself).
+    pub respect_gitignore: bool,
+    /// Pair left-only and right-only files with identical contents as moved/renamed.
+    pub detect_moves: bool,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -129,6 +135,8 @@ impl Default for FolderOptions {
             follow_symlinks: false,
             dot_names_first: true,
             align: vec![],
+            respect_gitignore: false,
+            detect_moves: false,
         }
     }
 }
@@ -186,6 +194,9 @@ pub struct Node {
     /// Result of the content comparison, when the criteria compared contents.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub content: Option<Content>,
+    /// Orphan file whose identical copy is an orphan on the other side: that node's `rel`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub moved: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub children: Vec<Node>,
 }
@@ -204,6 +215,7 @@ impl Node {
             newer: None,
             error: None,
             content: None,
+            moved: None,
             children: vec![],
         }
     }
@@ -216,8 +228,10 @@ pub struct Summary {
     pub same: u32,
     pub similar: u32,
     pub diff: u32,
+    /// Orphans paired as moved are counted here (one per pair), not in `left_only`/`right_only`.
     pub left_only: u32,
     pub right_only: u32,
+    pub moved: u32,
     pub errors: u32,
 }
 
@@ -402,11 +416,84 @@ impl Filter {
     }
 }
 
+/// .gitignore rules of the compared roots: each root's own files, those of its folders, and those
+/// of its ancestors up to the repository root (the first folder containing `.git`).
+struct GitIgnores {
+    roots: Vec<(PathBuf, Vec<PathBuf>)>,
+    cache: RefCell<HashMap<PathBuf, Option<Arc<Gitignore>>>>,
+}
+
+impl GitIgnores {
+    fn new(roots: &[&Loc]) -> GitIgnores {
+        let roots = roots
+            .iter()
+            .filter_map(|l| l.disk())
+            .map(|root| {
+                let root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+                let mut outer = vec![];
+                if !root.join(".git").exists() {
+                    for a in root.ancestors().skip(1) {
+                        outer.push(a.to_path_buf());
+                        if a.join(".git").exists() {
+                            break;
+                        }
+                    }
+                    // Outside a repository only the compared tree's own files apply.
+                    if !outer.last().is_some_and(|a| a.join(".git").exists()) {
+                        outer.clear();
+                    }
+                }
+                (root, outer)
+            })
+            .collect();
+        GitIgnores { roots, cache: RefCell::new(HashMap::new()) }
+    }
+
+    fn load(&self, dir: &Path) -> Option<Arc<Gitignore>> {
+        if let Some(hit) = self.cache.borrow().get(dir) {
+            return hit.clone();
+        }
+        let mut b = GitignoreBuilder::new(dir);
+        let mut any = false;
+        for f in [dir.join(".gitignore"), dir.join(".git").join("info").join("exclude")] {
+            if f.is_file() && b.add(&f).is_none() {
+                any = true;
+            }
+        }
+        let gi = if any { b.build().ok().filter(|g| !g.is_empty()).map(Arc::new) } else { None };
+        self.cache.borrow_mut().insert(dir.to_path_buf(), gi.clone());
+        gi
+    }
+
+    /// Whether `rel` is ignored on any side, the deepest .gitignore taking precedence.
+    fn ignored(&self, rel: &str, is_dir: bool) -> bool {
+        let parent = rel.rsplit_once('/').map_or("", |(p, _)| p);
+        self.roots.iter().any(|(root, outer)| {
+            let path = root.join(rel);
+            let mut dirs: Vec<PathBuf> = vec![root.clone()];
+            for seg in parent.split('/').filter(|s| !s.is_empty()) {
+                dirs.push(dirs.last().unwrap().join(seg));
+            }
+            for dir in dirs.iter().rev().chain(outer.iter()) {
+                if let Some(gi) = self.load(dir) {
+                    match gi.matched(&path, is_dir) {
+                        Match::Ignore(_) => return true,
+                        Match::Whitelist(_) => return false,
+                        Match::None => {}
+                    }
+                }
+            }
+            false
+        })
+    }
+}
+
 /// Options plus the masks and filters compiled from them.
 pub(crate) struct Ctx<'a> {
     o: &'a FolderOptions,
     masks: Masks,
     filters: Vec<Filter>,
+    gitignore: Option<GitIgnores>,
     pending: RefCell<Option<HashMap<String, (Meta, Meta)>>>,
     progress: Option<&'a dyn Fn(ComparisonProgress)>,
     discovered: Cell<usize>,
@@ -418,8 +505,17 @@ impl<'a> Ctx<'a> {
         let now = now_ms();
         Ctx {
             o, masks: Masks::new(o), filters: o.other_filters.iter().filter_map(|f| Filter::compile(f, now)).collect(),
-            pending: RefCell::new(None), progress: None, discovered: Cell::new(0), last_progress: Cell::new(Instant::now()),
+            gitignore: None, pending: RefCell::new(None), progress: None, discovered: Cell::new(0), last_progress: Cell::new(Instant::now()),
         }
+    }
+
+    /// Context for comparing the given roots (needed to locate their .gitignore files).
+    pub(crate) fn for_roots(o: &'a FolderOptions, roots: &[&Loc]) -> Ctx<'a> {
+        let mut cx = Ctx::new(o);
+        if o.respect_gitignore {
+            cx.gitignore = Some(GitIgnores::new(roots));
+        }
+        cx
     }
 
     fn notify(&self, phase: &'static str, completed: usize, total: Option<usize>, force: bool) {
@@ -441,6 +537,12 @@ impl<'a> Ctx<'a> {
     /// Whether an entry of `parent` is listed.
     fn accept(&self, parent: &Loc, name: &str, rel: &str, m: &Meta) -> bool {
         if self.o.exclude_hidden && m.protected {
+            return false;
+        }
+        if self.o.respect_gitignore && name == ".git" {
+            return false;
+        }
+        if self.gitignore.as_ref().is_some_and(|g| g.ignored(rel, m.is_dir)) {
             return false;
         }
         if m.is_dir {
@@ -880,7 +982,7 @@ pub fn compare_items(left: &str, right: &str, rels: &[String], o: &FolderOptions
     let (Ok(Some(l)), Ok(Some(r))) = (open_source(left), open_source(right)) else {
         return rels.iter().map(|_| None).collect();
     };
-    let cx = Ctx::new(o);
+    let cx = Ctx::for_roots(o, &[&l, &r]);
     rels.iter().map(|rel| item_node(&l, &r, rel, &cx)).collect()
 }
 
@@ -1000,6 +1102,114 @@ fn finish_comparison(nodes: &mut [Node], left: &Loc, right: &Loc, cx: &Ctx, pend
     }
 }
 
+/// An orphan file considered for move detection.
+struct MoveCandidate {
+    rel: String,
+    name: String,
+    file: Loc,
+    size: u64,
+}
+
+/// Collects the orphan files of one side (`left`), tracking each node's location on that side.
+fn move_candidates(nodes: &[Node], loc: &Loc, root: &Loc, left: bool, out: &mut Vec<MoveCandidate>) {
+    for n in nodes {
+        let Some(side) = (if left { &n.left } else { &n.right }) else { continue };
+        if n.dir {
+            move_candidates(&n.children, &loc.join(&side.name), root, left, out);
+            continue;
+        }
+        let paired = n.left.is_some() && n.right.is_some();
+        if paired || side.size == 0 {
+            continue;
+        }
+        let file = match if left { &n.left_path } else { &n.right_path } {
+            Some(p) => root.join_rel(p),
+            None => loc.join(&side.name),
+        };
+        out.push(MoveCandidate { rel: n.rel.clone(), name: side.name.clone(), file, size: side.size });
+    }
+}
+
+/// CRC-32 of a file on disk, or the one recorded in a snapshot.
+fn candidate_crc(f: &Loc) -> Option<u32> {
+    match f {
+        Loc::Disk(p) => crc32_file(p).ok(),
+        Loc::Snap(s, rel) => {
+            let (parent, name) = rel.rsplit_once('/').unwrap_or(("", rel));
+            s.children(parent)?.iter().find(|(n, _)| n == name)?.1.crc
+        }
+    }
+}
+
+fn same_content(a: &Loc, b: &Loc) -> bool {
+    match (a.disk(), b.disk()) {
+        (Some(x), Some(y)) => files_binary_equal(x, y).unwrap_or(false),
+        // Snapshot contents are only known by CRC, which already matched.
+        _ => true,
+    }
+}
+
+/// Pairs left-only and right-only files with identical contents (same size, CRC and bytes) and marks
+/// each with its counterpart's `rel`. Files with the same name are paired first.
+fn detect_moves(nodes: &mut [Node], left: &Loc, right: &Loc, sum: &mut Summary) {
+    let (mut lc, mut rc) = (vec![], vec![]);
+    move_candidates(nodes, left, left, true, &mut lc);
+    move_candidates(nodes, right, right, false, &mut rc);
+    let sizes: HashSet<u64> = lc.iter().map(|c| c.size).collect();
+    rc.retain(|c| sizes.contains(&c.size));
+    let sizes: HashSet<u64> = rc.iter().map(|c| c.size).collect();
+    lc.retain(|c| sizes.contains(&c.size));
+    if lc.is_empty() {
+        return;
+    }
+    let mut groups: BTreeMap<(u64, u32), (Vec<MoveCandidate>, Vec<MoveCandidate>)> = BTreeMap::new();
+    for (c, is_left) in lc.into_iter().map(|c| (c, true)).chain(rc.into_iter().map(|c| (c, false))) {
+        if let Some(crc) = candidate_crc(&c.file) {
+            let g = groups.entry((c.size, crc)).or_default();
+            if is_left { g.0.push(c) } else { g.1.push(c) }
+        }
+    }
+    let mut moved: HashMap<(bool, String), String> = HashMap::new();
+    for (_, (ls, mut rs)) in groups {
+        if rs.is_empty() {
+            continue;
+        }
+        // Same-name pairs (moves) first, then the rest in order (renames).
+        let mut rest = vec![];
+        for l in ls {
+            match rs.iter().position(|r| r.name == l.name && same_content(&l.file, &r.file)) {
+                Some(i) => {
+                    let r = rs.remove(i);
+                    moved.insert((true, l.rel.clone()), r.rel.clone());
+                    moved.insert((false, r.rel), l.rel);
+                }
+                None => rest.push(l),
+            }
+        }
+        for l in rest {
+            if let Some(i) = rs.iter().position(|r| same_content(&l.file, &r.file)) {
+                let r = rs.remove(i);
+                moved.insert((true, l.rel.clone()), r.rel.clone());
+                moved.insert((false, r.rel), l.rel);
+            }
+        }
+    }
+    let pairs = (moved.len() / 2) as u32;
+    sum.moved += pairs;
+    sum.left_only -= pairs;
+    sum.right_only -= pairs;
+    fn mark(nodes: &mut [Node], moved: &mut HashMap<(bool, String), String>) {
+        for n in nodes {
+            if n.dir {
+                mark(&mut n.children, moved);
+            } else if n.left.is_none() || n.right.is_none() {
+                n.moved = moved.remove(&(n.left.is_some(), n.rel.clone()));
+            }
+        }
+    }
+    mark(nodes, &mut moved);
+}
+
 pub fn compare_folders(left: &str, right: &str, o: &FolderOptions) -> io::Result<FolderResult> {
     compare_folders_impl(left, right, o, None)
 }
@@ -1014,6 +1224,9 @@ fn compare_folders_impl(left: &str, right: &str, o: &FolderOptions, progress: Op
     cx.notify("scanning", 0, None, true);
     let lp = open_source(left)?.ok_or_else(|| io::Error::other(format!("Left folder not found: {left}")))?;
     let rp = open_source(right)?.ok_or_else(|| io::Error::other(format!("Right folder not found: {right}")))?;
+    if o.respect_gitignore {
+        cx.gitignore = Some(GitIgnores::new(&[&lp, &rp]));
+    }
     if progress.is_some() { *cx.pending.borrow_mut() = Some(HashMap::new()); }
     let mut sum = Summary::default();
     let mut children = if o.flatten { compare_flat(&lp, &rp, &cx, &mut sum)? } else { compare_dirs(&lp, &rp, "", &cx, &mut sum)? };
@@ -1024,6 +1237,9 @@ fn compare_folders_impl(left: &str, right: &str, o: &FolderOptions, progress: Op
         cx.notify("comparing", 0, Some(total), true);
         finish_comparison(&mut children, &lp, &rp, &cx, &mut pending, &mut sum, total);
         cx.notify("comparing", total, Some(total), true);
+    }
+    if o.detect_moves {
+        detect_moves(&mut children, &lp, &rp, &mut sum);
     }
     let mut root = Node::new("", "", true, folder_status(&children));
     root.left = Some(lp.root_side(left)?);
@@ -1439,6 +1655,78 @@ mod tests {
             let actual = compare_folders_with_progress(&left.to_string_lossy(), &target, &options, &|_| {}).unwrap();
             assert_eq!(serde_json::to_value(actual).unwrap(), serde_json::to_value(expected).unwrap());
         }
+    }
+
+    fn all_rels(n: &Node, out: &mut Vec<String>) {
+        for c in &n.children {
+            out.push(c.rel.clone());
+            all_rels(c, out);
+        }
+    }
+
+    fn find_rel<'a>(n: &'a Node, rel: &str, left: bool) -> &'a Node {
+        fn go<'a>(n: &'a Node, rel: &str, left: bool) -> Option<&'a Node> {
+            n.children.iter().find_map(|c| if c.rel == rel && c.left.is_some() == left { Some(c) } else { go(c, rel, left) })
+        }
+        go(n, rel, left).unwrap_or_else(|| panic!("{rel} not found"))
+    }
+
+    #[test]
+    fn detects_moved_and_renamed_files() {
+        let d = tempfile::tempdir().unwrap();
+        let (l, r) = (d.path().join("l"), d.path().join("r"));
+        write(&l.join("a/x.txt"), "hello world");
+        write(&r.join("b/x.txt"), "hello world");
+        write(&l.join("old.txt"), "rename me");
+        write(&r.join("new.txt"), "rename me");
+        write(&l.join("gone.txt"), "gone");
+        write(&r.join("added.txt"), "added");
+        write(&l.join("e1.txt"), "");
+        write(&r.join("e2.txt"), "");
+        write(&l.join("d1.txt"), "aaaa");
+        write(&r.join("d2.txt"), "bbbb");
+        let o = FolderOptions { detect_moves: true, ..Default::default() };
+        let (ls, rs) = (l.to_string_lossy(), r.to_string_lossy());
+        for res in [compare_folders(&ls, &rs, &o).unwrap(), compare_folders_with_progress(&ls, &rs, &o, &|_| {}).unwrap()] {
+            assert_eq!((res.summary.moved, res.summary.left_only, res.summary.right_only), (2, 3, 3));
+            assert_eq!(find_rel(&res.root, "a/x.txt", true).moved.as_deref(), Some("b/x.txt"));
+            assert_eq!(find_rel(&res.root, "b/x.txt", false).moved.as_deref(), Some("a/x.txt"));
+            assert_eq!(find_rel(&res.root, "new.txt", false).moved.as_deref(), Some("old.txt"));
+            for (rel, left) in [("gone.txt", true), ("e1.txt", true), ("d1.txt", true), ("d2.txt", false)] {
+                assert_eq!(find_rel(&res.root, rel, left).moved, None, "{rel}");
+            }
+        }
+        let off = compare_folders(&ls, &rs, &FolderOptions::default()).unwrap();
+        assert_eq!((off.summary.moved, off.summary.left_only), (0, 5));
+    }
+
+    #[test]
+    fn respects_gitignore_files_of_both_sides_and_the_enclosing_repository() {
+        let d = tempfile::tempdir().unwrap();
+        let repo = d.path().join("repo");
+        fs::create_dir_all(repo.join(".git")).unwrap();
+        write(&repo.join(".gitignore"), "build/\n*.log\n!keep.log\n");
+        let (l, r) = (repo.join("proj"), d.path().join("other"));
+        write(&r.join(".gitignore"), "tmp/\n");
+        for side in [&l, &r] {
+            for f in ["build/out.txt", "a.log", "keep.log", "src/main.rs", "src/gen.rs", "tmp/x.txt"] {
+                write(&side.join(f), f);
+            }
+        }
+        write(&r.join(".git/HEAD"), "ref");
+        write(&l.join("src/.gitignore"), "gen.rs\n");
+        let o = FolderOptions { respect_gitignore: true, ..Default::default() };
+        let res = compare_folders(&l.to_string_lossy(), &r.to_string_lossy(), &o).unwrap();
+        let mut rels = vec![];
+        all_rels(&res.root, &mut rels);
+        rels.sort();
+        assert_eq!(rels, vec![".gitignore", "keep.log", "src", "src/.gitignore", "src/main.rs"]);
+        let res = compare_folders(&l.to_string_lossy(), &r.to_string_lossy(), &FolderOptions::default()).unwrap();
+        assert_eq!(res.summary.files, 9);
+        // The left side is cut off from the enclosing repository once it is a repository itself.
+        write(&l.join(".git/HEAD"), "ref");
+        let res = compare_folders(&l.to_string_lossy(), &r.to_string_lossy(), &o).unwrap();
+        assert!(find_rel(&res.root, "a.log", true).left.is_some());
     }
 
     #[test]

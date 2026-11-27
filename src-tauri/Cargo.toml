@@ -49,6 +49,7 @@ image = { version = "0.25", default-features = false, features = ["png", "jpeg",
 chrono = "0.4.45"
 unicode-normalization = "0.1"
 font-kit = "0.14"
+ignore = "0.4.35"
 
 [dev-dependencies]
 tempfile = "3"

@@ -110,6 +110,12 @@ Other filters apply to files only. Folders are not removed by them.
 
 Turn on **Exclude protected operating system files (Recommended)** to leave out files that are marked as both hidden and system files. This applies to Windows; it is off by default.
 
+### .gitignore files
+
+**Respect .gitignore files** (on by default in folder comparisons) leaves out items ignored by Git, along with `.git` folders. The rules come from `.gitignore` files in the compared folders and their subfolders, and from `.git/info/exclude`. When a compared folder lies inside a Git repository, the `.gitignore` files between it and the repository root apply too. Deeper files take precedence, and `!` patterns re-include items as in Git.
+
+An item is left out when the rules of **either** side ignore it. That way, build output listed in only one side's `.gitignore` does not show up as an orphan on the other side. **Suppress Filters** and **Peek** show ignored items as well. Scripts and the command line do not apply `.gitignore` rules.
+
 ## Filters and snapshots
 
 When you save a snapshot of a folder with **Tools > Save Snapshot…**, items excluded by the filters are left out unless you turn on **Items excluded by file filters**. See [Save Snapshot](options.md#save-snapshot).

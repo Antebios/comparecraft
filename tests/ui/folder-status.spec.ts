@@ -1,6 +1,6 @@
 import { test, expect, folderTab } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
-import type { FolderComparisonProgress, Session } from "../../src/api";
+import type { FolderComparisonProgress, FolderResult, Session } from "../../src/api";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -479,4 +479,34 @@ test("a folder refresh restores the configured metadata comparison", async ({ pa
   await expect(page.locator(".frow .fstatus")).toHaveText("=");
   await page.keyboard.press("F5");
   await expect(page.locator(".frow .fstatus")).toHaveText("≠");
+});
+
+test("moved files are marked, counted, and can be hidden", async ({ page, folders }) => {
+  const side = (name: string) => ({ name, size: 18, modified: 1000 });
+  const result: FolderResult = {
+    root: { name: "", rel: "", dir: true, status: "diff", children: [
+      { name: "new", rel: "new", dir: true, status: "right", right: side("new"), children: [
+        { name: "moved.txt", rel: "new/moved.txt", dir: false, status: "right", right: side("moved.txt"), moved: "old/moved.txt" },
+      ] },
+      { name: "old", rel: "old", dir: true, status: "left", left: side("old"), children: [
+        { name: "moved.txt", rel: "old/moved.txt", dir: false, status: "left", left: side("moved.txt"), moved: "new/moved.txt" },
+      ] },
+      { name: "gone.txt", rel: "gone.txt", dir: false, status: "left", left: side("gone.txt") },
+    ] },
+    summary: { files: 3, same: 0, similar: 0, diff: 0, leftOnly: 1, rightOnly: 0, moved: 1, errors: 0 },
+  };
+  await page.route("**/test-invoke", async (route) => {
+    if (route.request().postDataJSON().cmd !== "compare_folders") { await route.fallback(); return; }
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify(result) });
+  });
+  await folders.open(page);
+  await page.locator("button", { hasText: "⊞ Expand" }).click();
+  const moved = page.locator(".frow").filter({ hasText: "moved.txt" });
+  await expect(moved).toHaveCount(2);
+  await expect(moved.locator(".fstatus")).toHaveText(["⇌", "⇌"]);
+  await expect(moved.first()).toHaveAttribute("title", /Moved\/renamed: identical to left old\/moved\.txt/);
+  await expect(page.locator(".statusbar")).toContainText("1 left-only · 0 right-only · 1 moved");
+  await page.locator("button", { hasText: "⇌ Moved" }).click();
+  await expect(moved).toHaveCount(0);
+  await expect(page.locator(".frow").filter({ hasText: "gone.txt" })).toHaveCount(1);
 });
