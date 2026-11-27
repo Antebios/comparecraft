@@ -2,7 +2,8 @@ import { ask, emit, isEmbedded, listen, open as openDialog, save as saveDialog, 
 import { settings } from "../settings";
 import { batch, createEffect, createMemo, createSignal, For, Index, on, onCleanup, onMount, Show } from "solid-js";
 import { api, basename, defaultRules, errText, fmtSize, fmtTime, type DiffResult, type Row, type Rules, type TextFile } from "../api";
-import { Btn, editorRowHeight, Highlighted, Modal, PathBar, useViewport } from "../components/common";
+import { Btn, editorRowHeight, Highlighted, Modal, PathBar, useViewport, WrappedText } from "../components/common";
+import { fixedLayout, layoutRange, PROBE, rowLayout, useWrapMetrics, wrapper } from "../wrap";
 import { showContextMenu } from "../components/ContextMenu";
 import { externalCommands, shellWords } from "../components/external";
 import FindBar from "../components/FindBar";
@@ -149,7 +150,20 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
 
   let paneL!: HTMLDivElement;
   let paneR!: HTMLDivElement;
+  let rulerL!: HTMLDivElement;
+  let rulerR!: HTMLDivElement;
   const vp = useViewport(() => paneL);
+  const wordWrap = () => (tab().options.wordWrap as boolean | undefined) ?? settings.textWordWrap;
+  const toggleWordWrap = () => updateTab(tab().id, { options: { ...tab().options, wordWrap: !wordWrap() } });
+  const metrics = [useWrapMetrics(() => rulerL), useWrapMetrics(() => rulerR)];
+  const wrapOf = (s: Side) =>
+    createMemo(() => {
+      const m = metrics[s];
+      return wrapper(wordWrap() && m.cols() ? { cols: m.cols(), tabSize: settings.tabSize, font: m.font(), charW: m.charW() } : null);
+    });
+  const wraps = [wrapOf(0), wrapOf(1)];
+  // Turning wrap on narrows the panes to the window; measure now so the first layout is final.
+  createEffect(on(wordWrap, (on) => on && metrics.forEach((m) => m.refresh()), { defer: true }));
   let overview!: HTMLDivElement;
   const mapViewport = useViewport(() => overview);
 
@@ -373,7 +387,20 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
       return hunkActive(index) && end > start ? [{ index, start, end, important: hunk.important }] : [];
     });
   });
-  const contentHeight = () => Math.max(vp.height(), visible().length * editorRowHeight());
+  /** Row heights in visual lines; an aligned row is as tall as its longer wrapped side. */
+  const layout = createMemo(() => {
+    const vis = visible();
+    const res = result();
+    if (!wordWrap() || !res) return fixedLayout(vis.length);
+    const [wl, wr] = [wraps[0](), wraps[1]()];
+    const [l, r] = [L(), R()];
+    return rowLayout(vis.length, (vi) => {
+      const row = res.rows[vis[vi]];
+      return Math.max(row.l === undefined ? 1 : wl(l[row.l]).length, row.r === undefined ? 1 : wr(r[row.r]).length);
+    });
+  });
+  const rowTop = (vi: number) => layout().top(vi) * editorRowHeight();
+  const contentHeight = () => Math.max(vp.height(), layout().total * editorRowHeight());
   const maxScroll = () => Math.max(0, contentHeight() - vp.height());
   const overviewArea = createMemo(() => {
     const track = mapViewport.height();
@@ -382,15 +409,34 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
     return { top: maxScroll() ? scroll / maxScroll() * (track - height) : 0, height };
   });
 
-  createEffect(on([visible, vp.height, editorRowHeight], () => {
+  /**
+   * Row at the top of the panes and how many visual lines into it. Wrapped rows change height when
+   * the panes resize or wrapping toggles, so that row is kept in place instead of the pixel offset.
+   */
+  let anchor = { ri: -1, off: 0 };
+  const setAnchor = (top: number) => {
+    const lay = layout();
+    const line = top / editorRowHeight();
+    const vi = lay.at(Math.floor(line));
+    anchor = { ri: visible()[vi] ?? -1, off: line - lay.top(vi) };
+  };
+  let wasWrapped = wordWrap();
+  createEffect(on([layout, vp.height, editorRowHeight], () => {
+    const keep = wordWrap() || wasWrapped;
+    wasWrapped = wordWrap();
+    const a = anchor;
     queueMicrotask(() => {
-      if (paneL?.isConnected && paneR?.isConnected && paneL.clientHeight > 0) scrollPanes(paneL.scrollTop);
+      if (!paneL?.isConnected || !paneR?.isConnected || paneL.clientHeight <= 0) return;
+      const vis = visible();
+      const vi = keep && a.ri >= 0 ? lowerBound(vis, a.ri) : -1;
+      if (vi >= 0 && vis[vi] === a.ri) scrollPanes((layout().top(vi) + Math.min(a.off, layout().lines(vi))) * editorRowHeight());
+      else scrollPanes(paneL.scrollTop);
     });
   }));
 
   const windowRows = createMemo(() => {
     const vis = visible();
-    const { start, end } = vp.range(vis.length);
+    const { start, end } = layoutRange(layout(), vis.length, vp.scrollTop(), vp.height(), editorRowHeight());
     const items: { vi: number; ri: number }[] = [];
     for (let i = start; i < end; i++) items.push({ vi: i, ri: vis[i] });
     return items;
@@ -412,6 +458,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
       dst.scrollLeft = src.scrollLeft;
     }
     vp.setScrollTop(src.scrollTop);
+    setAnchor(src.scrollTop);
   };
 
   function scrollPanes(top: number) {
@@ -419,6 +466,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
     paneL.scrollTop = clamped;
     paneR.scrollTop = clamped;
     vp.setScrollTop(paneL.scrollTop);
+    setAnchor(paneL.scrollTop);
   }
 
   function jumpOverview(event: MouseEvent) {
@@ -448,7 +496,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
 
   function scrollToRow(ri: number) {
     const vi = lowerBound(visible(), ri);
-    scrollPanes(vi * editorRowHeight() - vp.height() / 3);
+    scrollPanes(rowTop(vi) - vp.height() / 3);
   }
 
   function goHunk(h: number) {
@@ -466,7 +514,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
     if (h < 0) {
       // Start from the current scroll position.
       const vis = visible();
-      const vi = Math.floor(vp.scrollTop() / editorRowHeight());
+      const vi = layout().at(Math.floor(vp.scrollTop() / editorRowHeight()));
       const ri = vis[Math.min(vi, vis.length - 1)] ?? 0;
       h = dir === 1 ? -1 : res.hunks.length;
       for (let i = 0; i < res.hunks.length; i++) {
@@ -763,7 +811,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
     });
     if (!visible().includes(ri)) setFilter("all");
     const vi = lowerBound(visible(), ri);
-    const top = vi * editorRowHeight();
+    const top = rowTop(vi);
     if (top < paneL.scrollTop || top > paneL.scrollTop + vp.height() - editorRowHeight() * 2) scrollToRow(ri);
   }
 
@@ -1129,6 +1177,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
     filterCmd("diffs", "Show Differences"),
     filterCmd("context", "Show Context"),
     filterCmd("same", "Show Same"),
+    { id: "word-wrap", menu: "View", group: "wrap", label: "Word Wrap", keys: "Alt+Z", checked: wordWrap, run: toggleWordWrap },
     { id: "ignore-unimp", menu: "View", group: "rules", label: "Ignore Unimportant Differences", checked: ignoreUnimportant, run: () => setIgnoreUnimportant(!ignoreUnimportant()) },
   ]);
   const k = (id: string) => {
@@ -1166,14 +1215,22 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
     return (
       <div
         class="tpane"
+        classList={{ wrapped: wordWrap() }}
         id={`text-pane-${tab().id}-${s}`}
         ref={(el) => (s === 0 ? (paneL = el) : (paneR = el))}
         onScroll={(e) => onScroll(e.currentTarget, s === 0 ? paneR : paneL)}
       >
         <div
           class="tpane-inner"
-          style={{ height: `${visible().length * editorRowHeight()}px`, width: `calc(${(s === 0 ? maxL() : maxR()) + 2}ch + 82px)` }}
+          style={{ height: `${layout().total * editorRowHeight()}px`, width: wordWrap() ? "100%" : `calc(${(s === 0 ? maxL() : maxR()) + 2}ch + 82px)` }}
         >
+          <div class="wrap-ruler" aria-hidden="true" ref={(el) => (s === 0 ? (rulerL = el) : (rulerR = el))}>
+            <span class="gut" />
+            <span class="ln" />
+            <span class="wrap-area">
+              <span class="wrap-probe">{PROBE}</span>
+            </span>
+          </div>
           <Index each={windowRows()}>
             {(item) => {
               const row = () => result()!.rows[item().ri];
@@ -1204,7 +1261,10 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
                     "align-from": alignFrom()?.side === s && alignFrom()?.line === idx(),
                     "kb-target": item().ri === selRow() && s === selSide(),
                   }}
-                  style={{ top: `${item().vi * editorRowHeight()}px` }}
+                  style={{
+                    top: `${rowTop(item().vi)}px`,
+                    height: wordWrap() ? `${layout().lines(item().vi) * editorRowHeight()}px` : undefined,
+                  }}
                   onMouseDown={(e) => {
                     const ri = item().ri;
                     // Keep a line selection for its context menu.
@@ -1261,8 +1321,9 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
                     fallback={
                       <span class="tx">
                         {idx() !== undefined && (
-                          <Highlighted
+                          <WrappedText
                             text={lines(s)[idx()!] ?? ""}
+                            starts={wraps[s]()(lines(s)[idx()!])}
                             spans={k() === "same" ? undefined : row()[spansKey]}
                             cls={row().k === "unimportant" ? "hl-u" : "hl"}
                           />
@@ -1322,6 +1383,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
         >
           ≈ Ignore unimportant
         </Btn>
+        <Btn title="Wrap long lines" kbd={displayKeys("Alt+Z")} active={wordWrap()} onClick={toggleWordWrap}>↵ Wrap</Btn>
         <Btn title="Comparison rules" onClick={() => setShowRules(!showRules())} active={showRules()}>⚙ Rules</Btn>
         <span class="sep" />
         <Btn title="Swap sides" onClick={swap}>⇄ Swap</Btn>
@@ -1378,7 +1440,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
               <div
                 class="ov-mark"
                 classList={{ imp: mark.important, cur: cur() === mark.index }}
-                style={{ top: `${mark.start / Math.max(1, visible().length) * 100}%`, height: `max(2px, ${(mark.end - mark.start) / Math.max(1, visible().length) * 100}%)` }}
+                style={{ top: `${layout().top(mark.start) / Math.max(1, layout().total) * 100}%`, height: `max(2px, ${(layout().top(mark.end) - layout().top(mark.start)) / Math.max(1, layout().total) * 100}%)` }}
                 onClick={(event) => { event.stopPropagation(); if (event.button === 0) goHunk(mark.index); }}
               />
             )}
@@ -1391,7 +1453,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
         <div class="divider" />
         <Pane side={1} />
       </div>
-      <div class="details">
+      <div class="details" classList={{ wrapped: wordWrap() }}>
         <Show when={selRowData()} fallback={<div class="muted">Select a line to see details. Double-click a line to edit it.</div>}>
           {(row) => (
             <>

@@ -4,6 +4,13 @@ import { join } from "node:path";
 import type { Page } from "@playwright/test";
 
 async function openMinimap(page: Page, left: string, right: string) {
+  // These checks cover one row per line and horizontal scrolling.
+  await page.route("**/test-invoke", (route) => {
+    const { cmd } = route.request().postDataJSON();
+    if (cmd === "load_settings") return route.fulfill({ json: { textWordWrap: false } });
+    if (cmd === "save_settings") return route.fulfill({ json: null });
+    return route.continue();
+  });
   await page.goto(`/tests/ui/?spec=${encodeURIComponent(JSON.stringify({ kind: "text", paths: [left, right] }))}`);
   await expect(page.locator(".tab-view:visible .trow").first()).toBeVisible({ timeout: 15000 });
 }

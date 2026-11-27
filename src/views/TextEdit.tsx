@@ -1,8 +1,8 @@
 import { ask, save as saveDialog } from "../host";
 import { createEffect, createSignal, onMount, Show } from "solid-js";
 import { api, errText, type TextFile } from "../api";
-import { registerCommands } from "../commands";
 import { Btn, PathBar } from "../components/common";
+import { displayKeys, registerCommands } from "../commands";
 import { settings } from "../settings";
 import { persistSession, updateTab, type Tab } from "../store";
 
@@ -15,6 +15,8 @@ export default function TextEdit(props: { tab: Tab; active: boolean }) {
   const [message, setMessage] = createSignal("");
   const [pos, setPos] = createSignal({ line: 1, col: 1 });
   let area!: HTMLTextAreaElement;
+  const wordWrap = () => (tab().options.wordWrap as boolean | undefined) ?? settings.textWordWrap;
+  const toggleWordWrap = () => updateTab(tab().id, { options: { ...tab().options, wordWrap: !wordWrap() } });
 
   async function load(path: string) {
     if (!path) return;
@@ -81,6 +83,7 @@ export default function TextEdit(props: { tab: Tab; active: boolean }) {
     { id: "save", menu: "File", group: "save", label: "Save", keys: "Ctrl+S", inInputs: true, run: save },
     { id: "save-as", menu: "File", group: "save", label: "Save As…", keys: "Shift+Ctrl+S", inInputs: true, run: saveAs },
     { id: "reload", menu: "File", group: "save", label: "Reload", keys: "F5", run: reload },
+    { id: "word-wrap", menu: "View", group: "wrap", label: "Word Wrap", keys: "Alt+Z", inInputs: true, checked: wordWrap, run: toggleWordWrap },
   ]);
 
   return (
@@ -89,6 +92,7 @@ export default function TextEdit(props: { tab: Tab; active: boolean }) {
         <Btn title="Save" kbd="Ctrl+S" onClick={save} disabled={!dirty()}>💾 Save</Btn>
         <Btn title="Save As" onClick={saveAs}>Save As…</Btn>
         <Btn title="Reload from disk" kbd="F5" onClick={reload}>⟳ Reload</Btn>
+        <Btn title="Wrap long lines" kbd={displayKeys("Alt+Z")} active={wordWrap()} onClick={toggleWordWrap}>↵ Wrap</Btn>
       </div>
       <div class="paths">
         <PathBar value={tab().paths[0] ?? ""} onCommit={commitPath} dirty={dirty()} />
@@ -96,6 +100,8 @@ export default function TextEdit(props: { tab: Tab; active: boolean }) {
       <textarea
         ref={area}
         class="text-edit"
+        classList={{ wrapped: wordWrap() }}
+        wrap={wordWrap() ? "soft" : "off"}
         spellcheck={false}
         value={text()}
         style={{ "tab-size": settings.tabSize }}

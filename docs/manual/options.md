@@ -119,6 +119,7 @@ In the VS Code extension, the editor font family follows VS Code's **Editor: Fon
 | --- | --- | --- | --- |
 | **Context lines (Show Context):** | 0 to 50 | 3 | The number of unchanged lines shown above and below each difference when a text comparison shows context. |
 | **Tab size:** | 1 to 16 | 4 | The width of a tab character, in spaces. |
+| **Word wrap long lines** | On or off | On | Wraps long lines in Text Compare, Text Merge and Text Edit. **View > Word Wrap** (`Alt+Z`) overrides it for a single tab. |
 
 ## Next Difference
 
