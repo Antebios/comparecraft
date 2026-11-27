@@ -4,6 +4,7 @@ import { batch, createEffect, createMemo, createSignal, For, Index, on, onCleanu
 import { api, basename, defaultRules, errText, fmtSize, fmtTime, type DiffResult, type Row, type Rules, type TextFile } from "../api";
 import { Btn, editorRowHeight, Highlighted, Modal, PathBar, useViewport, WrappedText } from "../components/common";
 import { fixedLayout, layoutRange, PROBE, rowLayout, useWrapMetrics, wrapper } from "../wrap";
+import { mapOffset, ordered, type TextPos, type TextSel } from "../textSelection";
 import { showContextMenu } from "../components/ContextMenu";
 import { externalCommands, shellWords } from "../components/external";
 import FindBar from "../components/FindBar";
@@ -123,6 +124,8 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
   const [selSide, setSelSide] = createSignal<Side>(0);
   /** Other end of a line (row range) selection, or -1 when only the caret row is selected. */
   const [selAnchor, setSelAnchor] = createSignal(-1);
+  /** Text selected by dragging; its rows are mirrored into the row selection above. */
+  const [textSel, setTextSel] = createSignal<TextSel | null>(null);
   const [cuts, setCuts] = createSignal<Cut[]>([]);
   const [alignFrom, setAlignFrom] = createSignal<{ side: Side; line: number } | null>(null);
   const [ignoredKeys, setIgnoredKeys] = createSignal<Set<string>>(new Set());
@@ -502,6 +505,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
   function goHunk(h: number) {
     const res = result();
     if (!res || h < 0 || h >= res.hunks.length) return;
+    setTextSel(null);
     setCur(h);
     setSelRow(res.hunks[h].start);
     scrollToRow(res.hunks[h].start);
@@ -584,6 +588,13 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
     return a < 0 ? [r, r] : [Math.min(a, r), Math.max(a, r)];
   };
   const hasLineSel = () => selAnchor() >= 0 && selRow() >= 0;
+  /** The dragged text selection, unless the row selection was changed since. */
+  const dragSel = () => {
+    const t = textSel();
+    if (!t || selSide() !== t.side || selRow() !== t.focus.ri) return null;
+    return selAnchor() === (t.anchor.ri === t.focus.ri ? -1 : t.anchor.ri) ? t : null;
+  };
+  createEffect(on(result, () => setTextSel(null), { defer: true }));
   const inSel = (ri: number) => {
     const [a, b] = selRange();
     return ri >= a && ri <= b;
@@ -640,13 +651,78 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
     recompute(true);
   }
 
-  /** "Copy to Left/Right": the selected lines, or else the current difference section. */
+  /** "Copy to Left/Right": the dragged text, else the selected lines, else the current difference section. */
   function copyHunk(to: Side) {
+    const t = dragSel();
+    if (t && t.side !== to) return copySelection(to, t);
     if (hasLineSel()) return copyRows(to, ...selRange());
     const res = result();
     const h = curHunk();
     if (!res || h < 0) return setMessage("Select a difference first.");
     copyRows(to, res.hunks[h].start, res.hunks[h].end - 1);
+  }
+
+  /**
+   * Endpoints and text of a dragged selection. A selection starting at the end of a non-empty line or
+   * ending at its start leaves that line out; rows without a line on the selected side are covered whole.
+   */
+  function dragSource(t: TextSel): { a: TextPos; b: TextPos; text: string[] } | null {
+    const rows = result()?.rows;
+    if (!rows) return null;
+    const k = keyOf(t.side);
+    const src = lines(t.side);
+    const lineAt = (ri: number) => (rows[ri]?.[k] === undefined ? undefined : src[rows[ri][k]!] ?? "");
+    let [a, b] = ordered(t);
+    // Empty lines count as selected when the drag starts or ends on them.
+    if (a.ri < b.ri && lineAt(a.ri) && a.col >= lineAt(a.ri)!.length) a = { ri: a.ri + 1, col: 0 };
+    if (a.ri < b.ri && lineAt(b.ri) && b.col === 0) b = { ri: b.ri - 1, col: Infinity };
+    if (a.ri > b.ri || (a.ri === b.ri && lineAt(a.ri) !== undefined && a.col >= Math.min(b.col, lineAt(a.ri)!.length))) return null;
+    const text: string[] = [];
+    for (let i = a.ri; i <= b.ri; i++) {
+      const line = lineAt(i);
+      if (line !== undefined) text.push(line.slice(i === a.ri ? a.col : 0, i === b.ri ? b.col : line.length));
+    }
+    return { a, b, text };
+  }
+
+  /**
+   * Copies dragged text to side `to`: the other side's text of the covered rows is replaced, keeping
+   * its part before the selection start and after the selection end on partially selected lines.
+   */
+  function copySelection(to: Side, t: TextSel) {
+    const res = result();
+    const sel = dragSource(t);
+    if (!res || !sel) return setMessage("Select some text first.");
+    if (readOnly(to)) return setMessage("Target side is read-only.");
+    const { a, b, text } = sel;
+    const [sk, dk] = [keyOf(t.side), keyOf(to)];
+    const [src, dst] = [lines(t.side), [...lines(to)]];
+    const dstIdx: number[] = [];
+    for (let i = a.ri; i <= b.ri; i++) if (res.rows[i][dk] !== undefined) dstIdx.push(res.rows[i][dk]!);
+    const opts = { ignoreCase: rules().ignoreCase, ignoreEmbeddedWs: rules().ignoreEmbeddedWs };
+    const [ra, rb] = [res.rows[a.ri], res.rows[b.ri]];
+    let start = 0;
+    let prefix = "";
+    let suffix = "";
+    if (ra[sk] !== undefined && ra[dk] !== undefined) {
+      start = mapOffset(src[ra[sk]!], dst[ra[dk]!], a.col, "start", opts);
+      prefix = dst[ra[dk]!].slice(0, start);
+    }
+    if (rb[sk] !== undefined && rb[dk] !== undefined) {
+      const end = mapOffset(src[rb[sk]!], dst[rb[dk]!], b.col, "end", opts);
+      suffix = dst[rb[dk]!].slice(a.ri === b.ri ? Math.max(end, start) : end);
+    }
+    const next = [...text];
+    if (next.length) {
+      next[0] = prefix + next[0];
+      next[next.length - 1] += suffix;
+    }
+    snapshot();
+    if (dstIdx.length) dst.splice(dstIdx[0], dstIdx[dstIdx.length - 1] - dstIdx[0] + 1, ...next);
+    else dst.splice(insertionPoint(to, b.ri + 1), 0, ...next);
+    editLines(to, dst);
+    setTextSel(null);
+    recompute(true);
   }
 
   /** "Copy Line to Left/Right": the selected lines, or else the caret line. */
@@ -803,6 +879,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
 
   function selectRow(ri: number, side: Side = selSide(), extend = false) {
     batch(() => {
+      setTextSel(null);
       if (!extend) setSelAnchor(-1);
       else if (selAnchor() < 0) setSelAnchor(selRow());
       setSelRow(ri);
@@ -884,7 +961,12 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
   const hasSel = () => selRow() >= 0;
   /** Text selected with the mouse, or else the selected lines of the selected side. */
   function selectionText(): string {
-    const t = window.getSelection()?.toString() ?? "";
+    const native = window.getSelection();
+    const t = native?.toString() ?? "";
+    // Rows scrolled out of view are re-rendered, so a long drag is read from the tracked selection.
+    const drag = dragSel();
+    const inPanes = !!native?.anchorNode && (paneL.contains(native.anchorNode) || paneR.contains(native.anchorNode));
+    if (drag && (!t || inPanes)) return dragSource(drag)?.text.join("\n") ?? "";
     if (t) return t;
     const s = selSide();
     return selLines(s).map((i) => lines(s)[i] ?? "").join("\n");
@@ -957,6 +1039,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
     if (!res || h < 0) return;
     const hk = res.hunks[h];
     batch(() => {
+      setTextSel(null);
       setCur(h);
       setSelAnchor(hk.start);
       setSelRow(hk.end - 1);
@@ -1208,6 +1291,91 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
 
   const selRowData = () => result()?.rows[selRow()];
 
+  const paneOf = (s: Side) => (s === 0 ? paneL : paneR);
+
+  /** Row at a viewport Y coordinate in pane `s`, clamped to the visible part of the pane. */
+  function rowAtY(s: Side, clientY: number): number {
+    const vis = visible();
+    if (!vis.length) return -1;
+    const pane = paneOf(s);
+    const y = Math.max(0, Math.min(pane.clientHeight - 1, clientY - pane.getBoundingClientRect().top)) + pane.scrollTop;
+    return vis[layout().at(Math.floor(y / editorRowHeight()))];
+  }
+
+  /** Column of row `ri` in pane `s` under a viewport point: 0 before the text, the line end after it. */
+  function colAt(s: Side, ri: number, x: number, y: number): number {
+    const idx = result()?.rows[ri]?.[keyOf(s)];
+    if (idx === undefined) return 0;
+    const len = (lines(s)[idx] ?? "").length;
+    const tx = paneOf(s).querySelector<HTMLElement>(`.trow[data-ri="${ri}"] .tx`);
+    if (!tx) return y < paneOf(s).getBoundingClientRect().top ? 0 : len;
+    const row = tx.parentElement!.getBoundingClientRect();
+    if (y < row.top) return 0;
+    if (y >= row.bottom) return len;
+    if (x <= tx.getBoundingClientRect().left) return 0;
+    const d = document as Document & {
+      caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+      caretRangeFromPoint?: (x: number, y: number) => Range | null;
+    };
+    const cy = Math.min(Math.max(y, row.top + 1), row.bottom - 1);
+    const pos = d.caretPositionFromPoint?.(x, cy);
+    const range = pos ? null : d.caretRangeFromPoint?.(x, cy);
+    const node = pos?.offsetNode ?? range?.startContainer;
+    if (!node || !tx.contains(node)) return len;
+    const before = document.createRange();
+    before.setStart(tx, 0);
+    before.setEnd(node, pos?.offset ?? range!.startOffset);
+    return Math.min(len, before.toString().length);
+  }
+
+  let endDrag: (() => void) | undefined;
+  onCleanup(() => endDrag?.());
+  /** Tracks a mouse drag from the caret row: the selected text by row and column, auto-scrolling at the edges. */
+  function startDrag(s: Side, e: MouseEvent) {
+    endDrag?.();
+    const pane = paneOf(s);
+    const anchor: TextPos = { ri: selRow(), col: colAt(s, selRow(), e.clientX, e.clientY) };
+    let last = { x: e.clientX, y: e.clientY };
+    const update = () => {
+      const ri = rowAtY(s, last.y);
+      if (ri < 0) return;
+      const focus = { ri, col: colAt(s, ri, last.x, last.y) };
+      const moved = focus.ri !== anchor.ri || focus.col !== anchor.col;
+      batch(() => {
+        setTextSel(moved ? { side: s, anchor, focus } : null);
+        setSelSide(s);
+        setSelAnchor(ri === anchor.ri ? -1 : anchor.ri);
+        setSelRow(ri);
+      });
+    };
+    const move = (ev: MouseEvent) => {
+      last = { x: ev.clientX, y: ev.clientY };
+      update();
+    };
+    // Scrolls at least this fast while the pointer is past the top or bottom; a native selection
+    // auto-scroll counts toward it, so the two don't add up.
+    let lastTop = pane.scrollTop;
+    const autoScroll = window.setInterval(() => {
+      const top = pane.getBoundingClientRect().top;
+      const over = last.y < top ? last.y - top : Math.max(0, last.y - (top + pane.clientHeight));
+      const want = Math.sign(over) * Math.min(Math.abs(over), 3 * editorRowHeight());
+      const moved = pane.scrollTop - lastTop;
+      if (want && Math.sign(moved) !== -Math.sign(want) && Math.abs(moved) < Math.abs(want)) pane.scrollTop += want - moved;
+      lastTop = pane.scrollTop;
+    }, 50);
+    endDrag = () => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+      pane.removeEventListener("scroll", update);
+      clearInterval(autoScroll);
+      endDrag = undefined;
+    };
+    const up = () => endDrag?.();
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+    pane.addEventListener("scroll", update);
+  }
+
   const Pane = (p: { side: Side }) => {
     const s = p.side;
     const key = s === 0 ? "l" : "r";
@@ -1242,9 +1410,11 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
                * each difference section, or (with a line selection) on the first
                * selected row of the selected pane, which copies only those lines.
                */
-              const gutBtn = (): "sec" | "line" | null => {
+              const gutBtn = (): "sec" | "line" | "sel" | null => {
                 const ri = item().ri;
                 if (readOnly(other(s))) return null;
+                const t = dragSel();
+                if (t && s === t.side) return ri === ordered(t)[0].ri ? "sel" : null;
                 if (hasLineSel() && s === selSide()) return ri === selRange()[0] ? "line" : null;
                 const h = row().h;
                 return h !== undefined && hunkActive(h) && result()!.hunks[h].start === ri ? "sec" : null;
@@ -1252,6 +1422,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
               return (
                 <div
                   class="trow"
+                  data-ri={item().ri}
                   classList={{
                     [`k-${k()}`]: true,
                     filler: idx() === undefined,
@@ -1269,6 +1440,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
                     const ri = item().ri;
                     // Keep a line selection for its context menu.
                     if (e.button === 2 && s === selSide() && inSel(ri)) return;
+                    setTextSel(null);
                     const from = alignFrom();
                     if (from && from.side !== s && idx() !== undefined) return completeAlign(from, { side: s, line: idx()! });
                     if (e.shiftKey && selRow() >= 0 && s === selSide()) {
@@ -1283,6 +1455,7 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
                       setSelSide(s);
                       setCur(row().h ?? -1);
                     });
+                    if (e.button === 0 && !(e.target as HTMLElement).closest("input")) startDrag(s, e);
                   }}
                   onDblClick={() => !readOnly(s) && setEditing({ ri: item().ri, side: s })}
                   onContextMenu={(e) => showContextMenu(e, tab().id, paneMenu(s))}
@@ -1299,14 +1472,16 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
                       {(b) => (
                         <button
                           class="gbtn"
-                          classList={{ line: b() === "line", left: s === 1 }}
+                          classList={{ line: b() !== "sec", left: s === 1 }}
                           tabIndex={-1}
-                          title={`${b() === "line" ? "Copy selected lines" : "Copy section"} to ${s === 0 ? "right" : "left"} (${displayKeys(b() === "line" ? (s === 0 ? "Shift+Ctrl+R" : "Shift+Ctrl+L") : s === 0 ? "Ctrl+R" : "Ctrl+L")})`}
+                          title={`${b() === "sel" ? "Copy selection" : b() === "line" ? "Copy selected lines" : "Copy section"} to ${s === 0 ? "right" : "left"} (${displayKeys(b() === "line" ? (s === 0 ? "Shift+Ctrl+R" : "Shift+Ctrl+L") : s === 0 ? "Ctrl+R" : "Ctrl+L")})`}
                           onMouseDown={(e) => e.stopPropagation()}
                           onDblClick={(e) => e.stopPropagation()}
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (b() === "line") copyRows(other(s), ...selRange());
+                            const t = dragSel();
+                            if (b() === "sel" && t) copySelection(other(s), t);
+                            else if (b() === "line") copyRows(other(s), ...selRange());
                             else gutterCopy(row().h!, other(s));
                           }}
                         >

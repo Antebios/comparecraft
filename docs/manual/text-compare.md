@@ -82,6 +82,7 @@ The quickest way to copy a change is the arrow in the gutter:
 
 - On the first line of each difference section, the gutter of the left pane shows **▶** ("Copy section to right") and the gutter of the right pane shows **◀** ("Copy section to left"). Click the arrow to copy the whole section to the other side.
 - If you select several lines, the arrow appears on the first selected line instead and copies only the selected lines ("Copy selected lines to right" or "Copy selected lines to left").
+- If you select text by dragging, the arrow appears on its first line and copies only the selected text ("Copy selection to right" or "Copy selection to left").
 
 The arrows are hidden when the target side is read-only.
 
@@ -89,16 +90,27 @@ You can also use the toolbar and keyboard:
 
 | Action | Toolbar | Keys |
 | --- | --- | --- |
-| Copy the current section to the left | ⇐ Copy to Left | `Ctrl+L` |
-| Copy the current section to the right | Copy to Right ⇒ | `Ctrl+R` |
-| Copy the selected lines to the left | | `Shift+Ctrl+L` |
-| Copy the selected lines to the right | | `Shift+Ctrl+R` |
+| Copy the selected text, or else the selected lines or the current section, to the left | ⇐ Copy to Left | `Ctrl+L` |
+| Copy the selected text, or else the selected lines or the current section, to the right | Copy to Right ⇒ | `Ctrl+R` |
+| Copy the selected lines (whole lines) to the left | | `Shift+Ctrl+L` |
+| Copy the selected lines (whole lines) to the right | | `Shift+Ctrl+R` |
 
-Right-click the gutter to see the copy commands for that side.
+Right-click the gutter to see the copy commands for that side. Right-clicking inside a selection keeps it, so **Copy to Left** or **Copy to Right** in the popup menu copies the selection.
+
+### Copy selected text
+
+Drag across one or more lines to select text, then use **Copy to Left** or **Copy to Right**. The selected text replaces the matching text on the other side in one step (one **Undo** reverts it):
+
+- Lines covered by the selection are replaced, including unchanged lines and several difference sections at once.
+- When the selection starts or ends partway through a line, the other side keeps its text before the start and after the end. For example, selecting only `05` in `## 56001 2026_11_05` and copying it to a left side that reads `## 56001 2026_11_06 draft` gives `## 56001 2026_11_05 draft`.
+- A selection that ends at the very start of a line leaves that line out. Empty lines the drag starts or ends on are included.
+
+Dragging past the top or bottom of the pane scrolls it.
 
 ## Select lines
 
 - Click a line to select it and make its pane the current side.
+- Drag across lines to select text; the lines it covers are selected too.
 - `Shift`+click, or `Shift+Up` and `Shift+Down`, extends the selection to a range of lines.
 - **Edit > Select Section** (`Ctrl+D`) selects every line of the current difference section.
 
