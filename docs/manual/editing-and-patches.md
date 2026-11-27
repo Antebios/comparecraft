@@ -20,6 +20,7 @@ To open another file in the same tab, type its path in the path bar and press `E
 | 💾 Save | Save | `Ctrl+S` | Saves the file |
 | Save As… | Save As… | `Shift+Ctrl+S` | Saves the text under a new name |
 | ⟳ Reload | Reload | `F5` | Reads the file from disk again |
+| ↵ Wrap | View > Word Wrap | `Alt+Z` | Turns wrapping of long lines on or off for this tab |
 
 A **●** badge in the path bar shows that the file has unsaved changes. Reloading a changed file asks "Discard unsaved changes and reload?"
 

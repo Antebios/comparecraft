@@ -86,7 +86,7 @@ impl Logger {
             .map_err(|e| format!("Unable to open log file {}: {e}", path.display()))?;
         if !self.banner {
             self.banner = true;
-            let _ = writeln!(f, "{}", Logger::stamp(&format!("*** CompareCraft {} ***", env!("CARGO_PKG_VERSION"))));
+            let _ = writeln!(f, "{}", Logger::stamp(&format!("*** CompareCraft {} ***", crate::APP_VERSION)));
         }
         for (lvl, line) in std::mem::take(&mut self.pending) {
             if lvl <= level {

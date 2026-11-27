@@ -157,6 +157,12 @@ You can change any shortcut on the [Toolbars, Shortcuts page of the Options](opt
 | Line Up / Line Down | `Up` / `Down` |
 | Extend Selection Up / Down | `Shift+Up` / `Shift+Down` |
 
+### View
+
+| Command | Shortcut |
+| --- | --- |
+| Word Wrap | `Alt+Z` |
+
 In the find bar, `Enter` finds the next match, `Shift+Enter` finds the previous match and `Esc` closes the bar.
 
 ## Text Merge
@@ -177,6 +183,7 @@ In the find bar, `Enter` finds the next match, `Shift+Enter` finds the previous 
 | Previous Difference Section | `Ctrl+P` |
 | Next Conflict Section | `Alt+N` |
 | Previous Conflict Section | `Alt+P` |
+| Word Wrap | `Alt+Z` |
 
 ## Folder Merge
 
@@ -235,6 +242,7 @@ In the find bar, `Enter` finds the next match, `Shift+Enter` finds the previous 
 | Save | `Ctrl+S` |
 | Save As… | `Shift+Ctrl+S` |
 | Reload | `F5` |
+| Word Wrap | `Alt+Z` |
 
 ## Text Patch
 

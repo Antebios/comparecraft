@@ -1,5 +1,6 @@
 // Console subsystem on purpose: the extension spawns it with windowsHide, and --version must print in a terminal.
 use comparecraft_lib::backend::{serve, Logger, PROTOCOL_VERSION};
+use comparecraft_lib::APP_VERSION;
 use std::io::{self, Write};
 
 const USAGE: &str = "usage: comparecraft-backend --stdio | --version";
@@ -9,7 +10,7 @@ fn main() {
     let code = match args.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
         ["--stdio"] => serve(io::stdin().lock(), Box::new(io::stdout()), Logger::from_env()),
         ["--version"] => {
-            let _ = writeln!(io::stdout(), "comparecraft-backend {} (protocol {PROTOCOL_VERSION})", env!("CARGO_PKG_VERSION"));
+            let _ = writeln!(io::stdout(), "comparecraft-backend {APP_VERSION} (protocol {PROTOCOL_VERSION})");
             0
         }
         _ => {

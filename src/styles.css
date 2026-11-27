@@ -650,7 +650,8 @@ button.link {
 }
 .trow .ln,
 .mcell .ln,
-.orow .ln {
+.orow .ln,
+.wrap-ruler .ln {
   flex: none;
   width: 52px;
   padding-right: 8px;
@@ -744,6 +745,17 @@ button.link {
   min-height: 48px;
   background: var(--bg2);
   overflow-x: auto;
+}
+.details.wrapped {
+  overflow-x: hidden;
+  overflow-y: auto;
+  max-height: 30vh;
+}
+.details.wrapped .dline,
+.details.wrapped .tx {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  min-width: 0;
 }
 .dline {
   display: flex;
@@ -2112,7 +2124,8 @@ kbd {
 }
 
 /* Text compare gutter: difference markers and copy-section arrows. */
-.trow .gut {
+.trow .gut,
+.wrap-ruler .gut {
   flex: none;
   width: 18px;
   position: relative;
@@ -2626,4 +2639,54 @@ kbd {
 }
 .paths.fm-output {
   grid-template-columns: 1fr;
+}
+
+/* Word wrap: rows hold one block per visual line (see src/wrap.ts); the ruler measures the text width. */
+.wrap-ruler {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 0;
+  display: flex;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+}
+.wrap-ruler .wrap-area {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+}
+.wrap-probe {
+  position: absolute;
+  left: 0;
+  top: 0;
+  white-space: pre;
+}
+.tpane.wrapped,
+.mtop.wrapped,
+.mbottom.wrapped {
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+}
+.wrapped .tx {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+.wrapped .tx .seg {
+  display: block;
+  white-space: pre;
+}
+.wrapped .gbtn {
+  bottom: auto;
+  height: calc(var(--editor-row-height, 20px) - 4px);
+}
+.wrapped .line-edit {
+  align-self: flex-start;
+}
+.text-edit.wrapped {
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
 }

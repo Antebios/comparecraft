@@ -52,6 +52,8 @@ export interface Settings {
   contextLines: number;
   tabSize: number;
   findCurrentWord: boolean;
+  /** Soft-wraps long lines in text views (a tab's View > Word Wrap overrides it). */
+  textWordWrap: boolean;
   // Next difference
   nextDiffLoadFirst: boolean;
   nextDiffAfterCopy: boolean;
@@ -113,6 +115,7 @@ export const DEFAULT_SETTINGS: Settings = {
   contextLines: 3,
   tabSize: 4,
   findCurrentWord: true,
+  textWordWrap: true,
   nextDiffLoadFirst: false,
   nextDiffAfterCopy: false,
   nextDiffWrap: false,

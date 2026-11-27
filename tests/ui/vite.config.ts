@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import solid from "vite-plugin-solid";
+import { appVersion } from "../../scripts/version.mjs";
 import { readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { resolve, join, extname, sep } from "node:path";
 import { BackendClient } from "../../extensions/vscode/src/backend";
@@ -42,6 +43,7 @@ async function folderResult(left: string, right: string, options: { dotNamesFirs
 }
 
 export default defineConfig({
+  define: { __APP_VERSION__: JSON.stringify(appVersion()) },
   plugins: [
     solid(),
     {

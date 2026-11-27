@@ -68,6 +68,8 @@ jobs:
           version="${RELEASE_TAG#v}"
           npm version "$version" --no-git-tag-version --allow-same-version --ignore-scripts
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          # The backend helper built below reports this version (CompareCraft: Check Embedded Backend).
+          echo "COMPARECRAFT_VERSION=$version" >> "$GITHUB_ENV"
       - name: Linux deps
         if: runner.os == 'Linux'
         run: |
@@ -95,6 +97,7 @@ jobs:
         working-directory: extensions/vscode
       - name: Install, upgrade, host-test and uninstall the VSIX
         working-directory: extensions/vscode
+        timeout-minutes: 30
         run: |
           if [ "$RUNNER_OS" = "Linux" ]; then
             xvfb-run -a npm run test:vsix

@@ -1,6 +1,7 @@
 import { open, save } from "../host";
-import { createEffect, createSignal, onCleanup, onMount, type JSX } from "solid-js";
+import { createEffect, createSignal, Index, onCleanup, onMount, Show, type JSX } from "solid-js";
 import { editorRowHeight } from "../settings";
+import { clipSpans } from "../wrap";
 export { editorRowHeight };
 
 export function PathBar(props: {
@@ -122,6 +123,24 @@ export function Highlighted(props: { text: string; spans?: [number, number][]; c
     return out;
   };
   return <>{parts().map((p) => (p.h ? <span class={props.cls}>{p.s}</span> : p.s))}</>;
+}
+
+/** `Highlighted` split into one block per visual line at the UTF-16 offsets in `starts`. */
+export function WrappedText(props: { text: string; starts: number[]; spans?: [number, number][]; cls: string }) {
+  return (
+    <Show when={props.starts.length > 1} fallback={<Highlighted text={props.text} spans={props.spans} cls={props.cls} />}>
+      <Index each={props.starts}>
+        {(start, i) => {
+          const end = () => props.starts[i + 1] ?? props.text.length;
+          return (
+            <span class="seg">
+              <Highlighted text={props.text.slice(start(), end())} spans={clipSpans(props.spans, start(), end())} cls={props.cls} />
+            </span>
+          );
+        }}
+      </Index>
+    </Show>
+  );
 }
 
 /** Moves focus into a dialog when it opens, keeps Tab inside it and restores focus on close. */

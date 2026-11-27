@@ -77,6 +77,10 @@ Right-click a section for a context menu with the take commands, **Edit Output S
 
 By default, every character counts when CompareCraft looks for changes. Click **≈ Ignore whitespace** to ignore differences in leading, trailing and embedded whitespace. This can turn conflicts that differ only in spacing into ordinary changes.
 
+## Wrap long lines
+
+Long lines wrap at word boundaries in the three input panes and the output pane. A row of the input panes takes as many rows as its longest side. Click **↵ Wrap**, choose **View > Word Wrap** or press `Alt+Z` to turn wrapping on or off for this tab. The default is the **Word wrap long lines** setting on the [Text Editing page of the Options](options.md#text-editing).
+
 ## Save the output
 
 Click **💾 Save Output** or press `Ctrl+S` (**File > Save Output**).

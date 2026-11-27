@@ -6,6 +6,8 @@ src-tauri/target
 src-tauri/shell-menu/target
 src-tauri/windows-shell-extension/target
 src-tauri/gen
+# Written by scripts/version.mjs --github for release builds
+src-tauri/tauri.release.conf.json
 
 # makepkg build outputs
 packaging/arch/pkg/

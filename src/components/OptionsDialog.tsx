@@ -14,7 +14,7 @@ const PAGES: { id: OptionsPage; label: string; keywords: string }[] = [
   { id: "startup", label: "Startup", keywords: "workspace quick compare file manager integration nautilus dolphin thunar explorer finder context menu" },
   { id: "tabs", label: "Tabs", keywords: "tab window close warn hide single" },
   { id: "colors", label: "Colors, Fonts", keywords: "theme dark light color font stripes background text size folder sort dot names first" },
-  { id: "text", label: "Text Editing", keywords: "context lines tab size find word indent" },
+  { id: "text", label: "Text Editing", keywords: "context lines tab size find word indent wrap long lines" },
   { id: "nextdiff", label: "Next Difference", keywords: "next difference first load copy wrap message" },
   { id: "backups", label: "Backups", keywords: "backup bak tilde save copy folder" },
   { id: "fileops", label: "File Operations", keywords: "confirm copy move delete overwrite newer recycle trash" },
@@ -410,6 +410,7 @@ export default function OptionsDialog(props: { page?: OptionsPage; onClose: () =
                       "findCurrentWord",
                       "Initialize Find to current word",
                     )}
+                    {check("textWordWrap", "Word wrap long lines")}
                   </>,
                 )}
               </Match>

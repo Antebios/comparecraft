@@ -7,6 +7,7 @@ import {
   existsSync,
 } from "node:fs";
 import { resolve } from "node:path";
+import { parseTag } from "./version.mjs";
 
 const test = process.argv.includes("--test");
 if (process.platform !== "darwin") {
@@ -29,11 +30,13 @@ const contents = resolve(bundle, "Contents");
 const executable = resolve(contents, "MacOS/CompareCraftFinder");
 mkdirSync(resolve(contents, "MacOS"), { recursive: true });
 const config = JSON.parse(readFileSync("src-tauri/tauri.conf.json", "utf8"));
+// Bundle versions must be numeric, so a pre-release uses its N.N.N part like the app bundle.
+const version = parseTag(`v${process.env.COMPARECRAFT_VERSION ?? ""}`)?.numeric ?? config.version;
 writeFileSync(
   resolve(contents, "Info.plist"),
   readFileSync("packaging/macos/finder/Info.plist", "utf8").replaceAll(
     "@VERSION@",
-    config.version,
+    version,
   ),
 );
 const sources = [

@@ -146,6 +146,13 @@ actual earlier release. The runner honors `VSCODE_EXECUTABLE_PATH` and
 `COMPARECRAFT_BACKEND` like `test:integration`. On Linux without a display, use
 `xvfb-run -a npm run test:vsix`.
 
+Both `test:integration` and `test:vsix` launch VS Code through
+`scripts/run-host-tests.cjs`. The host tests record whether they passed; if VS Code
+then does not quit within 30 seconds (some VS Code releases hang on shutdown), the
+runner stops it and uses the recorded result. A run with no result is stopped
+after 20 minutes. `COMPARECRAFT_HOST_EXIT_GRACE_MS` and
+`COMPARECRAFT_HOST_TIMEOUT_MS` change these limits.
+
 To test a specific package:
 
 ```text

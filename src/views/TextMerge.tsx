@@ -1,8 +1,9 @@
 import { ask, emit, isEmbedded, listen, save as saveDialog } from "../host";
 import { settings } from "../settings";
-import { batch, createEffect, createMemo, createSignal, Index, onCleanup, onMount, Show } from "solid-js";
+import { batch, createEffect, createMemo, createSignal, Index, on, onCleanup, onMount, Show } from "solid-js";
 import { api, errText, strictRules, type Chunk, type MergeResult, type Rules, type TextFile } from "../api";
-import { Btn, editorRowHeight, Modal, PathBar, useViewport } from "../components/common";
+import { Btn, editorRowHeight, Modal, PathBar, useViewport, WrappedText } from "../components/common";
+import { fixedLayout, layoutRange, PROBE, rowLayout, useWrapMetrics, wrapper } from "../wrap";
 import { displayKeys, registerCommands } from "../commands";
 import { showContextMenu } from "../components/ContextMenu";
 import { persistSession, updateTab, type Tab } from "../store";
@@ -55,8 +56,17 @@ export default function TextMerge(props: { tab: Tab; active: boolean }) {
 
   let top!: HTMLDivElement;
   let bottom!: HTMLDivElement;
+  let rulerTop!: HTMLDivElement;
+  let rulerBot!: HTMLDivElement;
   const vpTop = useViewport(() => top);
   const vpBot = useViewport(() => bottom);
+  const wordWrap = () => (tab().options.wordWrap as boolean | undefined) ?? settings.textWordWrap;
+  const toggleWordWrap = () => updateTab(tab().id, { options: { ...tab().options, wordWrap: !wordWrap() } });
+  const wrapOf = (m: ReturnType<typeof useWrapMetrics>) =>
+    createMemo(() => wrapper(wordWrap() && m.cols() ? { cols: m.cols(), tabSize: settings.tabSize, font: m.font(), charW: m.charW() } : null));
+  const metrics = [useWrapMetrics(() => rulerTop), useWrapMetrics(() => rulerBot)];
+  const [wrapTop, wrapBot] = metrics.map(wrapOf);
+  createEffect(on(wordWrap, (on) => on && metrics.forEach((m) => m.refresh()), { defer: true }));
 
   const path = (i: number) => tab().paths[i] ?? "";
   const outputPath = () => tab().output ?? path(3);
@@ -189,15 +199,34 @@ export default function TextMerge(props: { tab: Tab; active: boolean }) {
     return starts;
   });
 
+  /** Each three-way row is as tall as its longest wrapped cell. */
+  const topLayout = createMemo(() => {
+    const rows = topRows();
+    const m = merge();
+    if (!wordWrap() || !m) return fixedLayout(rows.length);
+    const w = wrapTop();
+    return rowLayout(rows.length, (i) => {
+      const c = m.chunks[rows[i].ci];
+      const j = rows[i].j;
+      return Math.max(w(c.left[j]).length, w(c.base[j]).length, w(c.right[j]).length);
+    });
+  });
+  const outLayout = createMemo(() => {
+    const rows = outRows();
+    if (!wordWrap()) return fixedLayout(rows.length);
+    const w = wrapBot();
+    return rowLayout(rows.length, (i) => w(rows[i].text).length);
+  });
+
   const unresolved = () => choices().filter((c, i) => c === null && merge()?.chunks[i].kind === "conflict").length;
 
   function selectChunk(ci: number, scroll = true) {
     setSel(ci);
     if (!scroll) return;
     const t = chunkTopStart()[ci];
-    if (t !== undefined) top.scrollTop = Math.max(0, t * editorRowHeight() - vpTop.height() / 3);
+    if (t !== undefined) top.scrollTop = Math.max(0, topLayout().top(t) * editorRowHeight() - vpTop.height() / 3);
     const o = chunkOutStart()[ci];
-    if (o !== undefined) bottom.scrollTop = Math.max(0, o * editorRowHeight() - vpBot.height() / 3);
+    if (o !== undefined) bottom.scrollTop = Math.max(0, outLayout().top(o) * editorRowHeight() - vpBot.height() / 3);
   }
 
   function nav(dir: 1 | -1, conflictsOnly: boolean) {
@@ -288,6 +317,7 @@ export default function TextMerge(props: { tab: Tab; active: boolean }) {
     { id: "prev-diff", menu: "Search", group: "diff", label: "Previous Difference Section", keys: "Ctrl+P", run: () => nav(-1, false) },
     { id: "next-conflict", menu: "Search", group: "conflict", label: "Next Conflict Section", keys: "Alt+N", run: () => nav(1, true) },
     { id: "prev-conflict", menu: "Search", group: "conflict", label: "Previous Conflict Section", keys: "Alt+P", run: () => nav(-1, true) },
+    { id: "word-wrap", menu: "View", group: "wrap", label: "Word Wrap", keys: "Alt+Z", checked: wordWrap, run: toggleWordWrap },
   ]);
 
   function setPath(i: number, p: string) {
@@ -309,21 +339,23 @@ export default function TextMerge(props: { tab: Tab; active: boolean }) {
     return (
       <div class="mcell" classList={{ filler: j >= arr.length, changed }}>
         <span class="ln">{j < arr.length ? start + j + 1 : ""}</span>
-        <span class="tx">{arr[j] ?? ""}</span>
+        <span class="tx">
+          <WrappedText text={arr[j] ?? ""} starts={wrapTop()(arr[j])} cls="" />
+        </span>
       </div>
     );
   };
 
   const winTop = createMemo(() => {
     const rows = topRows();
-    const { start, end } = vpTop.range(rows.length);
+    const { start, end } = layoutRange(topLayout(), rows.length, vpTop.scrollTop(), vpTop.height(), editorRowHeight());
     const items: { i: number; ci: number; j: number }[] = [];
     for (let i = start; i < end; i++) items.push({ i, ...rows[i] });
     return items;
   });
   const winBot = createMemo(() => {
     const rows = outRows();
-    const { start, end } = vpBot.range(rows.length);
+    const { start, end } = layoutRange(outLayout(), rows.length, vpBot.scrollTop(), vpBot.height(), editorRowHeight());
     const items: { i: number; r: (typeof rows)[number] }[] = [];
     for (let i = start; i < end; i++) items.push({ i, r: rows[i] });
     return items;
@@ -356,6 +388,7 @@ export default function TextMerge(props: { tab: Tab; active: boolean }) {
         >
           ≈ Ignore whitespace
         </Btn>
+        <Btn title="Wrap long lines" kbd={displayKeys("Alt+Z")} active={wordWrap()} onClick={toggleWordWrap}>↵ Wrap</Btn>
         <Btn title="Reload inputs" kbd="F5" onClick={loadAll}>⟳ Refresh</Btn>
         <Btn title="Save output" kbd={displayKeys("Ctrl+S")} onClick={saveOutput}>💾 Save Output</Btn>
       </div>
@@ -367,8 +400,18 @@ export default function TextMerge(props: { tab: Tab; active: boolean }) {
           </div>
         ))}
       </div>
-      <div class="mtop" ref={top} onScroll={(e) => vpTop.setScrollTop(e.currentTarget.scrollTop)}>
-        <div style={{ height: `${topRows().length * editorRowHeight()}px`, position: "relative" }}>
+      <div class="mtop" classList={{ wrapped: wordWrap() }} ref={top} onScroll={(e) => vpTop.setScrollTop(e.currentTarget.scrollTop)}>
+        <div style={{ height: `${topLayout().total * editorRowHeight()}px`, position: "relative" }}>
+          <div class="wrap-ruler" aria-hidden="true" ref={rulerTop}>
+            <div class="mcell">
+              <span class="ln" />
+              <span class="wrap-area">
+                <span class="wrap-probe">{PROBE}</span>
+              </span>
+            </div>
+            <div class="mcell" />
+            <div class="mcell" />
+          </div>
           <Index each={winTop()}>
             {(it) => {
               const c = () => merge()!.chunks[it().ci];
@@ -376,7 +419,10 @@ export default function TextMerge(props: { tab: Tab; active: boolean }) {
                 <div
                   class="mrow"
                   classList={{ [kindClass(it().ci)]: true, sel: sel() === it().ci, cstart: it().j === 0 }}
-                  style={{ top: `${it().i * editorRowHeight()}px` }}
+                  style={{
+                    top: `${topLayout().top(it().i) * editorRowHeight()}px`,
+                    height: wordWrap() ? `${topLayout().lines(it().i) * editorRowHeight()}px` : undefined,
+                  }}
                   onMouseDown={() => selectChunk(it().ci, false)}
                   onDblClick={() => selectChunk(it().ci)}
                   onContextMenu={(e) => showContextMenu(e, tab().id, MERGE_MENU)}
@@ -394,20 +440,31 @@ export default function TextMerge(props: { tab: Tab; active: boolean }) {
         <span class="plabel">{LABELS[3]}</span>
         <PathBar value={outputPath()} title={tab().titles?.[3]} saveDialog onCommit={(p) => setPath(3, p)} dirty={dirty()} />
       </div>
-      <div class="mbottom" ref={bottom} onScroll={(e) => vpBot.setScrollTop(e.currentTarget.scrollTop)}>
-        <div style={{ height: `${outRows().length * editorRowHeight()}px`, position: "relative" }}>
+      <div class="mbottom" classList={{ wrapped: wordWrap() }} ref={bottom} onScroll={(e) => vpBot.setScrollTop(e.currentTarget.scrollTop)}>
+        <div style={{ height: `${outLayout().total * editorRowHeight()}px`, position: "relative" }}>
+          <div class="wrap-ruler" aria-hidden="true" ref={rulerBot}>
+            <span class="ln" />
+            <span class="wrap-area">
+              <span class="wrap-probe">{PROBE}</span>
+            </span>
+          </div>
           <Index each={winBot()}>
             {(it) => (
               <div
                 class="orow"
                 classList={{ [kindClass(it().r.ci)]: true, sel: sel() === it().r.ci, marker: !!it().r.marker, conflict: !!it().r.conflict }}
-                style={{ top: `${it().i * editorRowHeight()}px` }}
+                style={{
+                  top: `${outLayout().top(it().i) * editorRowHeight()}px`,
+                  height: wordWrap() ? `${outLayout().lines(it().i) * editorRowHeight()}px` : undefined,
+                }}
                 onMouseDown={() => selectChunk(it().r.ci, false)}
                 onDblClick={() => selectChunk(it().r.ci)}
                 onContextMenu={(e) => showContextMenu(e, tab().id, MERGE_MENU)}
               >
                 <span class="ln">{it().i + 1}</span>
-                <span class="tx">{it().r.text}</span>
+                <span class="tx">
+                  <WrappedText text={it().r.text} starts={wrapBot()(it().r.text)} cls="" />
+                </span>
               </div>
             )}
           </Index>

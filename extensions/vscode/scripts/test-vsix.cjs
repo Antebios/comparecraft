@@ -1,7 +1,8 @@
 // Verifies the packaged VSIX in an isolated VS Code profile: installs an older
 // build, upgrades to the packaged one, checks the installed files, runs the host
 // tests against the installed copy, then uninstalls it. Never publishes.
-const { runTests, downloadAndUnzipVSCode, resolveCliArgsFromVSCodeExecutablePath } = require("@vscode/test-electron");
+const { downloadAndUnzipVSCode, resolveCliArgsFromVSCodeExecutablePath } = require("@vscode/test-electron");
+const { runHostTests } = require("./run-host-tests.cjs");
 const { spawnSync } = require("node:child_process");
 const { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } = require("node:fs");
 const os = require("node:os");
@@ -121,7 +122,7 @@ async function main() {
     } else {
       const workspace = path.join(directory, "workspace");
       mkdirSync(workspace, { recursive: true });
-      await runTests({
+      await runHostTests({
         vscodeExecutablePath: executable,
         extensionDevelopmentPath: installed,
         extensionTestsPath: path.join(root, "out", "test", "host.js"),

@@ -1,4 +1,5 @@
-const { runTests, downloadAndUnzipVSCode } = require("@vscode/test-electron");
+const { downloadAndUnzipVSCode } = require("@vscode/test-electron");
+const { runHostTests } = require("./run-host-tests.cjs");
 const { mkdtemp, rm } = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
@@ -9,7 +10,7 @@ async function main() {
     path.join(os.tmpdir(), "comparecraft-vscode-host-"),
   );
   try {
-    await runTests({
+    await runHostTests({
       extensionDevelopmentPath: path.resolve(__dirname, ".."),
       extensionTestsPath: path.resolve(
         __dirname,

@@ -18,6 +18,9 @@ pub mod shell;
 pub mod snapshot;
 pub mod table;
 
+/// Application version: the release version for release builds, otherwise `<Cargo version>-dev`.
+pub const APP_VERSION: &str = env!("COMPARECRAFT_APP_VERSION");
+
 use base64::Engine;
 use serde::Serialize;
 use std::sync::Mutex;
