@@ -95,6 +95,7 @@ jobs:
         working-directory: extensions/vscode
       - name: Install, upgrade, host-test and uninstall the VSIX
         working-directory: extensions/vscode
+        timeout-minutes: 30
         run: |
           if [ "$RUNNER_OS" = "Linux" ]; then
             xvfb-run -a npm run test:vsix

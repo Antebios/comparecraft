@@ -5,7 +5,19 @@ import path from "node:path";
 import type { EmbeddedPanel, EmbeddedPanels } from "../src/embedded";
 import { pathKey } from "../src/embeddedCore";
 
+/** Records the outcome for the runner, which stops VS Code if it hangs on shutdown (scripts/run-host-tests.cjs). */
 export async function run(): Promise<void> {
+  const record = (value: string) => (process.env.COMPARECRAFT_TEST_RESULT ? writeFile(process.env.COMPARECRAFT_TEST_RESULT, value) : Promise.resolve());
+  try {
+    await runChecks();
+  } catch (error) {
+    await record("fail");
+    throw error;
+  }
+  await record("pass");
+}
+
+async function runChecks(): Promise<void> {
   const directory = process.env.COMPARECRAFT_TEST_DIRECTORY;
   const node = process.env.COMPARECRAFT_TEST_NODE;
   assert.ok(directory && node, "Integration runner must provide an isolated directory and Node executable");
