@@ -5,7 +5,7 @@ const harness = (page: Page) => page.evaluate(() => (window as unknown as { harn
 test.setTimeout(60_000);
 
 /** Mock only the platform transport: this exercises the actual bundled shared folder frontend. */
-async function openFolder(page: Page, config: { failOpen?: boolean; failSave?: boolean; earlyReceipt?: boolean; locked?: boolean; editorFont?: string } = {}) {
+async function openFolder(page: Page, config: { failOpen?: boolean; failSave?: boolean; earlyReceipt?: boolean; locked?: boolean; editorFont?: string; folders?: boolean } = {}) {
   await page.addInitScript((config) => {
     const w = window as unknown as {
       acquireVsCodeApi: () => unknown;
@@ -37,14 +37,20 @@ async function openFolder(page: Page, config: { failOpen?: boolean; failSave?: b
           if (cmd === "find_session") result = { id: "saved-id", name: "Saved Folder", kind: "folder", paths: ["/left", "/right"], options: {}, saved: true, locked: !!config.locked };
           if (cmd === "save_session" && config.failSave && (args.session as { saved: boolean }).saved) error = "Storage unavailable";
           if (cmd === "path_info") result = { path: args.path, exists: true, isDir: false, size: 5, modified: 1000, kind: "text" };
+          const file = (rel: string, status: string, right = 2000) => ({
+            name: rel.split("/").pop(), rel, dir: false, status, ...(status === "diff" ? { newer: "right" } : {}),
+            left: { name: rel.split("/").pop(), size: 5, modified: 1000 },
+            right: { name: rel.split("/").pop(), size: 5, modified: right },
+          });
+          const folder = (name: string, status: string, child: unknown) => ({
+            name, rel: name, dir: true, status, left: { name, size: 0, modified: 1000 }, right: { name, size: 0, modified: 1000 }, children: [child],
+          });
           if (cmd === "compare_folders") result = {
             root: {
               name: "", rel: "", dir: true, status: "diff",
-              children: [{
-                name: "pair.txt", rel: "pair.txt", dir: false, status: "diff",
-                left: { name: "pair.txt", size: 5, modified: 1000 },
-                right: { name: "pair.txt", size: 5, modified: 2000 },
-              }],
+              children: config.folders
+                ? [folder("older", "diff", file("older/pair.txt", "diff")), folder("same", "same", file("same/s.txt", "same", 1000))]
+                : [file("pair.txt", "diff")],
             },
             summary: { files: 1, same: 0, similar: 0, diff: 1, leftOnly: 0, rightOnly: 0, errors: 0 },
           };
@@ -64,7 +70,7 @@ async function openFolder(page: Page, config: { failOpen?: boolean; failSave?: b
     });
   }, config);
   await page.goto("/tests/ui/embedded.html");
-  await expect(page.locator(".frow")).toBeVisible();
+  await expect(page.locator(".frow").first()).toBeVisible();
 }
 
 test("embedded font inheritance overrides desktop font settings without enumerating fonts", async ({ page }) => {
@@ -75,6 +81,15 @@ test("embedded font inheritance overrides desktop font settings without enumerat
   });
   await expect(page.locator(".path-input").first()).toHaveCSS("font-family", '"Embedded Test Mono", monospace');
   expect((await harness(page)).calls.some((call) => call.method === "invoke" && call.params?.cmd === "list_font_families")).toBe(false);
+});
+
+test("embedded folder icons follow the VS Code dark theme colors", async ({ page }) => {
+  await openFolder(page, { folders: true });
+  await page.evaluate(() => document.body.classList.add("vscode-dark"));
+  const fill = (rel: string, side: number) => page.locator(`.frow[title="${rel}"] .fside`).nth(side).locator(".fi-body").evaluate((el) => getComputedStyle(el).fill);
+  expect(await fill("older", 0)).toBe("rgb(125, 132, 148)");
+  expect(await fill("older", 1)).toBe("rgb(255, 143, 143)");
+  expect(await fill("same", 0)).toBe("rgb(216, 178, 90)");
 });
 
 test("embedded folder hides deferred commands, nested external apps, shortcuts and snapshot settings", async ({ page }) => {

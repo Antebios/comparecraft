@@ -18,6 +18,7 @@ body.vscode-high-contrast:not(.vscode-high-contrast-light) {
   --orphan-bg: #3c2a50;
   --orphan-fg: #d2a8ff;
   --older-fg: #7d8494;
+  --folder-fg: #d8b25a;
   --same-fg: #7fcf86;
   --conflict-bg: #4d3a1a;
   --filler: repeating-linear-gradient(135deg, #262a32 0 4px, #1f2229 4px 8px);
@@ -43,4 +44,8 @@ body.vscode-high-contrast .trow.sel,
 body.vscode-high-contrast .trow.cur {
   outline: 1px dashed var(--vscode-contrastActiveBorder, var(--accent));
   outline-offset: -1px;
+}
+
+body.vscode-high-contrast .fi-edge {
+  stroke: var(--vscode-contrastBorder, var(--fg));
 }

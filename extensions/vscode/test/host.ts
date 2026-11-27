@@ -59,8 +59,19 @@ async function runChecks(): Promise<void> {
     await vscode.commands.executeCommand(command, ...args);
     const deadline = Date.now() + 10000;
     while (Date.now() < deadline) {
-      if (await readFile(output, "utf8") !== "null") {
-        assert.deepEqual(JSON.parse(await readFile(output, "utf8")), [await realpath(expected)]);
+      // The launcher truncates the file before writing it, so an empty or partial read means "not yet".
+      const text = await readFile(output, "utf8").catch((error: NodeJS.ErrnoException) => {
+        if (error.code === "EBUSY" || error.code === "EPERM" || error.code === "ENOENT") return "";
+        throw error;
+      });
+      let launched: unknown = null;
+      try {
+        launched = JSON.parse(text);
+      } catch {
+        // Still being written.
+      }
+      if (launched !== null) {
+        assert.deepEqual(launched, [await realpath(expected)]);
         return;
       }
       await new Promise(resolve => setTimeout(resolve, 100));

@@ -92,7 +92,22 @@ Each row is colored by its comparison result. To see the meaning of the colors a
 
 These are the default colors of the light theme. You can change them on the [Colors, Fonts page of the Options](options.md#colors-fonts).
 
-Folders are colored to reflect their content: a folder that contains differences is shown as different. To show folders in plain text instead, turn off **Color folders to reflect content** in the Options. **Alternate row background (stripes)** adds stripes to the rows.
+Folders are colored to reflect their content, separately on each side, by what that side contains. The folder name has the main color and the folder icon shows it too; when a folder also contains a second kind of item, the lower-right corner of its icon has that item's color. Hover over a folder to see what it contains, worded as in the legend:
+
+| Folder on this side | Icon | Contains |
+| --- | --- | --- |
+| Red | red | Newer or different files ("Contains newer files", "Contains difference files") |
+| Red with a purple corner | red, purple corner | Newer or different files, and files that exist only on this side |
+| Red with a grey corner | red, grey corner | Newer or different files, and files that are older on this side |
+| Purple | purple | Files or folders that exist only on this side |
+| Purple with a grey corner | purple, grey corner | Orphans and files that are older on this side |
+| Grey | grey | Files that are older on this side, and otherwise only same files |
+| Blue | blue | Only files with unimportant differences |
+| Normal text | amber | Only same files |
+
+Items that exist only on the other side don't change this side's color. For example, if the right side has extra files, the left folder stays plain and the right folder is purple. Likewise, a folder whose changed files are all older on the left is grey on the left and red on the right. A folder that exists on one side only is purple. Items marked **Ignored** count as same.
+
+To show folders in plain text with a plain icon instead, turn off **Color folders to reflect content** in the Options. **Alternate row background (stripes)** adds stripes to the rows.
 
 ## Expand and collapse folders
 

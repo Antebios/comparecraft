@@ -157,6 +157,7 @@ export const COLOR_VARS: [string, string][] = [
   ["--older-fg", "Older text"],
   ["--orphan-fg", "Orphan text"],
   ["--orphan-bg", "Orphan background"],
+  ["--folder-fg", "Folder icon (same contents)"],
   ["--same-fg", "Same text"],
   ["--unimp-fg", "Unimportant difference text"],
   ["--diff-bg", "Difference background"],

@@ -2,7 +2,7 @@
 # Build from a local checkout:  cd packaging/arch && makepkg -sfi
 pkgname=comparecraft
 # Set by pkgver() from the latest release tag (git describe); makepkg updates this line.
-pkgver=0.1.0
+pkgver=0.5.0.r9.gf67025a
 pkgrel=1
 pkgdesc="Compare, merge and synchronize files and folders (Tauri + SolidJS)"
 arch=('x86_64' 'aarch64')

@@ -16,6 +16,7 @@
   --orphan-bg: #efe2fb;
   --orphan-fg: #7a37b8;
   --older-fg: #8b8f99;
+  --folder-fg: #d9a333;
   --same-fg: #2f7d32;
   --conflict-bg: #ffe9c7;
   --filler: repeating-linear-gradient(135deg, #eceef2 0 4px, #f6f7f9 4px 8px);
@@ -43,6 +44,7 @@
     --orphan-bg: #3c2a50;
     --orphan-fg: #d2a8ff;
     --older-fg: #7d8494;
+    --folder-fg: #d8b25a;
     --same-fg: #7fcf86;
     --conflict-bg: #4d3a1a;
     --filler: repeating-linear-gradient(135deg, #262a32 0 4px, #1f2229 4px 8px);
@@ -67,6 +69,7 @@
   --orphan-bg: #3c2a50;
   --orphan-fg: #d2a8ff;
   --older-fg: #7d8494;
+  --folder-fg: #d8b25a;
   --same-fg: #7fcf86;
   --conflict-bg: #4d3a1a;
   --filler: repeating-linear-gradient(135deg, #262a32 0 4px, #1f2229 4px 8px);
@@ -888,6 +891,24 @@ button.link {
 .ficon {
   margin-right: 4px;
 }
+svg.fi {
+  width: 1.15em;
+  height: 1em;
+  vertical-align: -0.15em;
+  flex: none;
+}
+.fi-body {
+  fill: var(--fi-main);
+}
+.fi-corner {
+  fill: var(--fi-second);
+}
+.fi-edge {
+  fill: none;
+  stroke: color-mix(in srgb, var(--fi-main) 55%, #000);
+  stroke-width: 1;
+  stroke-linejoin: round;
+}
 .fside.diff,
 .fside.newer {
   color: var(--diff-fg);
@@ -1403,6 +1424,10 @@ button.link {
 }
 .legend .fside > span:last-child {
   color: var(--fg);
+}
+.legend-head {
+  margin: 10px 0 2px;
+  font-size: 1em;
 }
 
 /* Menu bar */
