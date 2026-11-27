@@ -59,7 +59,7 @@ From top to bottom, the Folder Compare window has:
 - The **filter bar**, with the **Filters:** box and the **⛃ Filters** and **👁 Peek** buttons. See [Filters](filters.md).
 - The **path bars** for the left and right base folders.
 - The **two trees**. Each side has the columns **Name**, **Size** and **Modified**. A narrow status column between the sides shows a symbol for each row.
-- The **status bar**, with the number of files and how many are same, similar, different, left-only and right-only (plus errors, if any). When items are selected, it also shows how many are selected on each side.
+- The **status bar**, with the number of files and how many are same, similar, different, left-only and right-only (plus moved pairs and errors, if any). When items are selected, it also shows how many are selected on each side.
 
 To hide the Size or Modified column, use **View > Columns**.
 
@@ -84,6 +84,7 @@ Each row is colored by its comparison result. To see the meaning of the colors a
 | Red text | ≠ | Different; this side is newer (or no timestamp winner) |
 | Grey text | ≠ | Different; this side is older |
 | Purple text | ◧ or ◨ | Orphan: exists on this side only (◧ left only, ◨ right only) |
+| Purple italic text | ⇌ | Moved or renamed: an orphan whose identical copy is an orphan on the other side |
 | Blue text | ≈ | Similar: only unimportant differences |
 | Normal text | = | Same |
 | Error color | ! | Error reading or comparing |
@@ -132,6 +133,12 @@ The **View > Show** submenu has more combinations: **Show All**, **Show Differen
 You can also build your own combination by turning these items on or off in the **View** menu: **Same**, **Left Orphans**, **Right Orphans**, **Left Newer**, **Right Newer** and **Differences (no newer side)**. When a filter other than All is active, its name (or "Custom display filter") appears at the right of the filter bar.
 
 **View > Ignore Unimportant Differences** (on by default) treats items with only unimportant differences as same, both for the display filters and for Next Difference.
+
+### Moved and renamed files
+
+When **Detect moved and renamed files** is on (see [Comparison](#comparison)), a left-only file and a right-only file with identical contents are paired as a move or rename. Both rows keep their orphan position but show **⇌** in the status column, and hovering over either row shows the path of its counterpart. The status bar counts each pair once as **moved**, not as left-only and right-only. Synchronizing still copies or deletes these files like any other orphan.
+
+Click **⇌ Moved** on the toolbar, or toggle **View > Moved and Renamed Files**, to hide or show these rows. For example, with **Diffs** selected and **⇌ Moved** off, a refactor that only moved files shows no differences.
 
 ## Folder handling modes
 
@@ -369,6 +376,7 @@ Quick tests:
 Requires opening files:
 
 - **Compare contents**, using **CRC comparison**, **Binary comparison** or **Rules-based comparison**.
+- **Detect moved and renamed files** (on by default): pairs left-only and right-only files with the same size, CRC and bytes as moved or renamed (see [Moved and renamed files](#moved-and-renamed-files)). Same-named files are paired first. Empty files are never paired. Only orphans whose sizes match are read.
 
 Options shown greyed out are not supported yet.
 

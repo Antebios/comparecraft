@@ -224,6 +224,9 @@ export default function FolderSettingsDialog(props: {
                 <label class="opt-check indent"><input type="radio" name="cm" disabled={!contentsOn()} checked={contentsMode() === "rules"} onChange={() => setContentsMode("rules")} /> Rules-based comparison</label>
                 {na("Override quick test results")}
                 {na("Compare versions")}
+                <label class="opt-check" title="Left-only and right-only files with identical contents (size, CRC and bytes) are marked as moved or renamed.">
+                  <input type="checkbox" checked={o.detectMoves !== false} onChange={(e) => setO("detectMoves", e.currentTarget.checked)} /> Detect moved and renamed files
+                </label>
               </>,
             )}
           </Match>
@@ -345,6 +348,9 @@ export default function FolderSettingsDialog(props: {
             </div>
             <label class="opt-check">
               <input type="checkbox" checked={!!o.excludeHidden} onChange={(e) => setO("excludeHidden", e.currentTarget.checked)} /> Exclude protected operating system files (Recommended)
+            </label>
+            <label class="opt-check" title="Items ignored by either side's .gitignore files (including the enclosing repository's) are excluded, as are .git folders.">
+              <input type="checkbox" checked={o.respectGitignore !== false} onChange={(e) => setO("respectGitignore", e.currentTarget.checked)} /> Respect .gitignore files
             </label>
             <Show when={editFilter()}>
               <OtherFilterEditor

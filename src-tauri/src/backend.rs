@@ -327,6 +327,8 @@ fn folder_options(value: Option<Value>) -> Result<folder::FolderOptions, RpcErro
         "followSymlinks",
         "dotNamesFirst",
         "align",
+        "respectGitignore",
+        "detectMoves",
     ];
     const FILTER_FIELDS: &[&str] = &[
         "kind",

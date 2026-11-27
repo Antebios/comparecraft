@@ -100,6 +100,8 @@ export const defaultOptions = (): FolderOptions => ({
   exclude: ".git/;node_modules/",
   ignoreCaseNames: IS_WINDOWS || IS_MAC,
   followSymlinks: false,
+  respectGitignore: true,
+  detectMoves: true,
   ...(settings.folderDefaults ?? {}),
   align: [],
 });
@@ -110,6 +112,7 @@ interface Flat {
 }
 
 const STATUS_GLYPH: Record<string, string> = { same: "=", similar: "≈", diff: "≠", left: "◧", right: "◨", error: "!" };
+const MOVED_GLYPH = "⇌";
 const other = (s: SideName): SideName => (s === "left" ? "right" : "left");
 const parentRel = (rel: string) => (rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "");
 const extOf = (name: string) => (name.lastIndexOf(".") > 0 ? name.slice(name.lastIndexOf(".")) : "");
@@ -148,7 +151,17 @@ function rollup(children: Status[]): Status {
 
 /** Recomputes paired-folder statuses and the summary after items were re-compared in place. */
 function recompute(root: FNode): Summary {
-  const sum: Summary = { files: 0, same: 0, similar: 0, diff: 0, leftOnly: 0, rightOnly: 0, errors: 0 };
+  const sum: Summary = { files: 0, same: 0, similar: 0, diff: 0, leftOnly: 0, rightOnly: 0, moved: 0, errors: 0 };
+  // Moved markers stay valid only while both files are still orphans pointing at each other.
+  const orphans = new Map<string, FNode>();
+  const index = (n: FNode) => {
+    n.children?.forEach(index);
+    if (!n.dir && !!n.left !== !!n.right) orphans.set(`${n.left ? "l" : "r"}:${n.rel}`, n);
+  };
+  index(root);
+  for (const n of orphans.values()) {
+    if (n.moved !== undefined && orphans.get(`${n.left ? "r" : "l"}:${n.moved}`)?.moved !== n.rel) delete n.moved;
+  }
   const walk = (n: FNode, top: boolean) => {
     n.children?.forEach((c) => walk(c, false));
     if (top) return;
@@ -158,8 +171,11 @@ function recompute(root: FNode): Summary {
       else if (paired) n.status = rollup((n.children ?? []).map((c) => c.status));
     } else if (!paired) {
       sum.files++;
-      n.left ? sum.leftOnly++ : sum.rightOnly++;
+      if (n.moved !== undefined) {
+        if (n.left) sum.moved!++;
+      } else n.left ? sum.leftOnly++ : sum.rightOnly++;
     } else {
+      delete n.moved;
       sum.files++;
       if (n.status === "same") sum.same++;
       else if (n.status === "similar") sum.similar++;
@@ -212,6 +228,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
     opts.flatten ? "flatten" : ((tab().options.folderMode as FolderMode | undefined) ?? "structure"),
   );
   const [ignoreUnimportant, setIgnoreUnimportant] = createSignal((tab().options.ignoreUnimportant as boolean | undefined) ?? true);
+  const [showMoved, setShowMoved] = createSignal((tab().options.showMoved as boolean | undefined) ?? true);
   const [suppress, setSuppress] = createSignal(false);
   const [peek, setPeek] = createSignal(false);
   const [viewSet, setViewSet] = createSignal<FolderViewSettings>({ ...defaultViewSettings(), ...((tab().options.folderView as Partial<FolderViewSettings> | undefined) ?? {}) });
@@ -292,7 +309,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
     otherFilters: [...(opts.otherFilters ?? [])],
     flatten: folderMode() === "flatten",
     dotNamesFirst: viewSet().dotNameOrder === "inherit" ? settings.folderDotNamesFirst : viewSet().dotNameOrder === "first",
-    ...(suppress() || peek() ? { include: "*", exclude: "", includeFolders: "", otherFilters: [], excludeHidden: false } : {}),
+    ...(suppress() || peek() ? { include: "*", exclude: "", includeFolders: "", otherFilters: [], excludeHidden: false, respectGitignore: false } : {}),
   });
   const flatMode = () => folderMode() === "flatten";
   let loadedOnce = false;
@@ -332,7 +349,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
         if (tab().expandAll) expandAll(r.root);
         else if (viewSet().expandOnLoad) expandAll(r.root, viewSet().expandDiffsOnly);
       }
-      log(`Compared ${left()} ↔ ${right()}: ${r.summary.files} files, ${r.summary.diff} different, ${r.summary.leftOnly + r.summary.rightOnly} orphans`);
+      log(`Compared ${left()} ↔ ${right()}: ${r.summary.files} files, ${r.summary.diff} different, ${r.summary.leftOnly + r.summary.rightOnly} orphans${r.summary.moved ? `, ${r.summary.moved} moved` : ""}`);
     } catch (e) {
       if (disposed || epoch !== comparisonEpoch) return;
       setError(errText(e));
@@ -398,7 +415,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
   }
   const saveViewState = () =>
     updateTab(tab().id, {
-      options: { ...tab().options, displayFilter: mask(), folderMode: folderMode(), ignoreUnimportant: ignoreUnimportant(), folderView: { ...viewSet() } },
+      options: { ...tab().options, displayFilter: mask(), folderMode: folderMode(), ignoreUnimportant: ignoreUnimportant(), showMoved: showMoved(), folderView: { ...viewSet() } },
     });
   createEffect(on([mask, folderMode, ignoreUnimportant, viewSet], saveViewState, { defer: true }));
 
@@ -470,6 +487,8 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
     return m;
   });
   const statusOf = (n: FNode): Status => effStatus()?.get(n.rel) ?? n.status;
+  /** Orphan file paired with an identical orphan on the other side. */
+  const isMoved = (n: FNode) => !n.dir && n.moved !== undefined && (statusOf(n) === "left" || statusOf(n) === "right");
 
   const flat = createMemo<Flat[]>(() => {
     const r = result();
@@ -477,10 +496,11 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
     const m = suppress() ? ALL_BITS : mask();
     const mode = folderMode();
     const iu = ignoreUnimportant();
+    const sm = showMoved() || suppress();
     const exp = expanded();
     const out: Flat[] = [];
     const memo = new Map<FNode, boolean>();
-    const matchesSelf = (n: FNode) => (statusBit(n, statusOf(n), iu) & m) !== 0;
+    const matchesSelf = (n: FNode) => (sm || !isMoved(n)) && (statusBit(n, statusOf(n), iu) & m) !== 0;
     // Files match by status; folders as set by the folder handling mode.
     const visibleNode = (n: FNode): boolean => {
       const hit = memo.get(n);
@@ -1655,6 +1675,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
     { id: "show-diffs-key", menu: "View", hidden: true, label: "Show Differences", keys: "Ctrl+2", run: () => setMask(0x2cc) },
     { id: "show-same-key", menu: "View", hidden: true, label: "Show Same", keys: "Ctrl+3", run: () => setMask(0x1) },
     ...TOGGLES.map(toggleCmd),
+    { id: "tog-moved", menu: "View", group: "toggles", label: "Moved and Renamed Files", checked: showMoved, run: () => setShowMoved(!showMoved()) },
     { id: "suppress-filters", menu: "View", group: "suppress", label: "Suppress Filters", checked: suppress, run: toggleSuppress },
     { id: "ignore-unimportant", menu: "View", group: "suppress", label: "Ignore Unimportant Differences", checked: ignoreUnimportant, run: () => setIgnoreUnimportant(!ignoreUnimportant()) },
     ...FOLDER_MODES.map(modeCmd),
@@ -1720,7 +1741,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
     const cls = () => {
       if (!s) return "missing";
       const st = statusOf(n);
-      if (st === "left" || st === "right") return "orphan";
+      if (st === "left" || st === "right") return isMoved(n) ? "orphan moved" : "orphan";
       if (st === "diff") return n.newer ? (n.newer === side ? "newer" : "older") : "diff";
       if (st === "similar") return "similar";
       if (st === "error") return "error";
@@ -1772,6 +1793,9 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
             </Btn>
           ))}
         </div>
+        <Btn title="Show orphan files that were moved or renamed (identical contents on the other side)" active={showMoved()} onClick={() => setShowMoved(!showMoved())}>
+          {MOVED_GLYPH} Moved
+        </Btn>
         <span class="sep" />
         <ComparisonPresetToolbar scope={tab().id} active={activePreset()} library={settings.comparisonPresets.library}
           pins={pinnedPresets()} disabledReason={presetDisabledReason} onChoose={choosePreset}
@@ -1898,10 +1922,10 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
                   onMouseDown={(e) => (e.stopPropagation(), click(e, n().rel, item().i))}
                   onDblClick={() => activate(n())}
                   onContextMenu={(e) => showContextMenu(e, tab().id, ROW_MENU)}
-                  title={n().error ?? n().rel}
+                  title={n().error ?? (isMoved(n()) ? `${n().rel}\nMoved/renamed: identical to ${n().left ? "right" : "left"} ${n().moved!.replace(/\u0001\d+$/, "")}` : n().rel)}
                 >
                   {sideCells(n(), "left", item().f.depth)}
-                  <div class="fstatus">{ignored().has(n().rel) ? "◌" : STATUS_GLYPH[statusOf(n())]}</div>
+                  <div class="fstatus">{ignored().has(n().rel) ? "◌" : isMoved(n()) ? MOVED_GLYPH : STATUS_GLYPH[statusOf(n())]}</div>
                   {sideCells(n(), "right", item().f.depth)}
                 </div>
               );
@@ -1929,6 +1953,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
               {r().summary.files} files · <span class="st-same">{r().summary.same} same</span> ·{" "}
               {r().summary.similar ? <><span class="st-sim">{r().summary.similar} similar</span> · </> : null}
               <span class="st-diff">{r().summary.diff} different</span> · <span class="st-orphan">{r().summary.leftOnly} left-only · {r().summary.rightOnly} right-only</span>
+              {r().summary.moved ? <> · <span class="st-moved">{r().summary.moved} moved</span></> : null}
               {r().summary.errors ? ` · ${r().summary.errors} errors` : ""}
             </span>
           )}
@@ -1946,11 +1971,12 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
             <div class="fside newer"><span class="fname">file.txt</span><span>Different; this side is newer (or no timestamp winner)</span></div>
             <div class="fside older"><span class="fname">file.txt</span><span>Different; this side is older</span></div>
             <div class="fside orphan"><span class="fname">file.txt</span><span>Orphan: exists on this side only</span></div>
+            <div class="fside orphan moved"><span class="fname">file.txt</span><span>Moved/renamed: orphan with an identical orphan on the other side</span></div>
             <div class="fside similar"><span class="fname">file.txt</span><span>Similar: only unimportant differences</span></div>
             <div class="fside"><span class="fname">file.txt</span><span>Same</span></div>
             <div class="fside error"><span class="fname">file.txt</span><span>Error reading or comparing</span></div>
             <div class="fside ign"><span class="fname">file.txt</span><span>Ignored (treated as same)</span></div>
-            <p class="muted">Status column: = same · ≈ similar · ≠ different · ◧ left only · ◨ right only · ! error · ◌ ignored</p>
+            <p class="muted">Status column: = same · ≈ similar · ≠ different · ◧ left only · ◨ right only · {MOVED_GLYPH} moved/renamed · ! error · ◌ ignored</p>
           </div>
         </Modal>
       </Show>
