@@ -20,6 +20,8 @@ import {
   type ReportRequest,
 } from "../api";
 import { Btn, editorRowHeight, Modal, PathBar, useViewport } from "../components/common";
+import { FolderIcon } from "../components/FolderIcon";
+import { folderLooks, lookOf, type FolderLook } from "../folderLook";
 import type { ComparisonListener } from "../comparisonStatus";
 import { showContextMenu } from "../components/ContextMenu";
 import { externalCommands, shellWords, sideOf } from "../components/external";
@@ -113,6 +115,8 @@ interface Flat {
 
 const STATUS_GLYPH: Record<string, string> = { same: "=", similar: "≈", diff: "≠", left: "◧", right: "◨", error: "!" };
 const MOVED_GLYPH = "⇌";
+/** Folder legend rows: content flags (newer 1, different 2, orphan 4, older 8, similar 16) and text class. */
+const LEGEND_FOLDERS: [number, string][] = [[0, ""], [1, "diff"], [3, "diff"], [5, "diff"], [9, "diff"], [4, "orphan"], [12, "orphan"], [8, "older"], [16, "similar"]];
 const other = (s: SideName): SideName => (s === "left" ? "right" : "left");
 const parentRel = (rel: string) => (rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "");
 const extOf = (name: string) => (name.lastIndexOf(".") > 0 ? name.slice(name.lastIndexOf(".")) : "");
@@ -487,6 +491,16 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
     return m;
   });
   const statusOf = (n: FNode): Status => effStatus()?.get(n.rel) ?? n.status;
+  /** Per-side folder colors from what each side contains. */
+  const looks = createMemo(() => {
+    const r = result();
+    return r ? folderLooks(r.root, statusOf) : new Map();
+  });
+  const SAME_LOOK = lookOf(0);
+  const folderLook = (n: FNode, side: SideName): FolderLook | undefined => {
+    const look = looks().get(n.rel)?.[side];
+    return look && !settings.folderColorFolders ? { ...SAME_LOOK, text: look.text } : look;
+  };
   /** Orphan file paired with an identical orphan on the other side. */
   const isMoved = (n: FNode) => !n.dir && n.moved !== undefined && (statusOf(n) === "left" || statusOf(n) === "right");
 
@@ -1736,10 +1750,15 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
 
   /* ---------- Rendering ---------- */
 
+  const TONE_CLASS: Record<FolderLook["main"], string> = { same: "", diff: "diff", orphan: "orphan", older: "older", similar: "similar", error: "error" };
+
   const sideCells = (n: FNode, side: SideName, depth: number) => {
     const s = n[side];
+    const look = () => (n.dir && s ? folderLook(n, side) : undefined);
     const cls = () => {
       if (!s) return "missing";
+      const l = look();
+      if (l) return TONE_CLASS[l.main];
       const st = statusOf(n);
       if (st === "left" || st === "right") return isMoved(n) ? "orphan moved" : "orphan";
       if (st === "diff") return n.newer ? (n.newer === side ? "newer" : "older") : "diff";
@@ -1748,14 +1767,18 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
       return "";
     };
     return (
-      <div class={`fside ${cls()}`} classList={{ selc: sel().has(n.rel) && sidesOn().includes(side), ign: ignored().has(n.rel), cto: cmpFrom()?.rel === n.rel && cmpFrom()?.side === side }}>
+      <div
+        class={`fside ${cls()}`}
+        classList={{ selc: sel().has(n.rel) && sidesOn().includes(side), ign: ignored().has(n.rel), cto: cmpFrom()?.rel === n.rel && cmpFrom()?.side === side }}
+        title={look() ? `${n.rel}\n${look()!.text}` : undefined}
+      >
         <span class="fname" style={{ "padding-left": `${depth * 16 + 4}px` }}>
           <Show when={s}>
             <Show when={n.dir} fallback={<span class="ficon">📄</span>}>
               <span class="twisty" onMouseDown={(e) => e.stopPropagation()} onClick={(e) => (e.stopPropagation(), toggle(n.rel))}>
                 {expanded().has(n.rel) ? "▾" : "▸"}
               </span>
-              <span class="ficon">📁</span>
+              <FolderIcon main={look()?.main ?? "same"} second={look()?.second} />
             </Show>
           </Show>
           {s?.name ?? ""}
@@ -1977,6 +2000,18 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
             <div class="fside error"><span class="fname">file.txt</span><span>Error reading or comparing</span></div>
             <div class="fside ign"><span class="fname">file.txt</span><span>Ignored (treated as same)</span></div>
             <p class="muted">Status column: = same · ≈ similar · ≠ different · ◧ left only · ◨ right only · {MOVED_GLYPH} moved/renamed · ! error · ◌ ignored</p>
+            <h4 class="legend-head">Folders (each side shows what it contains)</h4>
+            <For each={LEGEND_FOLDERS}>
+              {([flags, cls]) => {
+                const look = lookOf(flags);
+                return (
+                  <div class={`fside ${cls}`}>
+                    <span class="fname"><FolderIcon main={look.main} second={look.second} />folder</span>
+                    <span>{look.text}</span>
+                  </div>
+                );
+              }}
+            </For>
           </div>
         </Modal>
       </Show>

@@ -84,6 +84,7 @@ Click a color to change it. Once a color has been changed, a **Default** link ap
 - **Older text**
 - **Orphan text**
 - **Orphan background**
+- **Folder icon (same contents)**
 - **Same text**
 - **Unimportant difference text**
 - **Difference background**
@@ -93,7 +94,7 @@ Click a color to change it. Once a color has been changed, a **Default** link ap
 ### Folder views
 
 - **Alternate row background (stripes)** (off by default): shows every other row with a slightly different background.
-- **Color folders to reflect content** (on by default): colors each folder by the state of the items inside it, so you can see which folders contain differences.
+- **Color folders to reflect content** (on by default): colors each side of a folder by the items inside it on that side (newer or different, orphans, older), so you can see which folders contain differences. See [Colors and status symbols](folder-compare.md#colors-and-status-symbols).
 
 ### Fonts
 

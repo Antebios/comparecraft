@@ -1,6 +1,6 @@
 import { test, expect, folderTab } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
-import type { FolderComparisonProgress, FolderResult, Session } from "../../src/api";
+import type { FNode, FolderComparisonProgress, FolderResult, Session } from "../../src/api";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -509,4 +509,60 @@ test("moved files are marked, counted, and can be hidden", async ({ page, folder
   await page.locator("button", { hasText: "⇌ Moved" }).click();
   await expect(moved).toHaveCount(0);
   await expect(page.locator(".frow").filter({ hasText: "gone.txt" })).toHaveCount(1);
+});
+
+test("folders are colored per side by what each side contains", async ({ page, folders }) => {
+  const side = (name: string, size = 10) => ({ name, size, modified: 1000 });
+  const pair = (name: string, rel: string, status: FNode["status"], newer?: "left" | "right"): FNode =>
+    ({ name, rel, dir: false, status, left: side(name), right: side(name), ...(newer ? { newer } : {}) });
+  const dir = (name: string, status: FNode["status"], children: FNode[]): FNode =>
+    ({ name, rel: name, dir: true, status, left: side(name, 0), right: side(name, 0), children });
+  const result: FolderResult = {
+    root: { name: "", rel: "", dir: true, status: "diff", children: [
+      dir("common", "diff", [pair("a.kt", "common/a.kt", "diff", "right"), pair("same.kt", "common/same.kt", "same")]),
+      dir("mixed", "diff", [
+        pair("b.kt", "mixed/b.kt", "diff", "right"),
+        { name: "only-left.txt", rel: "mixed/only-left.txt", dir: false, status: "left", left: side("only-left.txt") },
+      ]),
+      dir("added", "diff", [{ name: "only-right.txt", rel: "added/only-right.txt", dir: false, status: "right", right: side("only-right.txt") }]),
+      dir("changed", "diff", [pair("c.txt", "changed/c.txt", "diff")]),
+      dir("alike", "similar", [pair("s.txt", "alike/s.txt", "similar")]),
+      dir("ign", "diff", [pair("i.txt", "ign/i.txt", "diff", "left")]),
+    ] },
+    summary: { files: 7, same: 1, similar: 1, diff: 4, leftOnly: 1, rightOnly: 1, errors: 0 },
+  };
+  await page.route("**/test-invoke", async (route) => {
+    if (route.request().postDataJSON().cmd !== "compare_folders") { await route.fallback(); return; }
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify(result) });
+  });
+  await folders.open(page);
+  await page.locator("button", { hasText: "⊞ Expand" }).click();
+  const sides = (rel: string) => page.locator(`.frow[title="${rel}"] .fside`);
+  const expectLook = async (name: string, left: RegExp, right: RegExp, icons: [string, string]) => {
+    await expect(sides(name).first()).toHaveClass(left);
+    await expect(sides(name).last()).toHaveClass(right);
+    await expect(sides(name).first().locator("svg.fi")).toHaveClass(new RegExp(icons[0]));
+    await expect(sides(name).last().locator("svg.fi")).toHaveClass(new RegExp(icons[1]));
+  };
+  // The issue: files older on the left make the left folder gray, not red.
+  await expectLook("common", /\bolder\b/, /\bdiff\b/, ["fi-older", "fi-diff"]);
+  await expect(sides("common").first()).toHaveAttribute("title", "common\nContains older files");
+  await expect(sides("common").last()).toHaveAttribute("title", "common\nContains newer files");
+  await expectLook("mixed", /\borphan\b/, /\bdiff\b/, ["fi-orphan fi2-older", "fi-diff"]);
+  await expect(sides("mixed").first()).toHaveAttribute("title", /Contains orphan and older files/);
+  await expect(sides("mixed").last().locator("svg.fi")).not.toHaveClass(/fi2-/);
+  // Items only on the other side leave a folder plain.
+  await expectLook("added", /^fside\s*$/, /\borphan\b/, ["fi-same", "fi-orphan"]);
+  await expect(sides("added").first()).toHaveAttribute("title", /Only contains same files/);
+  await expectLook("changed", /\bdiff\b/, /\bdiff\b/, ["fi-diff", "fi-diff"]);
+  await expect(sides("changed").first()).toHaveAttribute("title", /Contains difference files/);
+  await expectLook("alike", /\bsimilar\b/, /\bsimilar\b/, ["fi-similar", "fi-similar"]);
+  await expectLook("ign", /\bdiff\b/, /\bolder\b/, ["fi-diff", "fi-older"]);
+  // Marking the only difference Ignored makes its folder plain on both sides.
+  await page.locator(".frow").filter({ hasText: "i.txt" }).locator(".fside").first().click({ button: "right" });
+  await page.locator(".ctx-menu").getByText("Ignored", { exact: true }).click();
+  await expectLook("ign", /^fside\s*$/, /^fside\s*$/, ["fi-same", "fi-same"]);
+  // Files keep their own newer/older colors.
+  await expect(page.locator(".frow").filter({ hasText: "a.kt" }).locator(".fside").first()).toHaveClass(/\bolder\b/);
+  await expect(page.locator(".frow").filter({ hasText: "a.kt" }).locator(".fside").last()).toHaveClass(/\bnewer\b/);
 });
