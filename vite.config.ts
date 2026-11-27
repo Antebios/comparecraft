@@ -1,10 +1,12 @@
 import { defineConfig } from "vite";
 import solid from "vite-plugin-solid";
+import { appVersion } from "./scripts/version.mjs";
 
 const host = process.env.TAURI_DEV_HOST;
 
 export default defineConfig({
   plugins: [solid()],
+  define: { __APP_VERSION__: JSON.stringify(appVersion()) },
   clearScreen: false,
   server: {
     port: 1420,

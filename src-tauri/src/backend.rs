@@ -722,7 +722,7 @@ pub fn serve<R: BufRead>(mut input: R, output: Box<dyn Write + Send>, log: Logge
                         &id,
                         Ok(json!({
                             "protocolVersion": PROTOCOL_VERSION,
-                            "server": { "name": SERVER_NAME, "version": env!("CARGO_PKG_VERSION") },
+                            "server": { "name": SERVER_NAME, "version": crate::APP_VERSION },
                             "capabilities": { "methods": METHODS },
                             "limits": {
                                 "maxMessageBytes": MAX_MESSAGE_BYTES,

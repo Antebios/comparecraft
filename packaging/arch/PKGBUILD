@@ -1,6 +1,7 @@
 # Maintainer: Your Name <you@example.com>
 # Build from a local checkout:  cd packaging/arch && makepkg -sfi
 pkgname=comparecraft
+# Set by pkgver() from the latest release tag (git describe); makepkg updates this line.
 pkgver=0.1.0
 pkgrel=1
 pkgdesc="Compare, merge and synchronize files and folders (Tauri + SolidJS)"
@@ -16,6 +17,11 @@ sha256sums=()
 
 _srcroot="$(realpath "${startdir}/../..")"
 
+pkgver() {
+  cd "$_srcroot"
+  node scripts/version.mjs --pkgver
+}
+
 prepare() {
   cd "$_srcroot"
   npm ci --no-audit --no-fund
@@ -24,6 +30,9 @@ prepare() {
 build() {
   cd "$_srcroot"
   export CARGO_TARGET_DIR="$_srcroot/src-tauri/target"
+  # A checkout exactly on a release tag is built as that release; anything else shows "-dev" in About.
+  COMPARECRAFT_VERSION="$(node scripts/version.mjs --git)"
+  [[ -n "$COMPARECRAFT_VERSION" ]] && export COMPARECRAFT_VERSION || unset COMPARECRAFT_VERSION
   npx tauri build --no-bundle
 }
 

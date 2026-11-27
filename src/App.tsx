@@ -27,6 +27,7 @@ import TextMerge from "./views/TextMerge";
 import FolderMerge from "./views/FolderMerge";
 import TextEdit from "./views/TextEdit";
 import PatchView from "./views/PatchView";
+import { APP_VERSION } from "./version";
 
 function TabView(props: { tab: Tab }) {
   const active = () => state.active === props.tab.id;
@@ -274,7 +275,7 @@ export default function App() {
       </Show>
       <Show when={dialog() === "about"}>
         <Modal title="About CompareCraft" onClose={() => setDialog(null)}>
-          <p><b>CompareCraft 0.1.0</b>: compare, merge and synchronize files and folders.</p>
+          <p><b>CompareCraft {APP_VERSION}</b>: compare, merge and synchronize files and folders.</p>
           <p class="muted">Tauri + SolidJS · MIT License</p>
         </Modal>
       </Show>

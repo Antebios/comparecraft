@@ -22,8 +22,8 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with: { workspaces: "src-tauri -> target" }
       - run: npm ci
-      - name: Test macOS helper signing hook
-        run: node --test tests/macos-signing.test.mjs
+      - name: Test macOS helper signing hook and release versioning
+        run: node --test tests/macos-signing.test.mjs tests/version.test.mjs
       - run: npm run build
       - run: cargo test -- --test-threads=1
         working-directory: src-tauri
@@ -101,6 +101,15 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with: { workspaces: "src-tauri -> target" }
       - run: npm ci
+      # The release tag is the version: it names the installers and is shown in Help > About.
+      - name: Set version from release tag
+        id: version
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            node scripts/version.mjs --github "$GITHUB_REF_NAME"
+            echo "config=--config src-tauri/tauri.release.conf.json" >> "$GITHUB_OUTPUT"
+          fi
       - uses: tauri-apps/tauri-action@v0
         id: tauri
         env:
@@ -109,7 +118,7 @@ jobs:
           tagName: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
           releaseName: "CompareCraft ${{ github.ref_name }}"
           releaseDraft: true
-          args: ${{ matrix.args }}
+          args: ${{ matrix.args }} ${{ steps.version.outputs.config }}
       - name: Package and upload Windows portable ZIP
         if: matrix.platform == 'windows-latest'
         shell: pwsh
@@ -117,7 +126,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_ID: ${{ steps.tauri.outputs.releaseId }}
         run: |
-          $version = (Get-Content -Raw "src-tauri/tauri.conf.json" | ConvertFrom-Json).version
+          $version = if ($env:COMPARECRAFT_VERSION) { $env:COMPARECRAFT_VERSION } else { (Get-Content -Raw "src-tauri/tauri.conf.json" | ConvertFrom-Json).version }
           $zipName = "CompareCraft-$version-windows-portable.zip"
           $staging = Join-Path $env:RUNNER_TEMP "comparecraft-portable"
           $zipPath = Join-Path $env:RUNNER_TEMP $zipName
