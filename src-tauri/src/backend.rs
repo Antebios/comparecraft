@@ -4,10 +4,10 @@
 //! lifecycle) is documented in `docs/vscode-extension/backend-protocol.md`; keep the two in sync.
 //! Every method is read-only: the helper never writes, deletes or executes anything.
 
-use crate::{diff, fileio, folder, hex, merge, pix, quick, table};
-use serde::de::DeserializeOwned;
+use crate::protocol::{self, params, to_value};
+use crate::{fileio, folder, hex, pix, quick, table};
 use serde::Deserialize;
-use serde_json::{json, Map, Value};
+use serde_json::{json, Value};
 use std::collections::{HashMap, VecDeque};
 use std::io::{self, BufRead, Read, Write};
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -21,11 +21,7 @@ pub const MAX_MESSAGE_BYTES: usize = 64 << 20;
 pub const MAX_HEADER_BYTES: usize = 8 << 10;
 pub const MAX_CONCURRENT: usize = 4;
 pub const MAX_QUEUED: usize = 64;
-pub const MAX_LINES_PER_SIDE: usize = 2_000_000;
-/// Table files are parsed whole in memory; larger files get `LIMIT`.
-pub const MAX_TABLE_FILE_BYTES: u64 = 64 << 20;
-/// Picture files are decoded whole and returned as PNG data URLs; larger files get `LIMIT`.
-pub const MAX_PICTURE_FILE_BYTES: u64 = 64 << 20;
+pub use crate::protocol::{code, RpcError, MAX_LINES_PER_SIDE, MAX_PICTURE_FILE_BYTES, MAX_TABLE_FILE_BYTES};
 pub const METHODS: [&str; 11] = [
     "path.info",
     "text.load",
@@ -39,46 +35,6 @@ pub const METHODS: [&str; 11] = [
     "folder.compareItems",
     "file.quickCompare",
 ];
-
-pub mod code {
-    pub const PARSE_ERROR: i64 = -32700;
-    pub const INVALID_REQUEST: i64 = -32600;
-    pub const METHOD_NOT_FOUND: i64 = -32601;
-    pub const INVALID_PARAMS: i64 = -32602;
-    pub const INTERNAL: i64 = -32603;
-    pub const NOT_INITIALIZED: i64 = -32002;
-    pub const CANCELLED: i64 = -32800;
-    pub const UNSUPPORTED_PROTOCOL: i64 = -32010;
-    pub const IO: i64 = -32020;
-    pub const LIMIT: i64 = -32021;
-    pub const BUSY: i64 = -32022;
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct RpcError {
-    pub code: i64,
-    pub message: String,
-    pub data: Option<Value>,
-}
-
-impl RpcError {
-    fn new(code: i64, message: impl Into<String>) -> Self {
-        RpcError { code, message: message.into(), data: None }
-    }
-
-    fn with_data(mut self, data: Value) -> Self {
-        self.data = Some(data);
-        self
-    }
-
-    fn to_json(&self) -> Value {
-        let mut e = json!({ "code": self.code, "message": self.message });
-        if let Some(d) = &self.data {
-            e["data"] = d.clone();
-        }
-        e
-    }
-}
 
 /// Diagnostics on stderr; stdout is reserved for protocol frames.
 #[derive(Clone, Copy, Debug, Default)]
@@ -175,25 +131,6 @@ struct PathParams {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct DiffParams {
-    left: Vec<String>,
-    right: Vec<String>,
-    #[serde(default)]
-    rules: Option<Value>,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct MergeParams {
-    base: Vec<String>,
-    left: Vec<String>,
-    right: Vec<String>,
-    #[serde(default)]
-    rules: Option<Value>,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
 struct HexParams {
     left: String,
     right: String,
@@ -249,11 +186,6 @@ struct QuickCompareParams {
     left: String,
     right: String,
     mode: String,
-}
-
-fn params<T: DeserializeOwned>(value: Value) -> Result<T, RpcError> {
-    let value = if value.is_null() { Value::Object(Map::new()) } else { value };
-    serde_json::from_value(value).map_err(|e| RpcError::new(code::INVALID_PARAMS, format!("invalid params: {e}")))
 }
 
 fn absolute(path: &str) -> Result<(), RpcError> {
@@ -403,29 +335,6 @@ fn quick_mode(mode: &str) -> Result<quick::QcMode, RpcError> {
     }
 }
 
-/// `Rules` ignores unknown fields for desktop compatibility; the protocol rejects them so typos are visible.
-fn rules(value: Option<Value>) -> Result<diff::Rules, RpcError> {
-    let Some(value) = value.filter(|v| !v.is_null()) else {
-        return Ok(diff::Rules::default());
-    };
-    let Value::Object(given) = &value else {
-        return Err(RpcError::new(code::INVALID_PARAMS, "rules must be an object"));
-    };
-    let known = serde_json::to_value(diff::Rules::default()).unwrap_or_default();
-    if let Some(unknown) = given.keys().find(|k| known.get(k.as_str()).is_none()) {
-        return Err(RpcError::new(code::INVALID_PARAMS, format!("unknown rules field: {unknown}")));
-    }
-    serde_json::from_value(value).map_err(|e| RpcError::new(code::INVALID_PARAMS, format!("invalid rules: {e}")))
-}
-
-fn limit_lines(sides: &[&[String]]) -> Result<(), RpcError> {
-    if let Some(actual) = sides.iter().map(|s| s.len()).find(|n| *n > MAX_LINES_PER_SIDE) {
-        return Err(RpcError::new(code::LIMIT, format!("input has {actual} lines; the limit is {MAX_LINES_PER_SIDE}"))
-            .with_data(json!({ "limit": MAX_LINES_PER_SIDE, "actual": actual })));
-    }
-    Ok(())
-}
-
 fn io_error(path: &str, e: &io::Error) -> RpcError {
     RpcError::new(code::IO, format!("{path}: {e}")).with_data(json!({ "path": path, "kind": format!("{:?}", e.kind()) }))
 }
@@ -438,10 +347,6 @@ fn limit_file(path: &str, limit: u64) -> Result<(), RpcError> {
             .with_data(json!({ "limit": limit, "actual": actual })));
     }
     Ok(())
-}
-
-fn to_value<T: serde::Serialize>(value: T) -> Result<Value, RpcError> {
-    serde_json::to_value(value).map_err(|e| RpcError::new(code::INTERNAL, format!("could not encode result: {e}")))
 }
 
 /// Runs one engine method. Public so the method layer can be tested without framing.
@@ -523,18 +428,8 @@ pub fn call(method: &str, value: Value) -> Result<Value, RpcError> {
             let mode = quick_mode(&p.mode)?;
             Ok(json!(quick::quick_compare(Path::new(&p.left), Path::new(&p.right), mode)))
         }
-        "text.diff" => {
-            let p: DiffParams = params(value)?;
-            limit_lines(&[&p.left, &p.right])?;
-            let r = rules(p.rules)?;
-            to_value(diff::diff_lines(&p.left, &p.right, &r))
-        }
-        "text.merge" => {
-            let p: MergeParams = params(value)?;
-            limit_lines(&[&p.base, &p.left, &p.right])?;
-            let r = rules(p.rules)?;
-            to_value(merge::merge3(&p.base, &p.left, &p.right, &r))
-        }
+        "text.diff" => protocol::text_diff(value),
+        "text.merge" => protocol::text_merge(value),
         #[cfg(test)]
         "test.sleep" => {
             std::thread::sleep(std::time::Duration::from_millis(value["ms"].as_u64().unwrap_or(0)));
@@ -778,6 +673,7 @@ pub fn serve<R: BufRead>(mut input: R, output: Box<dyn Write + Send>, log: Logge
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::diff;
     use std::io::Cursor;
 
     #[derive(Clone, Default)]

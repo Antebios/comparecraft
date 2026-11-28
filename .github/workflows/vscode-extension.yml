@@ -1,9 +1,17 @@
 name: vscode-extension
 
 # Tests and packages the VS Code extension on CI and release runs.
-# Only release creation publishes, after all platform checks pass. Pre-release tags
-# (vN.N.N-pre) are tested and packaged but not published: the Marketplace doesn't accept
-# pre-release version numbers.
+#
+# The comparecraft-backend helper is built without the desktop app for each platform and bundled into a
+# platform-specific VSIX; the universal VSIX has no helper (WebAssembly engine only) and serves other
+# platforms and VS Code in a browser. Each package is installed and host-tested on its platform where a
+# hosted runner exists (Linux x64, Windows x64, macOS arm64), including Restricted Mode; the universal
+# package is tested without a helper, and the browser entry in VS Code for the Web.
+#
+# Only release creation publishes, after all checks pass, the exact files that were tested. Pre-release
+# tags (vN.N.N-pre) are tested and packaged but not published: the Marketplace doesn't accept pre-release
+# version numbers. Every release (pre-releases included) gets the tested VSIX files and helper-only Linux
+# archives for remote hosts as assets.
 on:
   push:
     branches: [main]
@@ -32,19 +40,103 @@ permissions:
   contents: read
 
 jobs:
-  extension:
-    name: Extension (${{ matrix.os }})
+  version:
+    name: Version
+    runs-on: ubuntu-22.04
     outputs:
       version: ${{ steps.release-version.outputs.version }}
       prerelease: ${{ steps.release-version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Version from the release tag
+        id: release-version
+        if: github.event_name == 'release'
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          if ! version="$(node scripts/version.mjs --check "$RELEASE_TAG")"; then
+            echo "::error::Release tag must use the format vN.N.N or vN.N.N-pre (for example, v1.2.3 or v1.2.3-beta.1)."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [[ "$version" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Pre-release $version: the VSIX files are tested and uploaded as a workflow artifact, but not published to the Marketplace."
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  helpers:
+    name: Helper (${{ matrix.target }})
+    needs: version
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, windows-latest, macos-latest]
+        include:
+          # Linux helpers are static (musl): one binary for every distribution, including Alpine.
+          - { target: linux-x64, also: alpine-x64, os: ubuntu-22.04, smoke: native }
+          - { target: linux-arm64, also: alpine-arm64, os: ubuntu-22.04, smoke: qemu }
+          - { target: win32-x64, os: windows-latest, smoke: native }
+          - { target: win32-arm64, os: windows-latest, smoke: none }
+          - { target: darwin-arm64, os: macos-latest, smoke: native }
+          - { target: darwin-x64, os: macos-latest, smoke: none }
     runs-on: ${{ matrix.os }}
     defaults:
       run:
         shell: bash
+    env:
+      # The helper reports this version (CompareCraft: Check Embedded Backend); other builds say "-dev".
+      COMPARECRAFT_VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "src-tauri -> target/portable"
+          key: helper-${{ matrix.target }}
+      - name: Build and stage the helper
+        working-directory: extensions/vscode
+        run: node scripts/stage-helper.cjs --target ${{ matrix.target }} ${{ matrix.also && format('--also {0}', matrix.also) || '' }}
+      - name: Linux helpers are statically linked
+        if: runner.os == 'Linux'
+        run: |
+          file extensions/vscode/helpers/${{ matrix.target }}/comparecraft-backend
+          file extensions/vscode/helpers/${{ matrix.target }}/comparecraft-backend | grep -q "statically linked\|static-pie linked"
+      - name: Run the helper
+        if: matrix.smoke == 'native'
+        run: extensions/vscode/helpers/${{ matrix.target }}/comparecraft-backend${{ runner.os == 'Windows' && '.exe' || '' }} --version
+      - name: Run the helper on Alpine
+        if: runner.os == 'Linux' && matrix.smoke == 'native'
+        run: docker run --rm --network none -v "$PWD/extensions/vscode/helpers/${{ matrix.also }}:/h:ro" alpine:3 /h/comparecraft-backend --version
+      - uses: docker/setup-qemu-action@v3
+        if: matrix.smoke == 'qemu'
+        with:
+          platforms: arm64
+      - name: Run the helper on arm64 Alpine (QEMU)
+        if: matrix.smoke == 'qemu'
+        run: docker run --rm --network none --platform linux/arm64 -v "$PWD/extensions/vscode/helpers/${{ matrix.also }}:/h:ro" alpine:3 /h/comparecraft-backend --version
+      - uses: actions/upload-artifact@v4
+        with:
+          name: helper-${{ matrix.target }}
+          path: extensions/vscode/helpers/
+          if-no-files-found: error
+
+  package:
+    name: Package
+    needs: [version, helpers]
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -57,73 +149,181 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             extensions/vscode/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "src-tauri -> target"
+          key: wasm-engine
       - name: Set extension version from release tag
-        id: release-version
-        if: github.event_name == 'release'
+        if: needs.version.outputs.version != ''
         working-directory: extensions/vscode
-        env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: npm version "${{ needs.version.outputs.version }}" --no-git-tag-version --allow-same-version --ignore-scripts
+      - run: npm ci
+      - run: npm ci
+        working-directory: extensions/vscode
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: helper-*
+          merge-multiple: true
+          path: extensions/vscode/helpers
+      - name: Package every platform and the universal VSIX (no publish)
+        working-directory: extensions/vscode
         run: |
-          if ! version="$(node ../../scripts/version.mjs --check "$RELEASE_TAG")"; then
-            echo "::error::Release tag must use the format vN.N.N or vN.N.N-pre (for example, v1.2.3 or v1.2.3-beta.1)."
+          chmod +x helpers/*/comparecraft-backend
+          npm run package:targets -- --helpers helpers
+          count=$(ls *.vsix | wc -l)
+          if [ "$count" -ne 9 ]; then
+            echo "::error::Expected 8 platform packages and the universal package, got $count."
             exit 1
           fi
-          npm version "$version" --no-git-tag-version --allow-same-version --ignore-scripts
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          if [[ "$version" == *-* ]]; then
-            echo "prerelease=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::Pre-release $version: the VSIX is tested and uploaded as a workflow artifact, but not published to the Marketplace."
-          else
-            echo "prerelease=false" >> "$GITHUB_OUTPUT"
-          fi
-          # The backend helper built below reports this version (CompareCraft: Check Embedded Backend).
-          echo "COMPARECRAFT_VERSION=$version" >> "$GITHUB_ENV"
-      - name: Linux deps
-        if: runner.os == 'Linux'
+      - name: Helper-only Linux archives
+        working-directory: extensions/vscode
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xvfb libfontconfig1-dev libfreetype6-dev
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: swatinem/rust-cache@v2
-        with: { workspaces: "src-tauri -> target" }
-      - name: Build Windows shell-extension resources
-        if: runner.os == 'Windows'
-        run: node scripts/build-windows-shell-extension.mjs
-      - name: Build the embedded backend helper
-        run: cargo build --bin comparecraft-backend
-        working-directory: src-tauri
-      - name: Point tests at the helper
-        run: echo "COMPARECRAFT_BACKEND=$GITHUB_WORKSPACE/src-tauri/target/debug/comparecraft-backend${{ runner.os == 'Windows' && '.exe' || '' }}" >> "$GITHUB_ENV"
-      - run: npm ci
-      - run: npm ci
-        working-directory: extensions/vscode
-      - name: Unit and contract tests
-        run: npm test
-        working-directory: extensions/vscode
-      - name: Package VSIX (no publish)
-        run: npm run package
-        working-directory: extensions/vscode
-      - name: Install, upgrade, host-test and uninstall the VSIX
-        working-directory: extensions/vscode
-        timeout-minutes: 30
-        run: |
-          if [ "$RUNNER_OS" = "Linux" ]; then
-            xvfb-run -a npm run test:vsix
-          else
-            npm run test:vsix
-          fi
-      - name: Upload VSIX
-        if: runner.os == 'Linux'
-        uses: actions/upload-artifact@v4
+          version="$(node -p "require('./package.json').version")"
+          mkdir -p archives
+          for target in linux-x64 linux-arm64; do
+            cp ../../LICENSE "helpers/$target/LICENSE"
+            tar -czf "archives/comparecraft-backend-$version-$target.tar.gz" -C "helpers/$target" comparecraft-backend LICENSE
+          done
+          ls -l archives
+      - uses: actions/upload-artifact@v4
         with:
           name: comparecraft-vscode-vsix
           path: extensions/vscode/*.vsix
           if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: comparecraft-backend-linux
+          path: extensions/vscode/archives/
+          if-no-files-found: error
+      # Test jobs reuse these instead of building the webview and the engine again.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: extension-media
+          path: |
+            extensions/vscode/media/webview/
+            extensions/vscode/media/engine/
+          if-no-files-found: error
+
+  test:
+    name: Test (${{ matrix.target }})
+    needs: [version, package]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: linux-x64, os: ubuntu-22.04 }
+          - { target: win32-x64, os: windows-latest }
+          - { target: darwin-arm64, os: macos-latest }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: extensions/vscode
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: extensions/vscode/package-lock.json
+      - name: Set extension version from release tag
+        if: needs.version.outputs.version != ''
+        run: npm version "${{ needs.version.outputs.version }}" --no-git-tag-version --allow-same-version --ignore-scripts
+      - name: Linux deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: extension-media
+          path: extensions/vscode/media
+      - uses: actions/download-artifact@v4
+        with:
+          name: comparecraft-vscode-vsix
+          path: extensions/vscode/vsix
+      - uses: actions/download-artifact@v4
+        with:
+          name: helper-${{ matrix.target }}
+          path: extensions/vscode/helpers
+      - name: Point unit tests at this platform's helper
+        run: |
+          echo "VERSION=$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"
+          # Artifacts don't keep the executable bit.
+          chmod +x helpers/${{ matrix.target }}/comparecraft-backend*
+          echo "COMPARECRAFT_BACKEND=$GITHUB_WORKSPACE/extensions/vscode/helpers/${{ matrix.target }}/comparecraft-backend${{ runner.os == 'Windows' && '.exe' || '' }}" >> "$GITHUB_ENV"
+      - name: Unit, contract and engine parity tests
+        run: npm test
+      - name: Build the browser entry and suite
+        run: node scripts/build-web.cjs --tests
+      - name: Install, upgrade, host-test (with Restricted Mode) and uninstall the platform VSIX
+        timeout-minutes: 30
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            xvfb-run -a npm run test:vsix -- "vsix/comparecraft-$VERSION-${{ matrix.target }}.vsix"
+          else
+            npm run test:vsix -- "vsix/comparecraft-$VERSION-${{ matrix.target }}.vsix"
+          fi
+      - name: Universal VSIX without any helper (WebAssembly engine)
+        if: runner.os == 'Linux'
+        timeout-minutes: 30
+        run: env -u COMPARECRAFT_BACKEND xvfb-run -a npm run test:vsix -- "vsix/comparecraft-$VERSION.vsix"
+      - name: VS Code for the Web (headless Chromium)
+        if: runner.os == 'Linux'
+        timeout-minutes: 15
+        run: |
+          npx playwright install --with-deps chromium
+          node scripts/test-web.cjs
+
+  # Remote-SSH and Dev Containers windows connected to disposable local containers run the linux-x64
+  # package's extension and helper on the "remote" side. They depend on Marketplace extensions and VS Code
+  # server downloads, so they report problems without holding up publishing.
+  remote:
+    name: Remote smoke (${{ matrix.via }})
+    needs: [version, package]
+    strategy:
+      fail-fast: false
+      matrix:
+        via: [ssh, container]
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: extensions/vscode
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: extensions/vscode/package-lock.json
+      - name: Set extension version from release tag
+        if: needs.version.outputs.version != ''
+        run: npm version "${{ needs.version.outputs.version }}" --no-git-tag-version --allow-same-version --ignore-scripts
+      - run: sudo apt-get update && sudo apt-get install -y xvfb
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/download-artifact@v4
+        with:
+          name: comparecraft-vscode-vsix
+          path: extensions/vscode/vsix
+      - name: Remote smoke test
+        timeout-minutes: 25
+        run: xvfb-run -a npm run test:remote -- --via ${{ matrix.via }} --vsix "vsix/comparecraft-$(node -p "require('./package.json').version")-linux-x64.vsix"
 
   publish:
     name: Publish to VS Code Marketplace
-    needs: extension
-    if: github.event_name == 'release' && github.event.action == 'created' && needs.extension.outputs.prerelease != 'true'
+    needs: [version, package, test]
+    if: github.event_name == 'release' && github.event.action == 'created' && needs.version.outputs.prerelease != 'true'
     runs-on: ubuntu-22.04
     environment: vscode-marketplace
     concurrency:
@@ -147,13 +347,34 @@ jobs:
         with:
           name: comparecraft-vscode-vsix
           path: ${{ runner.temp }}/vsix
-      - name: Publish the tested VSIX
+      - name: Publish the tested platform and universal packages
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
-          RELEASE_VERSION: ${{ needs.extension.outputs.version }}
         run: |
           if [ -z "$VSCE_PAT" ]; then
             echo "Set the VSCE_PAT secret in the vscode-marketplace environment."
             exit 1
           fi
-          npx --no-install vsce publish --packagePath "$RUNNER_TEMP/vsix/comparecraft-${RELEASE_VERSION}.vsix"
+          npx --no-install vsce publish --packagePath "$RUNNER_TEMP"/vsix/*.vsix
+
+  release-assets:
+    name: Attach VSIX packages and Linux helpers to the release
+    needs: [version, package, test]
+    if: github.event_name == 'release' && github.event.action == 'created'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: comparecraft-vscode-vsix
+          path: assets
+      - uses: actions/download-artifact@v4
+        with:
+          name: comparecraft-backend-linux
+          path: assets
+      - name: Upload the tested VSIX files and helper-only archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" assets/*.vsix assets/*.tar.gz --clobber --repo "$GITHUB_REPOSITORY"

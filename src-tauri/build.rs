@@ -7,5 +7,6 @@ fn main() {
         .filter(|v| !v.is_empty())
         .unwrap_or_else(|| format!("{}-dev", std::env::var("CARGO_PKG_VERSION").unwrap()));
     println!("cargo:rustc-env=COMPARECRAFT_APP_VERSION={version}");
+    #[cfg(feature = "desktop")]
     tauri_build::build()
 }

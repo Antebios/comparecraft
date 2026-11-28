@@ -461,7 +461,19 @@ export interface ShellStatus {
   warnings?: string[];
 }
 
+/** URI strings ("vscode-vfs://github/owner/repo/a.ts") name resources of virtual workspaces in VS Code. A
+ * Windows drive ("C:") has a one-letter "scheme", so file-system paths never match. */
+const isUri = (p: string) => /^[a-zA-Z][a-zA-Z0-9+.-]+:/.test(p);
+
 export function basename(p: string): string {
+  if (isUri(p)) {
+    const last = p.replace(/[?#].*$/, "").split("/").filter(Boolean).pop() ?? p;
+    try {
+      return decodeURIComponent(last);
+    } catch {
+      return last;
+    }
+  }
   const parts = p.split(/[\\/]/).filter(Boolean);
   return parts[parts.length - 1] ?? p;
 }
@@ -477,6 +489,7 @@ export function dirname(p: string): string {
 
 export function joinPath(root: string, rel: string): string {
   if (!rel) return root;
+  if (isUri(root)) return `${root.replace(/\/+$/, "")}/${rel.split("/").map(encodeURIComponent).join("/")}`;
   const sep = root.includes("\\") && !root.includes("/") ? "\\" : "/";
   return root.replace(/[\\/]+$/, "") + sep + rel.split("/").join(sep);
 }

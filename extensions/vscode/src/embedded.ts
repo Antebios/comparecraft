@@ -1,15 +1,18 @@
 import * as vscode from "vscode";
-import { randomBytes } from "node:crypto";
-import { access, constants, stat, writeFile } from "node:fs/promises";
-import path from "node:path";
-import { BackendError, type BackendManager } from "./backend";
 import {
-  dialogFilters, DocumentGuard, dropPaths, FOLDER_METHODS, isFileView, joinLines, parseSpec, pathKey, readBytes, readDataUrl, requireAbsolute, requireLines, requireObject, requireString,
+  dialogFilters, DocumentGuard, FOLDER_METHODS, isFileView, joinLines, parseSpec, readBytes, readDataUrl, requireAbsolute, requireLines, requireObject, requireString,
   deleteEmbeddedSession, readEmbeddedSessions, supportedFolderOptions, textFileFromBuffer, titleOf, unsupportedCommand, unsupportedFolderOptions, upsertEmbeddedSession,
-  VIEW_METHODS, type EmbeddedSessionRecord, type EmbeddedSpec, type FileView, type TextFileResult
+  type EmbeddedSessionRecord, type EmbeddedSpec, type TextFileResult
 } from "./embeddedCore";
+import type { ComparisonEngine } from "./engine";
+import { BackendError, errorText, UnavailableError } from "./errors";
+import { randomBase64, randomHex, utf8, type FileAccess } from "./fileAccess";
 import { FOLDER_SESSIONS_KEY, parseFolderSession, type FolderSession } from "./folderSessions";
-import { diskVerdict, withinFolder } from "./folderReceipts";
+import { diskVerdict } from "./folderReceipts";
+import { basename, dirname, isAbsolutePath, joinPath, pathKey, withinFolder } from "./paths";
+import type { Denial, Operation } from "./policy";
+import { droppedPaths, pathOf, toUri } from "./uris";
+import type { CopyProgress } from "./virtualFolders";
 
 export { specFromInputs } from "./embeddedCore";
 
@@ -17,14 +20,36 @@ export const VIEW_TYPE = "comparecraft.textCompare";
 const SETTINGS_KEY = "comparecraft.embeddedSettings";
 const SESSIONS_KEY = "comparecraft.embeddedSessions";
 
+/** Folder copies for folders the helper can't read directly (virtual workspaces; see virtualFolders.ts). */
+export interface FolderCopies {
+  side(owner: string, side: "left" | "right"): string;
+  copy(owner: string, side: "left" | "right", source: string, progress: CopyProgress): Promise<string>;
+  refresh(owner: string, sources: readonly [string, string], rels: readonly string[], progress: CopyProgress): Promise<void>;
+  release(owner: string): Promise<void>;
+}
+
+/** What the webview may offer (see `capabilities` requests); enforcement stays in this host. */
+export interface WebviewCapabilities {
+  readonly desktop: boolean;
+  readonly revealInOS: boolean;
+  readonly restricted: boolean;
+}
+
 export interface EmbeddedHost {
-  assertSupported(): void;
   log(message: string): void;
+  /** Why an operation isn't available for these paths here (see policy.ts), or undefined. */
+  denial(operation: Operation, paths?: readonly string[]): Denial | undefined;
   /** Offers to open a view the embedded panel does not provide in the desktop app; `reason` says why. */
   openInDesktop(kind: string, paths: readonly string[], reason?: string): Promise<void>;
   /** Called after a merge result is written; offers explicit review and staging. */
   afterMergeSaved(file: string): Promise<void>;
+  /** Copies of virtual folders for the helper; undefined where no helper can run (browser VS Code). */
+  readonly folderCopies?: FolderCopies;
 }
+
+const assertAllowed = (denial: Denial | undefined): void => {
+  if (denial) throw new UnavailableError(denial.reason, denial.fix);
+};
 
 /** Whether VS Code wraps lines by default (`editor.wordWrap` other than "off"). */
 export const editorWordWrap = () => vscode.workspace.getConfiguration("editor").get<string>("wordWrap", "off") !== "off";
@@ -32,7 +57,6 @@ export const editorWordWrap = () => vscode.workspace.getConfiguration("editor").
 const FOLDER_OPTION_NAMES: Record<string, string> = { respectGitignore: ".gitignore handling", detectMoves: "moved-file detection" };
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
-const errorText = (error: unknown) => error instanceof Error ? error.message : String(error);
 const eolOf = (document: vscode.TextDocument): "\n" | "\r\n" => document.eol === vscode.EndOfLine.CRLF ? "\r\n" : "\n";
 
 /** Owns every embedded comparison panel, including panels restored after a window reload. */
@@ -42,12 +66,11 @@ export class EmbeddedPanels implements vscode.Disposable {
   private readonly origins = new Map<EmbeddedPanel, { token: string; parent: EmbeddedPanel; paths: string[]; epoch: number }>();
   private disposing = false;
 
-  constructor(readonly context: vscode.ExtensionContext, readonly backend: BackendManager, readonly host: EmbeddedHost) {
+  constructor(readonly context: vscode.ExtensionContext, readonly engine: ComparisonEngine, readonly files: FileAccess, readonly host: EmbeddedHost) {
     context.subscriptions.push(vscode.window.registerWebviewPanelSerializer(VIEW_TYPE, {
       deserializeWebviewPanel: async (panel, state) => {
         try {
           const spec = parseSpec(state);
-          host.assertSupported();
           if (spec.kind === "folder") await this.validateFolder(spec);
           this.attach(panel, spec.kind === "folder" ? spec : { ...spec, output: null });
           if (spec.kind === "merge" && spec.output) void this.offerMergedText(spec);
@@ -103,23 +126,43 @@ export class EmbeddedPanels implements vscode.Disposable {
     return write;
   }
 
-  /** True when the installed helper has every method the read-only view needs. */
-  async supportsView(kind: FileView): Promise<boolean> {
-    const methods = VIEW_METHODS[kind];
-    return methods.length === 0 || (await this.backend.get()).supports(...methods);
+  /** Throws when this environment can't compare the spec's folders inside VS Code. */
+  async validateFolder(spec: EmbeddedSpec): Promise<void> {
+    const reason = await this.folderUnsupported(spec.paths);
+    if (reason) throw new UnavailableError(reason);
+    for (const file of spec.paths.filter(Boolean)) {
+      if ((await this.files.stat(requireAbsolute(file)))?.type !== "folder") throw new Error(`Not a folder: ${file}`);
+    }
   }
 
-  async validateFolder(spec: EmbeddedSpec): Promise<void> {
-    this.host.assertSupported();
-    if (!(await this.supportsFolder())) throw new Error("Update CompareCraft: the installed backend lacks embedded folder comparison support.");
-    for (const file of spec.paths.filter(Boolean)) {
-      if (!(await stat(requireAbsolute(file))).isDirectory()) throw new Error(`Not a folder: ${file}`);
+  /** Why folders can't be compared here (no helper, an old helper, browser VS Code), or undefined. */
+  async folderUnsupported(paths: readonly string[] = []): Promise<string | undefined> {
+    const denied = this.host.denial("folder", paths);
+    if (denied) return denied.reason;
+    if (paths.some(file => file && !this.files.isLocal(file)) && !this.host.folderCopies) return "Folder comparison needs folders on disk.";
+    const helper = await this.engine.helper();
+    if (!helper) {
+      return "Folder comparison in VS Code needs the CompareCraft helper (comparecraft-backend), which isn't installed here. Install the CompareCraft desktop app, or set comparecraft.backendPath.";
     }
-
+    return helper.supports(...FOLDER_METHODS) ? undefined : "Update CompareCraft: the installed backend lacks embedded folder comparison support.";
   }
 
   async supportsFolder(): Promise<boolean> {
-    return (await this.backend.get()).supports(...FOLDER_METHODS);
+    return !(await this.folderUnsupported());
+  }
+
+  /** What the webview of a panel showing `paths` may offer. */
+  capabilities(paths: readonly string[]): WebviewCapabilities {
+    return {
+      desktop: !this.host.denial("desktop", paths),
+      revealInOS: !this.host.denial("revealInOS", paths),
+      restricted: Boolean(this.host.denial("save")),
+    };
+  }
+
+  /** Tells every panel that trust or other capabilities changed. */
+  broadcastCapabilities(): void {
+    for (const panel of this.panels) panel.notify("host-capabilities", this.capabilities(panel.state.spec.paths));
   }
 
   private warnedFolderOptions = false;
@@ -129,7 +172,8 @@ export class EmbeddedPanels implements vscode.Disposable {
    * fields, which would fail every folder comparison. Warns once when an enabled option is dropped.
    */
   async folderOptions(options: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const backend = await this.backend.get();
+    const backend = await this.engine.helper();
+    if (!backend) throw new UnavailableError((await this.folderUnsupported()) ?? "Folder comparison needs the CompareCraft helper.");
     const { options: kept, dropped } = supportedFolderOptions(options, backend.info.capabilities.folderOptions);
     const enabled = dropped.filter(key => options[key] === true);
     if (enabled.length && !this.warnedFolderOptions) {
@@ -145,7 +189,8 @@ export class EmbeddedPanels implements vscode.Disposable {
 
   /** Folder Session Settings options the installed helper doesn't accept; the webview shows them disabled. */
   async unsupportedFolderOptions(): Promise<string[]> {
-    return unsupportedFolderOptions((await this.backend.get()).info.capabilities.folderOptions);
+    const backend = await this.engine.helper();
+    return backend ? unsupportedFolderOptions(backend.info.capabilities.folderOptions) : [];
   }
 
   folderSessions(): FolderSession[] {
@@ -173,7 +218,7 @@ export class EmbeddedPanels implements vscode.Disposable {
       throw new Error("The file comparison does not belong to this folder panel.");
     }
     if (this.origins.size >= 256) throw new Error("Too many originating file comparisons. Close some child panels first.");
-    const token = randomBytes(24).toString("hex");
+    const token = randomHex(24);
     this.origins.set(child, { token, parent, paths: [...paths], epoch: parent.folderEpoch });
     return token;
   }
@@ -194,8 +239,7 @@ export class EmbeddedPanels implements vscode.Disposable {
     if (!origin.paths.every((file, side) => pathKey(file) === pathKey(spec.paths[side] ?? ""))) return;
     const sequence = child.completionSequence;
     try {
-      const verdict = await diskVerdict(spec, <T>(method: string, params: unknown) =>
-        this.backend.get().then(client => client.request<T>(method, params)));
+      const verdict = await diskVerdict(spec, <T>(method: string, params: Record<string, unknown>) => this.engine.request<T>(method, params));
       if (this.origins.get(child) !== origin || origin.epoch !== origin.parent.folderEpoch || child.completionSequence !== sequence) return;
       origin.parent.notify("folder-comparison", { token: origin.token, receipt: {
         paths: [...origin.paths], result: { status: verdict === "same" || verdict === "sameBinary" ? "same" :
@@ -210,7 +254,6 @@ export class EmbeddedPanels implements vscode.Disposable {
   }
 
   open(spec: EmbeddedSpec): EmbeddedPanel {
-    this.host.assertSupported();
     // Kept alive while hidden: a reload would lose merge choices and undo history, and would re-read
     // files as their new baseline, hiding edits made in other tabs from the stale-write check.
     const panel = vscode.window.createWebviewPanel(VIEW_TYPE, titleOf(spec), vscode.ViewColumn.Active, { enableFindWidget: false, retainContextWhenHidden: true });
@@ -264,7 +307,7 @@ export class EmbeddedPanels implements vscode.Disposable {
 export class EmbeddedPanel {
   folderEpoch = 0;
   completionSequence = 0;
-  private completionTimer: NodeJS.Timeout | undefined;
+  private completionTimer: ReturnType<typeof setTimeout> | undefined;
   private isDisposed = false;
   readonly guard = new DocumentGuard();
   /** Requests received from the webview (invoke commands by name), oldest first; for diagnostics and tests. */
@@ -275,6 +318,8 @@ export class EmbeddedPanel {
   private readonly watchers = new Map<string, vscode.Disposable>();
   private readonly disposables: vscode.Disposable[] = [];
   private readonly deferred: (() => void)[] = [];
+  /** Identifies this panel's copies of virtual folders. */
+  private readonly copyOwner = randomHex(8);
 
   constructor(private readonly owner: EmbeddedPanels, readonly panel: vscode.WebviewPanel, spec: EmbeddedSpec) {
     this.spec = spec;
@@ -285,7 +330,7 @@ export class EmbeddedPanel {
       panel.webview.onDidReceiveMessage(message => void this.onMessage(message)),
       vscode.workspace.onDidChangeTextDocument(event => this.documentChanged(event.document)),
       vscode.workspace.onDidSaveTextDocument(document => {
-        if (this.spec.paths.some(file => pathKey(file) === pathKey(document.uri.fsPath))) this.scheduleCompletion();
+        if (this.spec.paths.some(file => file && pathKey(file) === pathKey(pathOf(document.uri)))) this.scheduleCompletion();
       }),
       panel.onDidDispose(() => this.disposed())
     );
@@ -301,8 +346,8 @@ export class EmbeddedPanel {
   private async render(media: vscode.Uri): Promise<void> {
     const webview = this.panel.webview;
     try {
-      this.owner.host.assertSupported();
-      await vscode.workspace.fs.stat(vscode.Uri.joinPath(media, "webview.js"));
+      // Browser VS Code serves extension files over HTTP, where the file system API can't check them.
+      if (media.scheme === "file") await vscode.workspace.fs.stat(vscode.Uri.joinPath(media, "webview.js"));
     } catch (error) {
       const reason = error instanceof vscode.FileSystemError
         ? "The embedded UI bundle is missing. Run npm run build:webview in the repository root, then reopen the comparison."
@@ -310,7 +355,7 @@ export class EmbeddedPanel {
       webview.html = `<!DOCTYPE html><html><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';"></head><body style="padding:1em">${escapeHtml(`CompareCraft: ${reason}`)}</body></html>`;
       return;
     }
-    const nonce = randomBytes(16).toString("base64");
+    const nonce = randomBase64(16);
     const script = webview.asWebviewUri(vscode.Uri.joinPath(media, "webview.js"));
     const style = webview.asWebviewUri(vscode.Uri.joinPath(media, "webview.css"));
     const csp = [
@@ -385,11 +430,12 @@ export class EmbeddedPanel {
 
   /** Handles one validated webview request. Public so integration tests can drive real documents. */
   async handle(method: string, params: unknown): Promise<unknown> {
-    this.owner.host.assertSupported();
     const p = isObject(params) ? params : {};
     switch (method) {
       case "init":
         return this.spec;
+      case "capabilities":
+        return this.owner.capabilities(this.spec.paths);
       case "invoke":
         return this.invoke(requireString(p.cmd, "command"), isObject(p.args) ? p.args : {});
       case "ask": {
@@ -411,21 +457,18 @@ export class EmbeddedPanel {
           canSelectFiles: p.directory !== true,
           canSelectFolders: p.directory === true,
           filters: dialogFilters(p.filters),
-          defaultUri: typeof p.defaultPath === "string" && path.isAbsolute(p.defaultPath) ? vscode.Uri.file(p.defaultPath) : undefined
+          defaultUri: typeof p.defaultPath === "string" && isAbsolutePath(p.defaultPath) ? toUri(p.defaultPath) : undefined
         });
         if (!picked?.length) return null;
-        if (picked.some(uri => uri.scheme !== "file")) throw new Error("Choose a local file.");
-        return p.multiple === true ? picked.map(uri => uri.fsPath) : picked[0]!.fsPath;
+        return p.multiple === true ? picked.map(pathOf) : pathOf(picked[0]!);
       }
       case "save": {
         const picked = await vscode.window.showSaveDialog({
           title: typeof p.title === "string" ? p.title : undefined,
           filters: dialogFilters(p.filters),
-          defaultUri: typeof p.defaultPath === "string" && path.isAbsolute(p.defaultPath) ? vscode.Uri.file(p.defaultPath) : undefined
+          defaultUri: typeof p.defaultPath === "string" && isAbsolutePath(p.defaultPath) ? toUri(p.defaultPath) : undefined
         });
-        if (!picked) return null;
-        if (picked.scheme !== "file") throw new Error("Choose a local file.");
-        return picked.fsPath;
+        return picked ? pathOf(picked) : null;
       }
       case "clipboard.read":
         return vscode.env.clipboard.readText();
@@ -437,14 +480,17 @@ export class EmbeddedPanel {
         return vscode.env.openExternal(vscode.Uri.parse(url));
       }
       case "openPath":
-        return vscode.commands.executeCommand("vscode.open", vscode.Uri.file(requireAbsolute(p.path)));
-      case "reveal":
-        return vscode.commands.executeCommand("revealFileInOS", vscode.Uri.file(requireAbsolute(p.path)));
+        return vscode.commands.executeCommand("vscode.open", toUri(requireAbsolute(p.path)));
+      case "reveal": {
+        // Files of a remote host, a virtual workspace or browser VS Code are shown in VS Code's Explorer.
+        const file = requireAbsolute(p.path);
+        return vscode.commands.executeCommand(this.owner.host.denial("revealInOS", [file]) ? "revealInExplorer" : "revealFileInOS", toUri(file));
+      }
       case "close":
         this.panel.dispose();
         return null;
       case "dropPaths":
-        return dropPaths(p.uris);
+        return droppedPaths(p.uris);
       case "folderSupport":
         return { unsupported: await this.owner.unsupportedFolderOptions() };
       case "desktopFolder":
@@ -462,19 +508,14 @@ export class EmbeddedPanel {
         if (kind === "text") {
           return this.openChild(parseSpec({ paths: p.paths, titles: p.titles, readOnly: p.readOnly, options: p.options }), p.origin);
         }
-        const paths = Array.isArray(p.paths) ? p.paths.filter((item): item is string => typeof item === "string" && path.isAbsolute(item)) : [];
+        const paths = Array.isArray(p.paths) ? p.paths.filter((item): item is string => typeof item === "string" && isAbsolutePath(item)) : [];
         if (kind === "edit") {
           // Single-file editing is VS Code's own editor; the desktop Text Edit view is not embedded.
-          for (const file of paths.slice(0, 1)) await vscode.commands.executeCommand("vscode.open", vscode.Uri.file(file));
+          for (const file of paths.slice(0, 1)) await vscode.commands.executeCommand("vscode.open", toUri(file));
           return null;
         }
-        if (isFileView(kind)) {
-          if (await this.owner.supportsView(kind)) {
-            return this.openChild(parseSpec({ kind, paths: p.paths, titles: p.titles, options: p.options }), p.origin);
-          }
-          await this.owner.host.openInDesktop(kind, paths, `The installed CompareCraft backend is too old for the embedded ${kind} view. Update CompareCraft to show it in VS Code.`);
-          return null;
-        }
+        // Every read-only view is available: the helper or the WebAssembly engine compares the files.
+        if (isFileView(kind)) return this.openChild(parseSpec({ kind, paths: p.paths, titles: p.titles, options: p.options }), p.origin);
         await this.owner.host.openInDesktop(kind, paths);
         return null;
       }
@@ -483,8 +524,8 @@ export class EmbeddedPanel {
     }
   }
 
-  private async backendRequest<T>(method: string, params: unknown): Promise<T> {
-    return (await this.owner.backend.get()).request<T>(method, params);
+  private backendRequest<T>(method: string, params: Record<string, unknown>): Promise<T> {
+    return this.owner.engine.request<T>(method, params);
   }
 
   private openChild(spec: EmbeddedSpec, origin: unknown): { originToken: string } | null {
@@ -540,27 +581,30 @@ export class EmbeddedPanel {
         });
       case "path_info":
         return this.backendRequest("path.info", { path: requireAbsolute(args.path) });
-      case "compare_folders":
+      case "compare_folders": {
         this.folderEpoch++;
         this.owner.releaseOrigins(this);
-        return this.backendRequest("folder.compare", {
-          left: requireAbsolute(args.left, "left folder"), right: requireAbsolute(args.right, "right folder"),
-          options: await this.owner.folderOptions(requireObject(args.options, "folder options"))
-        });
-      case "compare_items":
-        return this.backendRequest("folder.compareItems", {
-          left: requireAbsolute(args.left, "left folder"), right: requireAbsolute(args.right, "right folder"),
-          rels: requireLines(args.rels, "relative items"), options: await this.owner.folderOptions(requireObject(args.options, "folder options"))
-        });
+        const left = requireAbsolute(args.left, "left folder"), right = requireAbsolute(args.right, "right folder");
+        const options = await this.owner.folderOptions(requireObject(args.options, "folder options"));
+        const local = await this.localFolders(left, right, "copy");
+        return mapFolderErrors(await this.backendRequest("folder.compare", { left: local[0], right: local[1], options }), local, [left, right]);
+      }
+      case "compare_items": {
+        const left = requireAbsolute(args.left, "left folder"), right = requireAbsolute(args.right, "right folder");
+        const rels = requireLines(args.rels, "relative items");
+        const options = await this.owner.folderOptions(requireObject(args.options, "folder options"));
+        const local = await this.localFolders(left, right, rels);
+        return mapFolderErrors(await this.backendRequest("folder.compareItems", { left: local[0], right: local[1], rels, options }), local, [left, right]);
+      }
       case "quick_compare": {
         const mode = requireString(args.mode, "comparison mode");
         if (!["size", "crc", "binary", "rules"].includes(mode)) throw new Error("Invalid comparison mode.");
         return this.backendRequest("file.quickCompare", { left: requireAbsolute(args.left), right: requireAbsolute(args.right), mode });
       }
       case "read_bytes":
-        return readBytes(requireAbsolute(args.path), requireCount(args.offset, "offset"), requireCount(args.len, "length"));
+        return readBytes(this.owner.files, requireAbsolute(args.path), requireCount(args.offset, "offset"), requireCount(args.len, "length"));
       case "read_data_url":
-        return readDataUrl(requireAbsolute(args.path));
+        return readDataUrl(this.owner.files, requireAbsolute(args.path));
       case "hex_align": {
         const align = args.align ?? "complete";
         if (align !== "none" && align !== "fast" && align !== "complete") throw new Error("Invalid hex alignment.");
@@ -570,12 +614,16 @@ export class EmbeddedPanel {
         return this.backendRequest("table.compare", {
           left: requireAbsolute(args.left, "left path"), right: requireAbsolute(args.right, "right path"), options: requireObject(args.options ?? {}, "table options")
         });
-      case "pix_compare":
-        return this.backendRequest("pix.compare", {
+      case "pix_compare": {
+        const params: Record<string, unknown> = {
           left: requireAbsolute(args.left, "left path"), right: requireAbsolute(args.right, "right path"),
-          options: requireObject(args.options ?? {}, "picture options"),
-          leftData: optionalString(args.leftData, "left picture"), rightData: optionalString(args.rightData, "right picture")
-        });
+          options: requireObject(args.options ?? {}, "picture options")
+        };
+        const leftData = optionalString(args.leftData, "left picture"), rightData = optionalString(args.rightData, "right picture");
+        if (leftData !== null) params.leftData = leftData;
+        if (rightData !== null) params.rightData = rightData;
+        return this.backendRequest("pix.compare", params);
+      }
       case "pix_image":
         return this.backendRequest("pix.image", { path: requireAbsolute(args.path) });
       case "load_settings":
@@ -617,10 +665,40 @@ export class EmbeddedPanel {
     }
   }
 
+  /**
+   * Folders the helper can read for this comparison: local folders as they are, virtual-workspace
+   * folders as owned copies, refreshed whole (`"copy"`) or for the listed items.
+   */
+  private async localFolders(left: string, right: string, update: "copy" | readonly string[]): Promise<[string, string]> {
+    const files = this.owner.files;
+    if (files.isLocal(left) && files.isLocal(right)) return [left, right];
+    const copies = this.owner.host.folderCopies;
+    if (!copies) throw new UnavailableError((await this.owner.folderUnsupported([left, right])) ?? "Folder comparison needs folders on disk.");
+    const sides = [left, right] as const;
+    return vscode.window.withProgress({
+      location: vscode.ProgressLocation.Notification, title: "CompareCraft: reading folders for comparison", cancellable: true
+    }, async (progress, token) => {
+      const report: CopyProgress = {
+        report: (count, bytes) => progress.report({ message: `${count} files (${Math.round(bytes / 1024)} KB)` }),
+        cancelled: () => token.isCancellationRequested
+      };
+      if (update !== "copy") {
+        await copies.refresh(this.copyOwner, sides.map((side, index) => files.isLocal(side) ? copies.side(this.copyOwner, index ? "right" : "left") : side) as [string, string],
+          update, report);
+      }
+      const local: string[] = [];
+      for (const [index, side] of sides.entries()) {
+        const name = index === 0 ? "left" : "right";
+        local.push(files.isLocal(side) ? side : update === "copy" ? await copies.copy(this.copyOwner, name, side, report) : copies.side(this.copyOwner, name));
+      }
+      return local as [string, string];
+    });
+  }
+
   private async loadText(file: string): Promise<TextFileResult> {
     let document: vscode.TextDocument | undefined;
     try {
-      document = await vscode.workspace.openTextDocument(vscode.Uri.file(file));
+      document = await vscode.workspace.openTextDocument(toUri(file));
     } catch (error) {
       // Binary or very large files: show them read-only with the desktop decoder.
       this.owner.host.log(`VS Code cannot open ${file} as text (${errorText(error)}); loading it read-only.`);
@@ -633,11 +711,10 @@ export class EmbeddedPanel {
     const text = document.getText();
     this.guard.remember(file, text);
     this.watch(file);
-    const info = await stat(file).catch(() => undefined);
-    const writable = await access(file, constants.W_OK).then(() => true, () => false);
-    return textFileFromBuffer(file, text, eolOf(document), {
-      size: info?.size ?? Buffer.byteLength(text), modified: info ? Math.round(info.mtimeMs) : null, readOnly: !writable
-    });
+    const info = await this.owner.files.stat(file).catch(() => undefined);
+    // Restricted Mode and read-only file systems show the side read-only; saving is also refused below.
+    const readOnly = !info || info.readOnly || Boolean(this.owner.host.denial("save", [file]));
+    return textFileFromBuffer(file, text, eolOf(document), { size: info?.size ?? utf8(text).length, modified: info?.mtime ?? null, readOnly });
   }
 
   /**
@@ -646,38 +723,36 @@ export class EmbeddedPanel {
    */
   private async saveText(args: Record<string, unknown>): Promise<unknown> {
     const file = requireAbsolute(args.path);
+    assertAllowed(this.owner.host.denial("save", [file]));
     const lines = requireLines(args.lines, "lines");
     const finalNewline = args.finalNewline !== false;
     const key = pathKey(file);
-    const exists = await stat(file).then(info => {
-      if (!info.isFile()) throw new Error(`${file} is not a file.`);
-      return true;
-    }, (error: NodeJS.ErrnoException) => {
-      if (error.code === "ENOENT") return false;
-      throw error;
-    });
+    const existing = await this.owner.files.stat(file);
+    if (existing && existing.type !== "file") throw new Error(`${file} is not a file.`);
+    if (existing?.readOnly) throw new Error(`${basename(file)} is read-only.`);
     this.saving.add(key);
     try {
-      if (!exists) {
+      if (!existing) {
         const text = joinLines(lines, args.eol === "CRLF" ? "\r\n" : "\n", finalNewline);
-        await writeFile(file, text, { encoding: "utf8", flag: "wx" });
+        await this.owner.files.create(file, utf8(text));
         this.guard.remember(file, text);
         this.watch(file);
       } else {
-        const uri = vscode.Uri.file(file);
+        const uri = toUri(file);
         const document = await vscode.workspace.openTextDocument(uri);
         const current = document.getText();
         // The merge view never shows the result file's buffer, so it must not replace unsaved edits made there.
         if (this.spec.kind === "merge" && document.isDirty) {
-          throw new Error(`${path.basename(file)} has unsaved changes in another VS Code editor. Save or revert them there, then Refresh this merge before saving.`);
+          throw new Error(`${basename(file)} has unsaved changes in another VS Code editor. Save or revert them there, then Refresh this merge before saving.`);
         }
         if (this.guard.has(file)) this.guard.assertUnchanged(file, current);
-        else if (document.isDirty) throw new Error(`${path.basename(file)} has unsaved changes in VS Code. Save or revert them there first.`);
+        else if (document.isDirty) throw new Error(`${basename(file)} has unsaved changes in VS Code. Save or revert them there first.`);
         const text = joinLines(lines, eolOf(document), finalNewline);
         if (text !== current) {
           const edit = new vscode.WorkspaceEdit();
           edit.replace(uri, new vscode.Range(document.positionAt(0), document.positionAt(current.length)), text);
-          if (!(await vscode.workspace.applyEdit(edit))) throw new Error(`VS Code rejected the edit to ${file}.`);
+          // Read-only documents can accept the request without changing.
+          if (!(await vscode.workspace.applyEdit(edit)) || document.getText() !== text) throw new Error(`VS Code rejected the edit to ${file}.`);
         }
         if (document.isDirty && !(await document.save())) throw new Error(`VS Code could not save ${file}.`);
         const saved = document.getText();
@@ -689,14 +764,14 @@ export class EmbeddedPanel {
     } finally {
       this.saving.delete(key);
     }
-    const info = await stat(file);
-    return { path: file, exists: true, isDir: false, size: info.size, modified: Math.round(info.mtimeMs), kind: "file" };
+    const info = await this.owner.files.stat(file);
+    return { path: file, exists: true, isDir: false, size: info?.size ?? 0, modified: info?.mtime ?? null, kind: "file" };
   }
 
   private watch(file: string): void {
     const key = pathKey(file);
     if (this.watchers.has(key)) return;
-    const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.file(path.dirname(file)), path.basename(file)));
+    const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(toUri(dirname(file)), basename(file)));
     const check = () => void this.checkDisk(file);
     watcher.onDidChange(check);
     watcher.onDidCreate(check);
@@ -706,27 +781,48 @@ export class EmbeddedPanel {
   private async checkDisk(file: string): Promise<void> {
     if (this.saving.has(pathKey(file))) return;
     try {
-      this.documentChanged(await vscode.workspace.openTextDocument(vscode.Uri.file(file)));
+      this.documentChanged(await vscode.workspace.openTextDocument(toUri(file)));
     } catch {
       /* not readable as text right now; the next change or a reload reports it */
     }
   }
 
   private documentChanged(document: vscode.TextDocument): void {
-    if (document.uri.scheme !== "file" || this.saving.has(pathKey(document.uri.fsPath))) return;
-    for (const file of this.guard.changed(document.uri.fsPath, document.getText())) this.postEvent("file-changed", file);
+    if (document.uri.scheme === "untitled") return;
+    const file = pathOf(document.uri);
+    if (this.saving.has(pathKey(file))) return;
+    for (const changed of this.guard.changed(file, document.getText())) this.postEvent("file-changed", changed);
   }
 
   private disposed(): void {
     this.isDisposed = true;
     clearTimeout(this.completionTimer);
     this.owner.releaseOrigins(this);
+    void this.owner.host.folderCopies?.release(this.copyOwner).catch(error => this.owner.host.log(`Could not remove folder copies: ${errorText(error)}`));
     for (const disposable of [...this.disposables, ...this.watchers.values()]) disposable.dispose();
     this.watchers.clear();
     if (!this.owner.isDisposing && (this.dirty[0] || this.dirty[1])) {
       void (this.spec.kind === "merge" ? this.owner.offerMergedText(this.spec) : this.owner.offerRestore(this.spec));
     }
   }
+}
+
+/** Rewrites helper error messages that name folder copies to name the original folders. */
+function mapFolderErrors<T>(result: T, local: readonly string[], original: readonly string[]): T {
+  const replacements = local.map((folder, index) => [folder, original[index]!] as const).filter(([folder, source]) => folder !== source);
+  if (!replacements.length) return result;
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) value.forEach(visit);
+    else if (isObject(value)) {
+      for (const [key, item] of Object.entries(value)) {
+        if (key === "error" && typeof item === "string") {
+          value[key] = replacements.reduce((text, [folder, source]) => text.split(folder).join(source), item);
+        } else visit(item);
+      }
+    }
+  };
+  visit(result);
+  return result;
 }
 
 function escapeHtml(text: string): string {

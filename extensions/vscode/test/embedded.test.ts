@@ -5,9 +5,14 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import {
   ConflictError, dialogFilters, DocumentGuard, joinLines, MAX_READ_BYTES, pairViewKind, parseSpec, readBytes, readDataUrl, specFromInputs, splitLines,
-  textFileFromBuffer, titleOf, unsupportedCommand, VIEW_METHODS
+  textFileFromBuffer, titleOf, unsupportedCommand
 } from "../src/embeddedCore";
 import { desktopViewArguments } from "../src/process";
+import { NodeFiles } from "../src/nodeFiles";
+import type { FileAccess } from "../src/fileAccess";
+
+/** Local files only; these tests never use URI strings. */
+const files = new NodeFiles({} as FileAccess);
 
 const a = path.resolve("a.txt"), b = path.resolve("b.txt");
 
@@ -25,8 +30,6 @@ test("read-only view specs keep their kind, files, titles and options only", () 
   assert.equal(titleOf(parseSpec({ kind: "table", paths: [a, a] })), "Table: a.txt");
   assert.equal(titleOf(parseSpec({ kind: "picture", paths: [png, ""], titles: [null, "Right"] })), "Picture: b.png ↔ Right");
   assert.equal(titleOf(parseSpec({ kind: "patch", paths: [path.resolve("fix.patch")] })), "Patch: fix.patch");
-  assert.deepEqual(VIEW_METHODS.patch, []);
-  assert.deepEqual(VIEW_METHODS.picture, ["pix.compare", "pix.image"]);
 });
 
 test("folder specs persist only local paths, options and session identity", () => {
@@ -59,21 +62,21 @@ test("bytes and pictures are read like the desktop commands", async () => {
   try {
     const bin = path.join(dir, "data.bin");
     await writeFile(bin, Buffer.from([0, 1, 2, 3, 4, 5, 6, 7]));
-    assert.deepEqual([...Buffer.from(await readBytes(bin, 2, 3), "base64")], [2, 3, 4]);
-    assert.deepEqual([...Buffer.from(await readBytes(bin, 6, 100), "base64")], [6, 7]);
-    assert.equal(await readBytes(bin, 100, 10), "");
+    assert.deepEqual([...Buffer.from(await readBytes(files, bin, 2, 3), "base64")], [2, 3, 4]);
+    assert.deepEqual([...Buffer.from(await readBytes(files, bin, 6, 100), "base64")], [6, 7]);
+    assert.equal(await readBytes(files, bin, 100, 10), "");
     await truncate(bin, MAX_READ_BYTES + 10);
-    assert.equal(Buffer.from(await readBytes(bin, 0, MAX_READ_BYTES * 2), "base64").length, MAX_READ_BYTES);
-    await assert.rejects(readBytes(path.join(dir, "missing.bin"), 0, 1));
+    assert.equal(Buffer.from(await readBytes(files, bin, 0, MAX_READ_BYTES * 2), "base64").length, MAX_READ_BYTES);
+    await assert.rejects(readBytes(files, path.join(dir, "missing.bin"), 0, 1));
 
     const jpg = path.join(dir, "photo.JPEG");
     await writeFile(jpg, "abc");
-    assert.deepEqual(await readDataUrl(jpg), { url: "data:image/jpeg;base64,YWJj", size: 3 });
+    assert.deepEqual(await readDataUrl(files, jpg), { url: "data:image/jpeg;base64,YWJj", size: 3 });
     const other = path.join(dir, "x.tga");
     await writeFile(other, "abc");
-    assert.match((await readDataUrl(other)).url, /^data:application\/octet-stream;base64,/);
-    await assert.rejects(readDataUrl(jpg, 2), /too large/);
-    await assert.rejects(readDataUrl(dir), /not a file/);
+    assert.match((await readDataUrl(files, other)).url, /^data:application\/octet-stream;base64,/);
+    await assert.rejects(readDataUrl(files, jpg, 2), /too large/);
+    await assert.rejects(readDataUrl(files, dir), /not a file/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

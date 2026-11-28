@@ -10,6 +10,7 @@ import type { LaunchMode, LocalResource, ResourceKind, SideInput } from "../src/
 import { assertSavedResources } from "../src/resources";
 import { SnapshotStore, type SnapshotSession } from "../src/snapshots";
 import { deleteEmbeddedSession, dropPaths, MAX_DROP_ITEMS, readEmbeddedSessions, supportedFolderOptions, unsupportedFolderOptions, upsertEmbeddedSession } from "../src/embeddedCore";
+import { UnavailableError } from "../src/errors";
 import { pathToFileURL } from "node:url";
 
 const file = (name: string): LocalResource => ({ path: path.resolve(name), kind: "file" });
@@ -54,7 +55,10 @@ class FakeHost implements ComparisonHost {
   embeddedAccepted = false;
   embeddedNotices = 0;
   dirty = false;
-  trusted = true;
+  /** Why the desktop app is unavailable (remote window, Restricted Mode, ...); undefined when it is. */
+  desktopDenied: UnavailableError | undefined;
+  acceptEmbedded = false;
+  offers: string[] = [];
   leftContext = false;
   notices: string[] = [];
   buffers = new Map<string, string>();
@@ -62,7 +66,8 @@ class FakeHost implements ComparisonHost {
   snapshotRoot = path.join(tmpdir(), `comparecraft-core-${process.pid}`);
   async bufferText(filePath: string) { return this.buffers.get(filePath); }
   async createSnapshots(): Promise<SnapshotSession> { return new SnapshotStore(this.snapshotRoot).create(); }
-  assertSupported() { if (!this.trusted) throw new Error("Trust required"); }
+  checkDesktop(_paths: readonly string[]) { if (this.desktopDenied) throw this.desktopDenied; }
+  async offerEmbedded(error: UnavailableError) { this.offers.push(error.message); return this.acceptEmbedded; }
   async resource(value: string) {
     const resource = this.resources.get(value);
     if (!resource) throw new Error("Missing resource");
@@ -164,9 +169,11 @@ test("embedded/default mode opens two files in the embedded panel without launch
   assert.deepEqual(host.embedded, [[left.path, right.path], [left.path, right.path]]);
   assert.equal(host.embeddedNotices, 0);
   assert.equal(host.launches.length, 0);
-  host.trusted = false;
-  await assert.rejects(controller.compare([left.path, right.path]), /Trust required/);
-  assert.equal(host.embedded.length, 2);
+  // Restricted Mode (and remote or browser hosts) still compare in VS Code; only the desktop app is denied.
+  host.desktopDenied = new UnavailableError("Restricted Mode: trust this workspace", "trust");
+  await controller.compare([left.path, right.path]);
+  assert.equal(host.embedded.length, 3);
+  assert.deepEqual(host.offers, []);
 });
 
 test("embedded folder comparisons open panels without desktop prompts or dirty-folder guards", async () => {
@@ -245,13 +252,23 @@ test("picker workflows enforce kinds and compare a file's parent folder", async 
   await assert.rejects(controller.compareWithPicker([other.path], "file"), /Choose a file/);
 });
 
-test("untrusted environments and folders with unsaved content never launch", async () => {
+test("denied desktop launches explain why and offer the embedded panel; folders with unsaved content never launch", async () => {
   const host = new FakeHost(), l = file("left.txt"), r = file("right.txt"), lf = folder("lf"), rf = folder("rf");
   host.add(l, r, lf, rf);
   const controller = new ComparisonController(host);
-  host.trusted = false;
-  await assert.rejects(controller.compare([l.path, r.path]), /Trust required/);
-  host.trusted = true;
+  host.desktopDenied = new UnavailableError("This window is connected to an SSH host.");
+  await controller.compare([l.path, r.path]);
+  assert.deepEqual(host.offers, ["This window is connected to an SSH host."]);
+  assert.equal(host.embedded.length, 0, "declining the offer opens nothing");
+  host.acceptEmbedded = true;
+  await controller.compare([l.path, r.path]);
+  assert.deepEqual(host.embedded, [[l.path, r.path]]);
+  assert.equal(await controller.compareInputs([{ kind: "content", name: "a.txt", title: "a", content: "a" }, { kind: "path", path: r.path }], { mode: "desktop" }), true);
+  assert.equal(host.embedded.length, 2);
+  // Nothing to embed (a Git tool waiting for the desktop process) or the home window: the reason is the error.
+  await assert.rejects(controller.compareInputs([{ kind: "path", path: l.path }, { kind: "path", path: r.path }], { mode: "desktop", onClosed: async () => {} }), /SSH host/);
+  await assert.rejects(controller.openDesktop(), /SSH host/);
+  host.desktopDenied = undefined;
   host.dirty = true;
   await assert.rejects(controller.compare([lf.path, rf.path]), /Unsaved/);
   assert.equal(host.launches.length, 0);
@@ -319,11 +336,19 @@ test("desktop process launch uses a real argument array and surfaces spawn and e
   }
 });
 
-test("dropped URIs become local paths and anything else is refused", () => {
+test("dropped URIs become paths of this host, virtual resources stay URIs, and anything else is refused", () => {
   const files = [path.join(tmpdir(), "with space & 100%.txt"), path.join(tmpdir(), "folder")];
   assert.deepEqual(dropPaths(files.map(file => pathToFileURL(file).href)), files);
-  assert.throws(() => dropPaths(["vscode-remote://wsl+ubuntu/home/a.txt"]), /Only local files/);
-  assert.throws(() => dropPaths(["untitled:Untitled-1"]), /Only local files/);
+  // A remote window's webview sees remote files as vscode-remote URIs; only this window's remote is accepted.
+  assert.throws(() => dropPaths(["vscode-remote://wsl+ubuntu/home/a.txt"]), /this window's host/);
+  assert.throws(() => dropPaths(["vscode-remote://wsl+ubuntu/home/a.txt"], { native: true, remoteName: "ssh-remote" }), /this window's host/);
+  if (process.platform !== "win32") {
+    assert.deepEqual(dropPaths(["vscode-remote://ssh-remote%2Bbuild-box/home/me/a%20b.txt"], { native: true, remoteName: "ssh-remote" }), ["/home/me/a b.txt"]);
+  }
+  assert.deepEqual(dropPaths(["vscode-vfs://github/owner/repo/a.ts"]), ["vscode-vfs://github/owner/repo/a.ts"]);
+  // Browser VS Code keeps file: URIs (served by the browser's file system access), too.
+  assert.deepEqual(dropPaths(["file:///home/me/a.txt"], { native: false }), ["file:///home/me/a.txt"]);
+  assert.throws(() => dropPaths(["untitled:Untitled-1"]), /Untitled documents/);
   assert.throws(() => dropPaths(["not a uri"]), /Invalid dropped item/);
   for (const value of [[], "file:///a", [1], Array(MAX_DROP_ITEMS + 1).fill(pathToFileURL(files[0]!).href)]) {
     assert.throws(() => dropPaths(value), /Invalid dropped items/);

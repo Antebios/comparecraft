@@ -1,5 +1,5 @@
 const { downloadAndUnzipVSCode } = require("@vscode/test-electron");
-const { runHostTests } = require("./run-host-tests.cjs");
+const { runHostTests, runRestrictedModeTests } = require("./run-host-tests.cjs");
 const { mkdtemp, rm } = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
@@ -9,6 +9,7 @@ async function main() {
   const directory = await mkdtemp(
     path.join(os.tmpdir(), "comparecraft-vscode-host-"),
   );
+  const vscodeExecutablePath = process.env.VSCODE_EXECUTABLE_PATH ?? resolveVSCodeExecutable(await downloadAndUnzipVSCode());
   try {
     await runHostTests({
       extensionDevelopmentPath: path.resolve(__dirname, ".."),
@@ -19,9 +20,7 @@ async function main() {
         "test",
         "host.js",
       ),
-      vscodeExecutablePath:
-        process.env.VSCODE_EXECUTABLE_PATH ??
-        resolveVSCodeExecutable(await downloadAndUnzipVSCode()),
+      vscodeExecutablePath,
       launchArgs: [
         directory,
         "--disable-extensions",
@@ -38,6 +37,14 @@ async function main() {
           ? { COMPARECRAFT_TEST_BACKEND: process.env.COMPARECRAFT_BACKEND }
           : {}),
       },
+    });
+    await runRestrictedModeTests({
+      vscodeExecutablePath,
+      extensionDevelopmentPath: path.resolve(__dirname, ".."),
+      extensionTestsPath: path.resolve(__dirname, "..", "out", "test", "restricted.js"),
+      extensionTestsEnv: process.env.COMPARECRAFT_BACKEND ? { COMPARECRAFT_TEST_BACKEND: process.env.COMPARECRAFT_BACKEND } : {},
+      // Without a helper, keep an installed desktop app's helper out of the test: Node has none beside it.
+      settings: process.env.COMPARECRAFT_BACKEND ? {} : { "comparecraft.desktopPath": process.execPath },
     });
   } finally {
     await rm(directory, {

@@ -1,7 +1,8 @@
-import { open, readFile, stat } from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import type { SideInput } from "./contracts";
+import { toBase64, type FileAccess } from "./fileAccess";
+import { basename, extname, fileUrlToPath, isAbsolutePath, pathKey } from "./paths";
+
+export { pathKey } from "./paths";
 
 /** Same cap as the desktop `read_bytes` command. */
 export const MAX_READ_BYTES = 4 << 20;
@@ -14,33 +15,22 @@ const MIME: Record<string, string> = {
 };
 
 /** Reads up to 4 MB at `offset` as base64, like the desktop `read_bytes` command. */
-export async function readBytes(file: string, offset: number, len: number): Promise<string> {
-  const handle = await open(file, "r");
-  try {
-    const buffer = Buffer.alloc(Math.min(len, MAX_READ_BYTES));
-    let filled = 0;
-    while (filled < buffer.length) {
-      const { bytesRead } = await handle.read(buffer, filled, buffer.length - filled, offset + filled);
-      if (bytesRead === 0) break;
-      filled += bytesRead;
-    }
-    return buffer.subarray(0, filled).toString("base64");
-  } finally {
-    await handle.close();
-  }
+export async function readBytes(files: FileAccess, file: string, offset: number, len: number): Promise<string> {
+  return toBase64(await files.read(file, offset, Math.min(len, MAX_READ_BYTES)));
 }
 
 /** Returns a picture as a data URL using the desktop's extension-to-MIME map. */
-export async function readDataUrl(file: string, limit = MAX_DATA_URL_BYTES): Promise<{ url: string; size: number }> {
-  const info = await stat(file);
-  if (!info.isFile()) throw new Error(`${file} is not a file.`);
-  if (info.size > limit) throw new Error(`${path.basename(file)} is too large to show in VS Code (${info.size} bytes; the limit is ${limit}).`);
-  const bytes = await readFile(file);
-  const mime = MIME[path.extname(file).slice(1).toLowerCase()] ?? "application/octet-stream";
-  return { url: `data:${mime};base64,${bytes.toString("base64")}`, size: bytes.length };
+export async function readDataUrl(files: FileAccess, file: string, limit = MAX_DATA_URL_BYTES): Promise<{ url: string; size: number }> {
+  const info = await files.stat(file);
+  if (!info) throw new Error(`${file} was not found.`);
+  if (info.type !== "file") throw new Error(`${file} is not a file.`);
+  if (info.size > limit) throw new Error(`${basename(file)} is too large to show in VS Code (${info.size} bytes; the limit is ${limit}).`);
+  const bytes = await files.readFile(file);
+  const mime = MIME[extname(file).slice(1).toLowerCase()] ?? "application/octet-stream";
+  return { url: `data:${mime};base64,${toBase64(bytes)}`, size: bytes.length };
 }
 
-/** Read-only views the embedded panel shows from files on disk. */
+/** Read-only views the embedded panel shows from files. */
 export const FILE_VIEWS = ["hex", "table", "picture", "patch"] as const;
 export type FileView = typeof FILE_VIEWS[number];
 export const isFileView = (kind: unknown): kind is FileView => FILE_VIEWS.includes(kind as FileView);
@@ -54,14 +44,6 @@ export function pairViewKind(infos: readonly { exists: boolean; isDir: boolean; 
   const kind = infos.find(info => info.exists)?.kind;
   return kind === "hex" || kind === "table" || kind === "picture" ? kind : undefined;
 }
-
-/** Helper methods each read-only view needs; older helpers lack them. */
-export const VIEW_METHODS: Record<FileView, readonly string[]> = {
-  hex: ["hex.align"],
-  table: ["table.compare"],
-  picture: ["pix.compare", "pix.image"],
-  patch: [],
-};
 
 export const FOLDER_METHODS = ["folder.compare", "folder.compareItems", "file.quickCompare"] as const;
 
@@ -204,7 +186,7 @@ export function parseSpec(value: unknown): EmbeddedSpec {
   if (isFileView(kind)) return fileViewSpec(kind, paths, titles, options);
   if (kind === "folder") {
     if (!Array.isArray(paths) || paths.length !== 2 || !paths.every(item =>
-      typeof item === "string" && (item === "" || path.isAbsolute(item))) || !paths.some(Boolean)) {
+      typeof item === "string" && (item === "" || isAbsolutePath(item))) || !paths.some(Boolean)) {
       throw new Error("Folder comparisons need two absolute sides and at least one folder.");
     }
     if (!Array.isArray(titles) || !titles.every(item => item === null || typeof item === "string")) throw new Error("Invalid comparison titles.");
@@ -219,7 +201,7 @@ export function parseSpec(value: unknown): EmbeddedSpec {
   }
   if (kind !== "text" && kind !== "merge") throw new Error("Invalid embedded view kind.");
   const merge = kind === "merge";
-  if (!Array.isArray(paths) || paths.length > (merge ? 4 : 2) || !paths.every(item => typeof item === "string" && (item === "" || path.isAbsolute(item)))) {
+  if (!Array.isArray(paths) || paths.length > (merge ? 4 : 2) || !paths.every(item => typeof item === "string" && (item === "" || isAbsolutePath(item)))) {
     throw new Error(merge ? "Embedded merges need up to four absolute file paths." : "Embedded comparisons need up to two absolute file paths.");
   }
   if (merge && (typeof paths[3] !== "string" || paths[3] === "")) throw new Error("An embedded merge needs a result file.");
@@ -248,7 +230,7 @@ export function parseSpec(value: unknown): EmbeddedSpec {
 /** Read-only views keep only their files, titles and view options; nothing is ever written. */
 function fileViewSpec(kind: FileView, paths: unknown, titles: unknown, options: unknown): EmbeddedSpec {
   const count = kind === "patch" ? 1 : 2;
-  if (!Array.isArray(paths) || paths.length > count || !paths.every(item => typeof item === "string" && (item === "" || path.isAbsolute(item)))) {
+  if (!Array.isArray(paths) || paths.length > count || !paths.every(item => typeof item === "string" && (item === "" || isAbsolutePath(item)))) {
     throw new Error(kind === "patch" ? "An embedded patch view needs one absolute file path." : `An embedded ${kind} comparison needs up to two absolute file paths.`);
   }
   if (kind === "patch" && !paths[0]) throw new Error("An embedded patch view needs one absolute file path.");
@@ -284,14 +266,9 @@ export function textFileFromBuffer(file: string, text: string, eol: "\n" | "\r\n
   };
 }
 
-export const pathKey = (file: string) => {
-  const resolved = path.resolve(file);
-  return process.platform === "win32" ? resolved.toLowerCase() : resolved;
-};
-
 export class ConflictError extends Error {
   constructor(file: string) {
-    super(`${path.basename(file)} changed in VS Code or on disk after it was loaded into this comparison. Reload (F5) to compare against the current text before saving.`);
+    super(`${basename(file)} changed in VS Code or on disk after it was loaded into this comparison. Reload (F5) to compare against the current text before saving.`);
     this.name = "ConflictError";
   }
 }
@@ -355,28 +332,44 @@ export function requireString(value: unknown, name: string): string {
 /** Most items accepted from one drag and drop. */
 export const MAX_DROP_ITEMS = 16;
 
-/** Local paths of URIs dropped on a webview (from the VS Code Explorer or editor tabs). */
-export function dropPaths(value: unknown): string[] {
+/**
+ * Paths of URIs dropped on a webview (from the VS Code Explorer or editor tabs): file-system paths for
+ * `file:` URIs where `native` (Node extension hosts), URI strings for other providers. The webview runs in
+ * the VS Code window, so in a remote window it reports files of the remote host as
+ * `vscode-remote://<remoteName>+<host>/path`; those become paths on this (remote) extension host.
+ */
+export function dropPaths(value: unknown, options: { native?: boolean; remoteName?: string } = { native: true }): string[] {
   if (!Array.isArray(value) || !value.length || value.length > MAX_DROP_ITEMS || !value.every(item => typeof item === "string" && item.length <= 8192)) {
     throw new Error("Invalid dropped items.");
   }
-  return value.map(uri => {
+  return value.map((uri: string) => {
     let url: URL;
     try {
-      url = new URL(uri as string);
+      url = new URL(uri);
     } catch {
       throw new Error(`Invalid dropped item: ${uri}`);
     }
-    if (url.protocol !== "file:") throw new Error("Only local files can be dropped.");
-    const file = fileURLToPath(url);
-    if (!path.isAbsolute(file)) throw new Error(`Invalid dropped item: ${uri}`);
+    const scheme = url.protocol.slice(0, -1).toLowerCase();
+    if (scheme === "untitled") throw new Error("Untitled documents can't be dropped; use Select Text as Left or Compare with Clipboard.");
+    let file = uri;
+    if (scheme === "vscode-remote") {
+      const authority = decodeURIComponent(url.host);
+      if (!options.remoteName || authority.split("+")[0] !== options.remoteName) throw new Error("Only files of this window's host can be dropped.");
+      file = fileUrlToPath(`file://${url.pathname}`);
+    } else if (scheme === "file" && options.native) {
+      file = fileUrlToPath(uri);
+    } else if (!url.pathname && !url.host) {
+      throw new Error(`Invalid dropped item: ${uri}`);
+    }
+    if (!isAbsolutePath(file)) throw new Error(`Invalid dropped item: ${uri}`);
     return file;
   });
 }
 
+/** An absolute file-system path or a URI string (see `paths.ts`). */
 export function requireAbsolute(value: unknown, name = "path"): string {
   const file = requireString(value, name);
-  if (!path.isAbsolute(file)) throw new Error(`The ${name} must be absolute: ${file}`);
+  if (!isAbsolutePath(file)) throw new Error(`The ${name} must be absolute: ${file}`);
   return file;
 }
 
@@ -392,9 +385,9 @@ export function requireObject(value: unknown, name: string): Record<string, unkn
 
 /** Panel title: the side names, or one name when both sides show the same file. */
 export function titleOf(spec: EmbeddedSpec): string {
-  if (spec.kind === "merge") return `Merge: ${path.basename(spec.paths[3] ?? "") || "result"}`;
-  if (spec.kind === "patch") return `Patch: ${spec.titles[0] || path.basename(spec.paths[0] ?? "") || "Untitled"}`;
-  const names = [0, 1].map(side => spec.titles[side] || (spec.paths[side] ? path.basename(spec.paths[side]!) : "Untitled"));
+  if (spec.kind === "merge") return `Merge: ${basename(spec.paths[3] ?? "") || "result"}`;
+  if (spec.kind === "patch") return `Patch: ${spec.titles[0] || basename(spec.paths[0] ?? "") || "Untitled"}`;
+  const names = [0, 1].map(side => spec.titles[side] || (spec.paths[side] ? basename(spec.paths[side]!) : "Untitled"));
   const pair = names[0] === names[1] ? names[0]! : `${names[0]} ↔ ${names[1]}`;
   const prefix = { hex: "Hex", table: "Table", picture: "Picture", folder: "Folder" }[spec.kind as string];
   return prefix ? `${prefix}: ${pair}` : pair;
@@ -413,14 +406,14 @@ export async function specFromInputs(inputs: readonly Input[], loadDisk: (file: 
   const paths: string[] = [], titles: (string | null)[] = [], readOnly: boolean[] = [], content: (string[] | null)[] = [];
   for (const input of inputs) {
     if (input.kind === "path" && !input.readOnly) {
-      if (!path.isAbsolute(input.path)) throw new Error(`The path must be absolute: ${input.path}`);
+      if (!isAbsolutePath(input.path)) throw new Error(`The path must be absolute: ${input.path}`);
       paths.push(input.path);
       titles.push(input.title ?? null);
       readOnly.push(false);
       content.push(null);
     } else {
       paths.push("");
-      titles.push(input.title ?? (input.kind === "path" ? `${path.basename(input.path)} (read-only)` : input.name));
+      titles.push(input.title ?? (input.kind === "path" ? `${basename(input.path)} (read-only)` : input.name));
       readOnly.push(true);
       content.push(input.kind === "path" ? await loadDisk(input.path)
         : splitLines(typeof input.content === "string" ? input.content : new TextDecoder().decode(input.content)));
@@ -431,11 +424,11 @@ export async function specFromInputs(inputs: readonly Input[], loadDisk: (file: 
 
 async function mergeSpec(inputs: readonly Input[], loadDisk: (file: string) => Promise<string[]>): Promise<EmbeddedSpec> {
   const result = inputs[3]!;
-  if (result.kind !== "path" || result.readOnly || !path.isAbsolute(result.path)) throw new Error("An embedded merge needs a writable result file.");
+  if (result.kind !== "path" || result.readOnly || !isAbsolutePath(result.path)) throw new Error("An embedded merge needs a writable result file.");
   const paths: string[] = [], titles: (string | null)[] = [], readOnly: boolean[] = [], content: string[][] = [];
   for (const input of inputs.slice(0, 3)) {
     paths.push("");
-    titles.push(input.title ?? (input.kind === "path" ? path.basename(input.path) : input.name));
+    titles.push(input.title ?? (input.kind === "path" ? basename(input.path) : input.name));
     readOnly.push(true);
     content.push(input.kind === "path" ? await loadDisk(input.path)
       : splitLines(typeof input.content === "string" ? input.content : new TextDecoder().decode(input.content)));

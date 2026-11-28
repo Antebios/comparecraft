@@ -1,5 +1,6 @@
-import { access, stat } from "node:fs/promises";
+import { access, chmod, stat } from "node:fs/promises";
 import { constants } from "node:fs";
+import { InstallationError } from "./errors";
 import { homedir } from "node:os";
 import path from "node:path";
 
@@ -11,7 +12,7 @@ interface DiscoveryOptions {
   isExecutable?: (value: string) => Promise<boolean>;
 }
 
-export class InstallationError extends Error {}
+export { InstallationError };
 
 export function desktopCandidates(options: DiscoveryOptions = {}): string[] {
   const platform = options.platform ?? process.platform;
@@ -89,4 +90,46 @@ export async function discoverBackend(options: BackendDiscoveryOptions = {}): Pr
   const helper = paths.join(paths.dirname(desktop), platform === "win32" ? "comparecraft-backend.exe" : "comparecraft-backend");
   if (await check(helper)) return helper;
   throw new InstallationError(`The installed CompareCraft (${desktop}) does not include the embedded-mode helper ${helper}. Update CompareCraft to a release that includes it, or set comparecraft.backendPath.`);
+}
+
+export type BackendSource = "setting" | "bundled" | "desktop";
+
+export interface LocateBackendOptions extends BackendDiscoveryOptions {
+  /** The helper packaged with a platform-specific extension (`bin/comparecraft-backend`). */
+  bundled?: string;
+}
+
+/** Makes a bundled helper executable if extraction dropped its mode bits; false when it isn't there. */
+async function bundledExecutable(file: string, platform: NodeJS.Platform, check: (value: string) => Promise<boolean>): Promise<boolean> {
+  if (await check(file)) return true;
+  if (platform === "win32") return false;
+  try {
+    if (!(await stat(file)).isFile()) return false;
+    await chmod(file, 0o755);
+  } catch {
+    return false;
+  }
+  return check(file);
+}
+
+/**
+ * Finds the helper for embedded comparisons, in order: `comparecraft.backendPath` (an invalid value
+ * fails without falling back), the helper bundled with the extension, then the one installed next to the
+ * desktop app. Returns undefined when none is installed; an invalid `comparecraft.desktopPath` fails.
+ */
+export async function locateBackend(options: LocateBackendOptions = {}): Promise<{ executable: string; source: BackendSource } | undefined> {
+  const platform = options.platform ?? process.platform;
+  const check = options.isExecutable ?? isExecutable;
+  if (options.override) return { executable: await validateOverride("backendPath", options.override, platform, check), source: "setting" };
+  if (options.bundled && await bundledExecutable(options.bundled, platform, check)) return { executable: options.bundled, source: "bundled" };
+  let desktop: string;
+  try {
+    desktop = await discoverDesktop({ ...options, override: options.desktopOverride ?? "" });
+  } catch (error) {
+    if (error instanceof InstallationError && !options.desktopOverride) return undefined;
+    throw error;
+  }
+  const paths = platform === "win32" ? path.win32 : path.posix;
+  const helper = paths.join(paths.dirname(desktop), platform === "win32" ? "comparecraft-backend.exe" : "comparecraft-backend");
+  return await check(helper) ? { executable: helper, source: "desktop" } : undefined;
 }

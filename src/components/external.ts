@@ -1,4 +1,4 @@
-import { message, openPath, revealItemInDir } from "../host";
+import { message, openPath, revealItemInDir, revealsInOS } from "../host";
 import { errText } from "../api";
 import { IS_MAC, type Command } from "../commands";
 
@@ -23,7 +23,11 @@ export function externalCommands(path: () => string | undefined, report: (msg: s
   };
   return [
     { id: "open-default", menu: "File", group, label: "Open with Default Application", enabled: () => !!path(), run: wrap((p) => openPath(p)) },
-    { id: "reveal", menu: "File", group, label: IS_MAC ? "Reveal in Finder" : "Show in File Manager", enabled: () => !!path(), run: wrap(revealItemInDir) },
+    {
+      id: "reveal", menu: "File", group, label: IS_MAC ? "Reveal in Finder" : "Show in File Manager", enabled: () => !!path(), run: wrap(revealItemInDir),
+      // Files of a remote host, virtual workspace or browser VS Code are shown in VS Code's Explorer instead.
+      caption: () => (revealsInOS() ? (IS_MAC ? "Reveal in Finder" : "Show in File Manager") : "Reveal in Explorer View"),
+    },
   ];
 }
 

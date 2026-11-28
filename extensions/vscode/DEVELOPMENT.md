@@ -6,20 +6,31 @@ Marketplace page. This guide is excluded from the VSIX.
 
 ## Install, upgrade, and remove
 
-The extension is currently distributed as a `.vsix` file; it is not published to
+The extension is currently distributed as `.vsix` files; it is not published to
 the Visual Studio Marketplace or Open VSX. Update this distribution status when
 publishing.
 
-1. Install CompareCraft itself first (Windows installer, macOS app, or Linux
-  package). The extension finds standard installations automatically.
-2. Install the VSIX from **Extensions > ... > Install from VSIX...**.
+Each platform has its own package, `comparecraft-<version>-<target>.vsix`, with
+the `comparecraft-backend` helper in `bin/` (targets `win32-x64`, `win32-arm64`,
+`darwin-x64`, `darwin-arm64`, `linux-x64`, `linux-arm64`, `alpine-x64`,
+`alpine-arm64`). The universal `comparecraft-<version>.vsix` has no helper and
+compares with the WebAssembly engine; it serves other platforms and VS Code for
+the Web. VS Code refuses a platform package built for another platform.
+
+1. Install the VSIX for the computer where your files are from **Extensions >
+  ... > Install from VSIX...**. In a remote window (SSH, WSL, Dev Containers)
+  that is the remote computer: VS Code installs the extension there.
+2. Optional: install the CompareCraft desktop app (Windows installer, macOS app,
+  or Linux package) to open comparisons in its window. The extension finds
+  standard installations automatically.
 3. Run **CompareCraft: Check Embedded Backend** from the Command Palette. It
-  reports the helper's version and protocol.
+  reports which engine compares (bundled helper, desktop helper, configured
+  helper or WebAssembly), its version and protocol, and the environment.
 
 For command-line installation, use:
 
 ```text
-code --install-extension comparecraft-0.1.0.vsix
+code --install-extension comparecraft-0.1.0-linux-x64.vsix
 ```
 
 **Upgrade:** install the newer VSIX the same way and reload the window when VS
@@ -53,12 +64,17 @@ Only unset `merge.tool`/`diff.tool` if their value is `comparecraft`.
 ## Prerequisites
 
 - Node.js 22 or newer and npm.
+- Rust with the `wasm32-unknown-unknown` target (`rustup target add
+  wasm32-unknown-unknown`) to build the WebAssembly engine.
 - A local VS Code desktop installation, or network access so the test runner can
   download one.
 - Git for Git integration tests.
-- An installed CompareCraft app with `comparecraft-backend`, or a helper built
-  from this repository. Building it requires Rust and the platform prerequisites
-  described in the [repository README](../../README.md).
+- A `comparecraft-backend` helper for helper tests: an installed CompareCraft
+  app's, `npm run stage:helper -- --target <target>` (Rust only, no desktop
+  prerequisites), or `cargo build --bin comparecraft-backend` in `src-tauri`
+  (needs the desktop prerequisites in the [repository README](../../README.md)).
+- For `test:web`, Playwright's Chromium (`npx playwright install chromium`).
+  For `test:remote`, Docker and an OpenSSH client.
 
 ## Build and run
 
@@ -72,8 +88,16 @@ npm test
 ```
 
 `build:all` runs `build:webview` (the root Vite build that writes
-`media/webview/`, which is git-ignored) and then `build` (extension TypeScript).
-`build` alone does not refresh the webview bundle.
+`media/webview/`), `build:engine` (the Rust engine for WebAssembly, written to
+`media/engine/comparecraft-engine.wasm`), `build` (extension TypeScript) and
+`build:web` (the esbuild browser bundle `out/web/extension.js`; it fails if Node
+built-ins reach the browser code). The outputs are git-ignored. `build` alone
+does not refresh the webview, engine or browser bundles.
+
+The extension has two entry points sharing `src/activate.ts`: `src/extension.ts`
+(Node extension hosts: desktop, remote) and `src/web/extension.ts` (browser).
+To try the browser entry, run `npm run build:all`, then
+`npx vscode-test-web --browser=chromium --extensionDevelopmentPath=. <folder>`.
 
 Open [dev.code-workspace](dev.code-workspace) in VS Code and press F5 using
 **Run CompareCraft Extension**. Its pre-launch task runs `npm run build:all`.
@@ -86,19 +110,45 @@ folder.
 From this directory:
 
 ```text
-npm test
-npm run test:integration
+npm test                    # unit, contract and engine parity tests (Node)
+npm run test:integration    # VS Code (Electron) host tests, then Restricted Mode
+npm run test:web            # VS Code for the Web in headless Chromium
+npm run test:vsix -- <package.vsix>
+npm run test:remote -- --via ssh|container --vsix <linux-x64 package>
 ```
+
+`npm test` includes parity tests that run every engine fixture through both the
+WebAssembly engine and the helper and require identical results; they need
+`npm run build:engine` and a helper (`COMPARECRAFT_BACKEND`, or the repository's
+debug build) and are skipped otherwise.
 
 The integration runner uses a temporary profile/workspace and a harmless Node
 launcher to verify commands and arguments without changing your normal VS Code
 settings or opening the desktop GUI. It does not substitute for manual
-installer/GUI verification.
+installer/GUI verification. After the main run it covers virtual workspaces
+(in-memory file system providers, writable and read-only), the WebAssembly
+fallback without any helper, and then launches VS Code again with workspace
+trust on so the folder opens in Restricted Mode (`test/restricted.ts`).
 
 By default the runner downloads a VS Code test build. To use an existing
 installation, set `VSCODE_EXECUTABLE_PATH` to its executable. Set
 `COMPARECRAFT_BACKEND` to exercise **Check Embedded Backend** and the embedded
-panels against a real helper; without it those integration steps are skipped.
+panels against a real helper; without it the helper-based steps are skipped and
+only the WebAssembly checks run.
+
+On Linux without a display, use `xvfb-run -a`. VS Code prefers Wayland when
+`WAYLAND_DISPLAY` is set, so on a Wayland desktop clear it (and any
+`OZONE_PLATFORM`/`GDK_BACKEND` overrides) for test runs under Xvfb, for example
+`env -u WAYLAND_DISPLAY XDG_SESSION_TYPE=x11 xvfb-run -a npm run test:integration`.
+
+`test:web` bundles `test/web/suite.ts` (no Node modules: it runs in the
+browser's extension host) and runs it with `@vscode/test-web` against a
+temporary folder of sample files: activation, the WebAssembly engine, text,
+Hex, Table and Picture views, saving through the file system provider, and the
+explanations for folder, Git and desktop commands.
+
+`test:remote` checks remote windows (see
+[Remote smoke tests](#remote-smoke-tests)).
 
 For example, in Windows PowerShell:
 
@@ -134,28 +184,40 @@ the ones its view handles there, so they never reach VS Code; it leaves
 ## Package and verify the VSIX
 
 ```text
-npm run package
-npm run test:vsix
+npm run stage:helper -- --target linux-x64 --also alpine-x64
+npm run package:targets -- --helpers helpers --targets linux-x64,alpine-x64
+npm run test:vsix -- comparecraft-<version>-linux-x64.vsix
+env -u COMPARECRAFT_BACKEND npm run test:vsix -- comparecraft-<version>.vsix
 ```
 
-`package` runs the webview and TypeScript builds and writes
-`comparecraft-<version>.vsix` (git-ignored) with
-`vsce package --no-dependencies`. There is no publish script.
+`stage:helper` builds `comparecraft-backend` with only the `native` feature (no
+Tauri, WebView or desktop prerequisites) into `src-tauri/target/portable` and
+copies it to `helpers/<target>/`. Linux helpers are static musl binaries that
+run on any distribution, Alpine included; other architectures cross-compile
+with Rust's bundled `rust-lld`. Windows and macOS helpers are built on those
+systems. `package:targets` builds everything once (`build:all`), then packages
+each target that has a staged helper plus the universal package (no `bin/`).
+`npm run package` alone writes only the universal `comparecraft-<version>.vsix`.
+The VSIX files are git-ignored. There is no publish script.
 
 `test:vsix` uses temporary extension and profile directories to:
 
 1. Package and install an older-version copy of the same code.
 2. Upgrade to the real VSIX.
-3. Check the installed files: compiled code, webview bundle, screenshots, README,
-   CHANGELOG and license, without source, tests, scripts, maps, `node_modules`, or this
-   development guide.
-4. Run the host tests against the installed extension files.
-5. Uninstall the extension and confirm it is no longer listed.
+3. Check the installed files: compiled code, browser bundle, webview bundle,
+   WebAssembly engine, screenshots, README, CHANGELOG and license; the helper in
+   `bin/` for platform packages and none in the universal package; without
+   source, tests, scripts, maps, `node_modules`, or this development guide.
+4. Run the host tests against the installed extension files: with the bundled
+   helper for platform packages, otherwise with `COMPARECRAFT_BACKEND` or the
+   WebAssembly engine alone.
+5. Run the Restricted Mode checks against the installed files.
+6. Uninstall the extension and confirm it is no longer listed.
 
-The older-version copy tests the upgrade mechanism, not migration from an
-actual earlier release. The runner honors `VSCODE_EXECUTABLE_PATH` and
-`COMPARECRAFT_BACKEND` like `test:integration`. On Linux without a display, use
-`xvfb-run -a npm run test:vsix`.
+The package's target comes from its file name. The older-version copy tests the
+upgrade mechanism, not migration from an actual earlier release. The runner
+honors `VSCODE_EXECUTABLE_PATH` like `test:integration`. On Linux without a
+display, use `xvfb-run -a npm run test:vsix`.
 
 Both `test:integration` and `test:vsix` launch VS Code through
 `scripts/run-host-tests.cjs`. The host tests record whether they passed; if VS Code
@@ -173,19 +235,53 @@ npm run test:vsix -- path-to-package.vsix
 `COMPARECRAFT_VSIX_SKIP_HOST=1` skips the host step; do not treat that as full
 release verification.
 
+### Remote smoke tests
+
+```text
+npm run build
+xvfb-run -a npm run test:remote -- --via ssh --vsix comparecraft-<version>-linux-x64.vsix
+xvfb-run -a npm run test:remote -- --via container --vsix comparecraft-<version>-linux-x64.vsix
+```
+
+`test:remote` builds a Debian test image, then opens a Remote-SSH window (sshd
+in a disposable container on 127.0.0.1 with a throwaway key) or a dev container
+window from an isolated VS Code profile with the Remote-SSH or Dev Containers
+extension. It runs `test/remote.ts` in the remote extension host with the
+extension unpacked from the VSIX: the bundled helper must run on the remote
+host, text, folder and Git comparisons must work on remote files, Explorer drops
+must become remote paths, the desktop app and the local file manager must be
+refused, and the helper must end with the remote extension host. The remote
+host doesn't inherit the runner's environment, so expectations and results go
+through files in the remote workspace. Containers, keys and the profile are
+removed afterwards; `--keep` keeps them (with VS Code's logs) after a failure.
+The automated run opens a folder in a dev container rather than attaching to a
+running one, because attaching asks a trust question that test windows can't
+answer. WSL needs a Windows machine and is verified by hand with the same
+checks.
+
+### Continuous integration
+
 The [vscode-extension workflow](../../.github/workflows/vscode-extension.yml)
-runs unit tests, packaging, and `test:vsix` on Windows, macOS, and Linux against a
-helper built from source, then uploads the VSIX as a workflow artifact. Relevant
+builds the helper for every target (static musl on Linux, smoke-tested with
+`--version`, on Alpine and, for Arm64, under QEMU), packages the eight platform
+VSIX files and the universal one, and uploads them as a workflow artifact. Test
+jobs on Linux x64, Windows x64 and macOS Arm64 run the unit and parity tests
+against their platform's helper and `test:vsix` on their platform package;
+Linux also tests the universal package without a helper and runs `test:web`.
+Linux runs `test:remote` over SSH and Dev Containers, which reports problems
+without holding up publishing. Arm64 Linux and Windows, Intel macOS and Alpine
+packages are built and their helpers checked, but not host-tested. Relevant
 pushes to `main`, pull requests, and manual dispatch run all these checks without
 publishing, using the checked-in extension version. When a GitHub release is
 created, the workflow uses the release's tagged source. The tag must use `vN.N.N`
 or `vN.N.N-pre` (for example, `v1.2.3` or `v1.2.3-beta.1`, checked by
 `scripts/version.mjs`); CI sets the extension manifest and lockfile version to
 the tag's version before testing and packaging, without committing those changes.
-Only release creation publishes the tested artifact, after every platform passes.
+Only release creation publishes the tested packages, after every test job passes.
 Pre-release tags are tested and packaged but not published, because the
-Marketplace doesn't accept pre-release version numbers; their VSIX stays a
-workflow artifact for side-loading.
+Marketplace doesn't accept pre-release version numbers. Every release, pre-releases
+included, gets the VSIX files and helper-only Linux archives
+(`comparecraft-backend-<version>-linux-<arch>.tar.gz`) as release assets.
 Native installer, signing, menus, and desktop GUI checks remain separate from CI.
 
 ## Documentation screenshots
@@ -256,10 +352,13 @@ resetting the view during capture. Validate with the root `npm run docs:build`,
   lockfile version update is required.
 4. Wait for the Linux, Windows, and macOS tests, then approve the
   **vscode-marketplace** deployment if required. The publish job downloads the
-  tested Linux VSIX and publishes it without rebuilding or changing its version.
-5. Verify the listing, icon, screenshots, changelog and installation from the Marketplace.
+  tested platform and universal packages and publishes them together
+  (`vsce publish --packagePath ...`) without rebuilding or changing their version.
+5. Verify the listing, icon, screenshots, changelog and installation from the
+  Marketplace on at least one platform package and in VS Code for the Web.
   After the first successful publication, update the distribution status at the
-  top of this guide. This workflow does not publish to Open VSX or GitHub Releases.
+  top of this guide. This workflow does not publish to Open VSX; it attaches the
+  packages and Linux helper archives to the GitHub release.
 
 Publishing is serialized to avoid concurrent uploads, and the job only receives the Marketplace token
 after the platform checks and environment protection rules pass. If an upload
@@ -321,8 +420,14 @@ one. Rerun configuration after moving the app.
 
 ## Installation discovery and helper diagnostics
 
-The extension does not modify `PATH` or download an engine. Without an override,
-it checks these desktop executable locations:
+The extension does not modify `PATH` or download anything. Embedded comparisons
+use the first helper found: `comparecraft.backendPath` (user setting), the helper
+bundled in the extension's `bin/` (made executable if needed), then the one next
+to the desktop app. Without any, they use the WebAssembly engine
+(`media/engine/comparecraft-engine.wasm`) for text, Hex, Table and Picture
+comparisons; folder comparisons need a helper. In VS Code for the Web only the
+WebAssembly engine exists. Without an override, the extension checks these
+desktop executable locations:
 
 - Windows: `%LOCALAPPDATA%\CompareCraft\comparecraft.exe`, then CompareCraft
   directories under available Program Files locations.
@@ -345,12 +450,14 @@ to it over stdin/stdout (no network port), and stops it when VS Code closes or
 the executable settings change. It only reads files; it never writes them.
 
 Run **CompareCraft: Check Embedded Backend** from the Command Palette to confirm
-the helper starts and compares text. Its version and protocol appear in a
-notification and in the **CompareCraft** Output channel. Embedded mode requires
-protocol version 1 and a helper from the same release line. An incompatible
-protocol or a crash is reported explicitly rather than replaced by another
-installation. If the helper is missing or too old, update the desktop app or
-set `comparecraft.backendPath` to the correct helper.
+the engine starts and compares text. It names the engine (and for a helper its
+source, path, version and protocol) and the environment (for example "a window
+connected to an SSH host (Restricted Mode)") in a notification and in the
+**CompareCraft** Output channel. Embedded mode requires protocol version 1. An
+incompatible protocol, a crash or an invalid configured path is reported
+explicitly rather than replaced by another installation or the WebAssembly
+engine. If a helper is too old, update it or set `comparecraft.backendPath` to
+the correct helper.
 
 Set `COMPARECRAFT_BACKEND_LOG=debug` before starting VS Code for per-request
 timing in the Output channel. After a crash, reopen the comparison; the helper
@@ -380,9 +487,8 @@ offered only if the result changed and the Git conflict state is unchanged.
 
 The initial view is selected by the type of the first file that exists. Files
 with unsaved edits, Git revisions, clipboard content, and other in-memory sides
-always use text comparison. Older helpers without binary, picture, or table
-comparison methods fall back to text for initial comparisons; explicit views
-unsupported by the helper offer the desktop app instead.
+always use text comparison. Binary, picture and table requests an older helper
+doesn't offer are served by the WebAssembly engine.
 
 Switching views inside a CompareCraft tab opens another tab. Text Edit opens
 VS Code's normal editor. Folder Compare, Folder Sync, and Folder Merge ask
@@ -406,10 +512,17 @@ Git's index stages, and only the result can be saved.
 
 ## Architecture and release handoff
 
-The extension requires the installed desktop app; it does not download an
-engine. The windowless helper uses stdin/stdout and protocol version 1. See the
-[backend protocol](../../docs/vscode-extension/backend-protocol.md) for contracts
-and capability handling.
+The extension doesn't need the desktop app: platform packages bundle the
+windowless helper (stdin/stdout, protocol version 1) and every package includes
+the WebAssembly engine. `src/policy.ts` decides what each environment allows
+(desktop app, Git, saving, folders, revealing files) for commands, menus and
+webview requests alike; `src/engine.ts` routes requests to the helper or the
+WebAssembly engine. See the
+[backend protocol](../../docs/vscode-extension/backend-protocol.md) for contracts,
+capability handling and the WebAssembly interface, and the
+[host support plan](../../docs/vscode-extension/host-support-plan.md) and
+[handoff](../../docs/vscode-extension/handoff-host-support.md) for the
+environment matrix and its verification.
 
 The [implementation plan](../../docs/vscode-extension/plan.md),
 [handoff and platform matrix](../../docs/vscode-extension/handoff.md), and

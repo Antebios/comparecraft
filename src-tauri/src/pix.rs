@@ -51,6 +51,20 @@ pub fn load_picture_bytes(bytes: &[u8]) -> Result<Picture, String> {
     decode(ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format().map_err(|e| e.to_string())?)
 }
 
+/// Decodes the contents of the picture file `name`; like `load_picture`, the extension picks the format
+/// when the contents don't identify it (for example TGA).
+pub fn load_picture_named(name: &str, bytes: &[u8]) -> Result<Picture, String> {
+    decode(named_reader(name, bytes)?)
+}
+
+fn named_reader<'a>(name: &str, bytes: &'a [u8]) -> Result<ImageReader<std::io::Cursor<&'a [u8]>>, String> {
+    let mut reader = ImageReader::new(std::io::Cursor::new(bytes));
+    if let Ok(format) = ImageFormat::from_path(name) {
+        reader.set_format(format);
+    }
+    reader.with_guessed_format().map_err(|e| e.to_string())
+}
+
 fn decode<R: std::io::BufRead + std::io::Seek>(reader: ImageReader<R>) -> Result<Picture, String> {
     let fmt = reader.format();
     let img = reader.decode().map_err(|e| e.to_string())?;
@@ -353,14 +367,34 @@ fn load_cached(path: &str) -> Result<std::sync::Arc<Picture>, String> {
 
 fn source(path: &str, data: Option<&str>) -> Result<std::sync::Arc<Picture>, String> {
     match data {
-        Some(d) => {
-            let b64 = d.split_once(',').map_or(d, |(_, v)| v);
-            let bytes = base64::engine::general_purpose::STANDARD.decode(b64).map_err(|e| e.to_string())?;
-            load_picture_bytes(&bytes).map(std::sync::Arc::new)
-        }
+        Some(d) => load_data_url(d),
         None => load_cached(path),
     }
     .map_err(|e| format!("{path}: {e}"))
+}
+
+/// An already rasterised picture passed as base64 or a data URL.
+fn load_data_url(d: &str) -> Result<std::sync::Arc<Picture>, String> {
+    let b64 = d.split_once(',').map_or(d, |(_, v)| v);
+    let bytes = base64::engine::general_purpose::STANDARD.decode(b64).map_err(|e| e.to_string())?;
+    load_picture_bytes(&bytes).map(std::sync::Arc::new)
+}
+
+/// One side of `pix_compare_data`: the file's name and contents, or an already rasterised picture.
+pub struct PictureInput<'a> {
+    pub name: &'a str,
+    pub bytes: &'a [u8],
+    pub data: Option<&'a str>,
+}
+
+impl PictureInput<'_> {
+    fn load(&self) -> Result<std::sync::Arc<Picture>, String> {
+        match self.data {
+            Some(d) => load_data_url(d),
+            None => load_picture_named(self.name, self.bytes).map(std::sync::Arc::new),
+        }
+        .map_err(|e| format!("{}: {e}", self.name))
+    }
 }
 
 fn to_image(p: &Picture) -> RgbaImage {
@@ -394,7 +428,15 @@ fn scaled(p: &Picture, w: u32, h: u32) -> Picture {
 /// Compares two pictures. `left_data`/`right_data` optionally supply already-rasterised
 /// pictures (base64 or data URL) for formats the decoder does not support.
 pub fn pix_compare(left: &str, right: &str, o: &PixOptions, left_data: Option<&str>, right_data: Option<&str>) -> Result<PixResult, String> {
-    let src = [source(left, left_data)?, source(right, right_data)?];
+    compare_sources([source(left, left_data)?, source(right, right_data)?], o)
+}
+
+/// Compares two in-memory pictures; `pix_compare` without the file reads.
+pub fn pix_compare_data(left: PictureInput, right: PictureInput, o: &PixOptions) -> Result<PixResult, String> {
+    compare_sources([left.load()?, right.load()?], o)
+}
+
+fn compare_sources(src: [std::sync::Arc<Picture>; 2], o: &PixOptions) -> Result<PixResult, String> {
     let mut pics: Vec<Picture> = (0..2).map(|i| transform(&src[i], o.rotate[i], o.flip[i])).collect();
     let mut changed = [o.rotate[0] % 4 != 0 || o.flip[0], o.rotate[1] % 4 != 0 || o.flip[1]];
     if o.auto_scale && (pics[0].width, pics[0].height) != (pics[1].width, pics[1].height) {
@@ -422,6 +464,15 @@ pub fn pix_compare(left: &str, right: &str, o: &PixOptions, left_data: Option<&s
 /// Decodes a picture and re-encodes it as a PNG data URL (for formats a webview cannot show).
 pub fn pix_image(path: &str) -> Result<String, String> {
     let reader = ImageReader::open(path).map_err(|e| e.to_string())?.with_guessed_format().map_err(|e| e.to_string())?;
+    png_data_url(reader)
+}
+
+/// `pix_image` for the contents of the picture file `name`.
+pub fn pix_image_data(name: &str, bytes: &[u8]) -> Result<String, String> {
+    png_data_url(named_reader(name, bytes)?)
+}
+
+fn png_data_url<R: std::io::BufRead + std::io::Seek>(reader: ImageReader<R>) -> Result<String, String> {
     let img = reader.decode().map_err(|e| e.to_string())?.to_rgba8();
     let (w, h) = img.dimensions();
     Ok(data_url(&encode_png(w, h, img.as_raw())?))

@@ -1,5 +1,5 @@
 const childProcess = require("node:child_process");
-const { existsSync, readFileSync, rmSync } = require("node:fs");
+const { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { getProfileArguments, killTree } = require("@vscode/test-electron/out/util");
@@ -15,7 +15,7 @@ const number = (name, fallback) => {
  * after the tests are done (1.148 hangs shutting down its Agent Host), so once the result exists
  * VS Code gets a grace period to quit and is then killed; the recorded result decides the run.
  */
-async function runHostTests({ vscodeExecutablePath, extensionDevelopmentPath, extensionTestsPath, launchArgs = [], extensionTestsEnv = {} }) {
+async function runHostTests({ vscodeExecutablePath, extensionDevelopmentPath, extensionTestsPath, launchArgs = [], extensionTestsEnv = {}, workspaceTrust = false }) {
   const result = path.join(os.tmpdir(), `comparecraft-host-result-${process.pid}-${Date.now()}`);
   rmSync(result, { force: true });
   const grace = number("COMPARECRAFT_HOST_EXIT_GRACE_MS", 30_000);
@@ -23,7 +23,8 @@ async function runHostTests({ vscodeExecutablePath, extensionDevelopmentPath, ex
   const args = [
     ...launchArgs,
     "--no-sandbox", "--disable-gpu-sandbox", "--disable-updates", "--skip-welcome", "--skip-release-notes",
-    "--disable-workspace-trust",
+    // Restricted Mode tests keep workspace trust on (the profile's settings open folders untrusted).
+    ...(workspaceTrust ? [] : ["--disable-workspace-trust"]),
     `--extensionTestsPath=${extensionTestsPath}`,
     `--extensionDevelopmentPath=${extensionDevelopmentPath}`,
   ];
@@ -78,4 +79,37 @@ async function runHostTests({ vscodeExecutablePath, extensionDevelopmentPath, ex
   }
 }
 
-module.exports = { runHostTests };
+/**
+ * Runs `extensionTestsPath` (out/test/restricted.js) in a window whose folder opens untrusted
+ * (Restricted Mode): workspace trust stays on and the profile never prompts for it. `settings` are
+ * added to the profile's user settings.
+ */
+async function runRestrictedModeTests({ vscodeExecutablePath, extensionDevelopmentPath, extensionTestsPath, extensionTestsEnv = {}, settings = {} }) {
+  // VS Code listens on <profile>/<version>-main.sock (on Linux only without XDG_RUNTIME_DIR). Socket
+  // paths are limited to 103 characters on macOS, where the temporary directory alone takes about 50.
+  const directory = mkdtempSync(path.join(os.tmpdir(), "cc-restricted-"));
+  try {
+    const folder = path.join(directory, "untrusted");
+    const profile = path.join(directory, "profile");
+    mkdirSync(folder);
+    mkdirSync(path.join(profile, "User"), { recursive: true });
+    writeFileSync(path.join(profile, "User", "settings.json"), JSON.stringify({
+      "security.workspace.trust.enabled": true,
+      "security.workspace.trust.startupPrompt": "never",
+      "security.workspace.trust.banner": "never",
+      ...settings,
+    }));
+    await runHostTests({
+      vscodeExecutablePath,
+      extensionDevelopmentPath,
+      extensionTestsPath,
+      workspaceTrust: true,
+      launchArgs: [folder, "--disable-extensions", "--user-data-dir", profile],
+      extensionTestsEnv: { ...extensionTestsEnv, COMPARECRAFT_TEST_DIRECTORY: folder },
+    });
+  } finally {
+    rmSync(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 });
+  }
+}
+
+module.exports = { runHostTests, runRestrictedModeTests };

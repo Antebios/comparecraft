@@ -3,11 +3,14 @@ test/**
 scripts/**
 node_modules/**
 out/test/**
+out/web/test/**
 **/*.map
 tsconfig.json
 package-lock.json
 dev.code-workspace
 DEVELOPMENT.md
 .vscode-test/**
+.vscode-test-web/**
+helpers/**
 .gitignore
 *.vsix

@@ -11,6 +11,8 @@ Protocol and crate boundary were decided in T007: [backend-protocol.md](backend-
   never silently switch, even during external-only delivery.
 - Existing desktop installation is required. Add a headless helper to installers;
   external-only commands remain compatible with older installs where supported.
+  *Superseded by [Host support](#host-support): platform packages bundle the
+  helper and the desktop app is optional.*
 - Separate user/machine executable overrides for desktop and backend. Invalid
   explicit paths fail visibly rather than falling through to a different install.
 - On Windows check `%LOCALAPPDATA%\CompareCraft`, not a hardcoded username.
@@ -26,6 +28,47 @@ Protocol and crate boundary were decided in T007: [backend-protocol.md](backend-
 - Handle crash/shutdown/pending requests explicitly; do not orphan helpers.
 - Start with local Windows/macOS/Linux desktop. Detect and explain deferred
   SSH/WSL/container/browser/unsupported-virtual-resource environments.
+  *Superseded by [Host support](#host-support).*
+
+## Host support
+
+Owner decisions of 2026-11-28 for [host-support-plan.md](host-support-plan.md),
+implemented on `feature/vscode-workspaces`:
+
+- **Packaging:** platform-specific VSIX files (Windows, macOS, Linux and Alpine;
+  x64 and Arm64) bundle the `comparecraft-backend` helper built without Tauri
+  (Cargo feature `native`; static musl on Linux). The universal VSIX has no
+  helper. Every package includes the WebAssembly engine. Releases also carry
+  helper-only Linux archives for remote hosts. This reverses "existing desktop
+  installation is required": the desktop app is optional.
+- **Engines:** the WebAssembly engine is the same Rust code (Cargo features,
+  shared `protocol.rs`), checked against the helper by parity tests on the
+  engine fixtures. It serves text, Hex, Table and Picture comparisons where no
+  helper is installed, for virtual-workspace files and for methods an older
+  helper lacks; folder comparison always needs the helper. An invalid
+  configured `backendPath` or `desktopPath` still fails visibly instead of
+  falling back.
+- **One policy:** `extensions/vscode/src/policy.ts` decides what each
+  environment allows (desktop app, Git, saving, folders, revealing files in the
+  OS). Commands, menus (context keys) and webview requests all consult it; hiding
+  UI is never the only guard, and each refusal explains why.
+- **Restricted Mode:** comparisons are read-only. Saving, all Git commands (a
+  repository's configuration can run programs) and the desktop app need trust,
+  with a Manage Workspace Trust action. The bundled helper, or one from user
+  settings or next to the desktop app, may run: it only reads files and
+  workspace settings can't choose it. Trust granted later updates open panels.
+- **Remote windows (SSH, WSL, Dev Containers):** the extension runs in the
+  workspace extension host (`extensionKind: ["workspace"]`) with the helper for
+  that host. The desktop app is refused (it would run on the local computer and
+  can't see remote files), revealing files uses VS Code's Explorer, and webview
+  drops (`vscode-remote://` URIs) become remote paths.
+- **Virtual workspaces:** files are read through `vscode.workspace.fs` and saved
+  through VS Code documents where the provider allows it (read-only providers
+  are refused with a clear message). Folders are compared from bounded copies
+  (20,000 files, 512 MB) in desktop VS Code, released when the panel closes and
+  swept after a crash. Git and the desktop app need files on disk.
+- **VS Code for the Web:** a browser entry point with the WebAssembly engine;
+  folder comparison, Git and the desktop app are refused.
 
 ## Content and editing safety
 
@@ -119,7 +162,8 @@ Protocol and crate boundary were decided in T007: [backend-protocol.md](backend-
   (64 MB) are served by the extension with Node file APIs. Older helpers keep
   working: these methods are not required at startup, so the extension falls
   back to the text view (Explorer pairs) or offers the desktop app (view
-  links). Explorer file pairs pick the view like the desktop (type of the
+  links). *Since host support, the WebAssembly engine serves the methods an
+  older helper lacks, and file reads go through VS Code's file system API.* Explorer file pairs pick the view like the desktop (type of the
   first existing file); a file with unsaved VS Code edits, and any in-memory
   side, stays in the text view. **Text Edit** opens the file in VS Code's own
   editor rather than embedding a second editor. **Folder Compare, Folder Sync

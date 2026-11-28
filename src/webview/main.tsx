@@ -19,7 +19,7 @@ import FolderCompare from "../views/FolderCompare";
 import { initFileDrop } from "../fileDrop";
 import { ReplaceHost } from "../views/folderOps";
 import { ModalHost } from "../views/sessionMenu";
-import { request, vscode, vscodeHost } from "./host";
+import { loadCapabilities, request, vscode, vscodeHost } from "./host";
 import "../styles.css";
 import "./vscode.css";
 
@@ -186,6 +186,11 @@ function Embedded(props: { id: string }) {
   return (
     <div class="app embedded" classList={{ "no-toolbar": !settings.showToolbar }}>
       <MenuBar scope={primaryId()} />
+      <Show when={vscodeHost.capabilities?.().restricted}>
+        <div class="filterbar restricted-note" role="note">
+          Restricted Mode: this comparison is read-only. Trust the workspace to save changes.
+        </div>
+      </Show>
       <Show when={error()}><div class="error" role="alert">{error()}</div></Show>
       <div class="content">
         <Show when={tab()} keyed>
@@ -210,7 +215,7 @@ async function start() {
     const spec = await request<EmbeddedSpec>("init");
     // Persist immediately so a reload before the first edit can still restore the panel.
     vscode.setState(spec);
-    await loadSettings();
+    await Promise.all([loadSettings(), loadCapabilities()]);
     // Settings broadcasts update shared libraries/defaults, not the panel's tab options.
     let reloading = false;
     let reloadAgain = false;

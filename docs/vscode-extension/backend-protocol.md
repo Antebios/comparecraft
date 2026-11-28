@@ -26,6 +26,22 @@ with the protocol implementation in a Tauri-free module `src-tauri/src/backend.r
   point; unused GUI code is removed by the linker. Splitting the engine into a
   separate Tauri-free crate stays possible later without changing this protocol.
 
+Update (host support, 2026-11): the crate has Cargo features instead of a split.
+
+| Build | Features | Contents |
+|---|---|---|
+| Desktop app (default) | `desktop` (includes `native`) | Tauri app `comparecraft`, `ccomp`, `comparecraft-backend` |
+| Helper and console only | `--no-default-features --features native` | `ccomp`, `comparecraft-backend`; no Tauri, WebView or GUI libraries |
+| WebAssembly engine | `--no-default-features`, `wasm32-unknown-unknown` | the library with the `wasm` module (see [WebAssembly engine](#webassembly-engine)) |
+
+The Tauri commands live in `src-tauri/src/desktop.rs`. `src-tauri/src/protocol.rs`
+holds what the helper and the WebAssembly engine share: error codes, parameter
+parsing, input limits, `text.diff`/`text.merge` and the in-memory methods. Engine
+modules that need the file system, processes or the desktop settings
+(`folder`, `script`, `sessions`, `settings`, `shell`, `snapshot`, ...) build only
+with `native`. Platform VSIX packages bundle a `native` helper (static musl on
+Linux), built by `extensions/vscode/scripts/stage-helper.cjs`.
+
 ## Executable and launch
 
 | Platform | Installed location (sibling of the desktop executable) |
@@ -33,9 +49,12 @@ with the protocol implementation in a Tauri-free module `src-tauri/src/backend.r
 | Windows | `%LOCALAPPDATA%\CompareCraft\comparecraft-backend.exe` (per-user NSIS), or the Program Files install folder |
 | macOS | `CompareCraft.app/Contents/MacOS/comparecraft-backend` |
 | Linux deb/rpm/Arch | `/usr/bin/comparecraft-backend` |
+| VS Code platform package | `<extension>/bin/comparecraft-backend` (`.exe` on Windows) |
 
-`comparecraft.backendPath` (machine scope, global value only) overrides
-discovery; an invalid explicit path fails without falling back.
+The extension uses `comparecraft.backendPath` (machine scope, global value only),
+then the helper bundled in its package, then the one next to the desktop app;
+without any it uses the WebAssembly engine. An invalid explicit path fails
+without falling back.
 
 - `comparecraft-backend --stdio` runs the protocol on stdin/stdout.
 - `comparecraft-backend --version` prints `comparecraft-backend <version> (protocol 1)`.
@@ -226,12 +245,59 @@ invalid params so typos are visible.
 | -32021 | Input limit exceeded (`data: { limit, actual }`) |
 | -32022 | Server busy (queue full) |
 
+## WebAssembly engine
+
+The extension also carries the engine compiled to WebAssembly
+(`extensions/vscode/media/engine/comparecraft-engine.wasm`, built by
+`npm run build:engine`: `cargo build --lib --release --no-default-features
+--target wasm32-unknown-unknown`). It serves VS Code for the Web, files of
+virtual workspaces, hosts without a helper, and methods an older helper lacks.
+It has no imports (no WASI), so any JavaScript host can instantiate it; it does
+no file I/O: the extension reads files through VS Code and passes their bytes.
+
+Exports (`src-tauri/src/wasm.rs`):
+
+- `memory`
+- `cc_alloc(len) -> ptr`: allocates `len` bytes for the host to fill.
+- `cc_free(ptr, len)`: releases a buffer from `cc_alloc` or `cc_call`.
+- `cc_call(request, request_len, a, a_len, b, b_len) -> ptr`: runs the UTF-8 JSON
+  request `{ "method", "params" }` with up to two input buffers (file contents;
+  null and 0 when absent). The response buffer is a 4-byte little-endian length
+  followed by `{ "result": ... }` or `{ "error": { "code", "message", "data"? } }`
+  using the [error codes](#error-codes) above. The host frees it with length + 4.
+
+Methods (`protocol::call_memory`; results match the corresponding helper method):
+
+| Method | Params | Inputs | Result as |
+|---|---|---|---|
+| `engine.info` | none | none | `{ version, methods, limits: { maxLinesPerSide, maxDataBytes } }` |
+| `text.diff`, `text.merge` | as in protocol 1 | none | protocol 1 |
+| `text.decode` | `{ name }` | file | `text.load`, with `name` as the path, no modification time and `readOnly: false` |
+| `kind.detect` | `{ name }` | file | the `kind` of `path.info` |
+| `hex.alignData` | `{ align? }` | left, right | `hex.align` |
+| `table.compareData` | `{ leftName, rightName, options? }` | left, right | `table.compare` |
+| `pix.compareData` | `{ leftName, rightName, options?, leftData?, rightData? }` | left, right | `pix.compare` |
+| `pix.imageData` | `{ name }` | file | `pix.image` |
+| `quick.compareData` | `{ mode }` (`rules`, `size`, `crc`, `binary`) | left, right | `file.quickCompare` |
+
+Inputs are limited to `maxDataBytes` (64 MiB) each, and table and picture files to
+their protocol 1 limits. There is no folder method: folder comparison needs the
+helper. `extensions/vscode/src/engine.ts` maps protocol 1 requests onto these
+methods and reads the inputs through VS Code's file system API. Calls are
+synchronous, and a trap discards the instance (the next call loads a new one).
+`extensions/vscode/test/parity.test.ts` runs the engine fixtures through both
+engines and requires identical results.
+
 ## Client obligations (extension)
 
-- Spawn only from global/default settings in a trusted local workspace.
+- Spawn only the helper bundled with the extension, the desktop app's, or one
+  from global/default settings, never an executable a workspace chooses. The
+  helper only reads files, so it may also run in Restricted Mode and in remote
+  extension hosts.
 - Fail explicitly on handshake timeout (10 s), protocol mismatch, missing
   capability, crash, or framing violation. Never silently fall back to another
-  mode or installation.
+  mode or installation; only when no helper is installed at all does the
+  extension use the WebAssembly engine.
 - Reject every pending request when the helper exits, and include the exit
   code/signal plus recent stderr in the error.
 - Dispose on deactivation and when the executable settings change, so no helper

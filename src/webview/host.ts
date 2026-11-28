@@ -1,7 +1,8 @@
 // VS Code webview implementation of the shared UI host. Every privileged operation is a
 // request to the extension, which validates it; the webview has no file system access.
 import type { EventCallback, UnlistenFn } from "@tauri-apps/api/event";
-import type { FileDropEvent, Host } from "../host";
+import { createSignal } from "solid-js";
+import type { FileDropEvent, Host, HostCapabilities } from "../host";
 
 interface VsCodeApi {
   postMessage(message: unknown): void;
@@ -13,6 +14,8 @@ declare function acquireVsCodeApi(): VsCodeApi;
 export const vscode = acquireVsCodeApi();
 
 type Pending = { resolve: (value: unknown) => void; reject: (reason: unknown) => void };
+// Until the extension answers, offer nothing it might refuse.
+const [capabilities, setCapabilities] = createSignal<HostCapabilities>({ desktop: false, revealInOS: false, restricted: false });
 const pending = new Map<number, Pending>();
 const listeners = new Map<string, Set<EventCallback<unknown>>>();
 let nextId = 1;
@@ -26,6 +29,11 @@ window.addEventListener("message", (event: MessageEvent) => {
     if (m.ok) p.resolve(m.result);
     else p.reject(m.error ?? "Request failed");
   } else if (m?.type === "event" && typeof m.event === "string") {
+    // Trust can be granted while the panel is open.
+    if (m.event === "host-capabilities") {
+      const next = parseCapabilities(m.payload);
+      if (next) setCapabilities(next);
+    }
     for (const handler of listeners.get(m.event) ?? []) handler({ event: m.event as never, id: 0, payload: m.payload });
   }
 });
@@ -46,6 +54,19 @@ export function request<T>(method: string, params?: unknown): Promise<T> {
       }
     }
   });
+}
+
+function parseCapabilities(value: unknown): HostCapabilities | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const v = value as Record<string, unknown>;
+  return { desktop: v.desktop === true, revealInOS: v.revealInOS === true, restricted: v.restricted === true };
+}
+
+/** Asks the extension what this panel may offer (desktop app, file manager, Restricted Mode). */
+export async function loadCapabilities(): Promise<void> {
+  // Without a usable answer the panel keeps offering nothing the extension might refuse.
+  const next = parseCapabilities(await request<unknown>("capabilities").catch(() => undefined));
+  if (next) setCapabilities(next);
 }
 
 let stateTimer: number | undefined;
@@ -130,6 +151,7 @@ async function onFileDrop(handler: (event: FileDropEvent) => void): Promise<() =
 
 export const vscodeHost: Host = {
   name: "vscode",
+  capabilities,
   folderComparisonOnly: true,
   openDesktopFolder: () => request("desktopFolder"),
   invoke: (cmd, args) => request("invoke", { cmd, args: args ?? {} }),

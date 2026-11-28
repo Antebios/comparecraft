@@ -4,6 +4,30 @@ The extension is released together with the CompareCraft desktop app and uses
 the same version numbers. Earlier changes are listed in the
 [GitHub releases](https://github.com/Antebios/comparecraft/releases).
 
+## Unreleased
+
+### Added
+
+- CompareCraft works in remote windows (Remote - SSH, WSL, Dev Containers):
+  comparisons, folder comparisons and Git commands run on the remote computer.
+- Restricted Mode: comparisons open read-only. Saving, Git commands and the
+  desktop app become available when you trust the folder, without reopening tabs.
+- Virtual workspaces, such as a GitHub repository opened without cloning: files
+  are compared and saved through VS Code, and folders are compared from a
+  temporary copy (up to 20,000 files and 512 MB).
+- VS Code for the Web (vscode.dev, github.dev): text, Hex, Table and Picture
+  comparisons with CompareCraft's WebAssembly engine.
+- The extension package for each platform includes the comparison helper, so
+  the desktop app is now optional. Other platforms compare files with the
+  WebAssembly engine.
+
+### Changed
+
+- **Check Embedded Backend** reports which engine compares (bundled helper,
+  desktop helper, configured helper or WebAssembly) and the environment.
+- Commands that aren't available in the current environment explain why, for
+  example the desktop app in a remote window.
+
 ## 0.6.0
 
 ### Added

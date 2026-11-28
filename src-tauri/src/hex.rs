@@ -330,16 +330,23 @@ pub fn hex_align(left: &str, right: &str, align: HexAlign) -> io::Result<HexAlig
     let rs = fs::metadata(right)?.len();
     let big = ls.max(rs) > ALIGN_MEMORY_LIMIT;
     let align = if big { HexAlign::None } else { align };
-    let map = if big {
-        positional_map(left, right, ls, rs)?
-    } else {
-        align_bytes(&fs::read(left)?, &fs::read(right)?, align)
-    };
+    if !big {
+        return Ok(align_data(&fs::read(left)?, &fs::read(right)?, align));
+    }
+    Ok(alignment(ls, rs, align, positional_map(left, right, ls, rs)?))
+}
+
+/// Aligns two in-memory inputs; `hex_align` without the file reads.
+pub fn align_data(a: &[u8], b: &[u8], align: HexAlign) -> HexAlignment {
+    alignment(a.len() as u64, b.len() as u64, align, align_bytes(a, b, align))
+}
+
+fn alignment(left_size: u64, right_size: u64, align: HexAlign, map: Vec<(u8, u64)>) -> HexAlignment {
     let mut counts = [0u64; 4];
     for &(k, n) in &map {
         counts[k as usize] += n;
     }
-    Ok(HexAlignment { left_size: ls, right_size: rs, align, map, counts })
+    HexAlignment { left_size, right_size, align, map, counts }
 }
 
 /// Streams both files and builds the positional (unaligned) map.

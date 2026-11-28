@@ -2,8 +2,10 @@ import * as vscode from "vscode";
 import assert from "node:assert/strict";
 import { mkdir, writeFile, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
+import type { TestApi } from "../src/activate";
 import type { EmbeddedPanel, EmbeddedPanels } from "../src/embedded";
 import { pathKey } from "../src/embeddedCore";
+import { virtualWorkspace, withoutHelper } from "./environments";
 
 /** Records the outcome for the runner, which stops VS Code if it hangs on shutdown (scripts/run-host-tests.cjs). */
 export async function run(): Promise<void> {
@@ -93,17 +95,23 @@ async function runChecks(): Promise<void> {
     await vscode.commands.executeCommand("comparecraft.clearLeft");
     console.log("PASS: actual VS Code activation, 26 registered commands, Explorer multi-selection, file/folder launches, independent left selections, default desktop dispatch and clear.");
 
-    const helper = process.env.COMPARECRAFT_TEST_BACKEND;
+    // The helper is configured (COMPARECRAFT_TEST_BACKEND), bundled with a platform package
+    // (COMPARECRAFT_TEST_BUNDLED=1), or absent (universal package: WebAssembly engine only).
+    const configured = process.env.COMPARECRAFT_TEST_BACKEND;
+    const bundled = process.env.COMPARECRAFT_TEST_BUNDLED === "1";
+    const helper = configured ?? (bundled ? path.join(extension.extensionPath, "bin", process.platform === "win32" ? "comparecraft-backend.exe" : "comparecraft-backend") : undefined);
     if (helper) {
-      await config.update("backendPath", helper, vscode.ConfigurationTarget.Global);
-      const result = await vscode.commands.executeCommand<{ executable: string; version: string; protocolVersion: number } | undefined>("comparecraft.checkBackend");
+      if (configured) await config.update("backendPath", configured, vscode.ConfigurationTarget.Global);
+      const result = await vscode.commands.executeCommand<{ engine: string; executable: string; version: string; protocolVersion: number } | undefined>("comparecraft.checkBackend");
       assert.ok(result, `Check Embedded Backend failed for ${helper}; see the CompareCraft output channel`);
+      assert.equal(result.engine, "helper");
       assert.equal(await realpath(result.executable), await realpath(helper));
       assert.equal(result.protocolVersion, 1);
-      console.log(`PASS: Check Embedded Backend started ${helper} (version ${result.version}) and completed a sample comparison.`);
-      await embeddedPanels(extension.exports as { embedded: EmbeddedPanels }, directory);
+      console.log(`PASS: Check Embedded Backend started ${configured ? helper : `the bundled helper ${helper}`} (version ${result.version}) and completed a sample comparison.`);
+      await embeddedPanels(extension.exports as TestApi, directory, node, bundled && !configured);
     } else {
-      console.log("SKIP: Check Embedded Backend and embedded panels (set COMPARECRAFT_BACKEND to a helper executable).");
+      await withoutHelper(extension.exports as TestApi, directory, node);
+      console.log("SKIP: helper-based embedded panel checks (set COMPARECRAFT_BACKEND to a helper executable).");
     }
   } finally {
     await config.update("backendPath", undefined, vscode.ConfigurationTarget.Global);
@@ -144,21 +152,12 @@ async function fileViews(panels: EmbeddedPanels, directory: string): Promise<voi
   } as const;
   const expected = { hex: "hex_align", picture: "pix_compare", table: "compare_tables" } as const;
   const opened = (before: Set<unknown>) => until("a new panel", () => panels.all.find(item => !before.has(item)));
-  if (!(await panels.supportsView("hex"))) {
-    const before = new Set(panels.all);
-    await vscode.commands.executeCommand("comparecraft.compareSelectedEmbedded", vscode.Uri.file(pairs.hex[0]), pairs.hex.map(file => vscode.Uri.file(file)));
-    const panel = await opened(before);
-    assert.equal(panel.state.spec.kind ?? "text", "text", "older helpers keep the text comparison");
-    panel.panel.dispose();
-    console.log("SKIP: the configured helper has no T012 view methods; verified the text fallback. Point COMPARECRAFT_BACKEND at a newer helper to test the views.");
-    return;
-  }
   for (const kind of ["hex", "picture", "table"] as const) {
     const before = new Set(panels.all);
     await vscode.commands.executeCommand("comparecraft.compareSelectedEmbedded", vscode.Uri.file(pairs[kind][0]), pairs[kind].map(file => vscode.Uri.file(file)));
     const panel = await opened(before);
     assert.equal(panel.state.spec.kind, kind);
-    await until(`the ${kind} view to compare through the helper`, () => panel.received.includes(expected[kind]), 20000)
+    await until(`the ${kind} view to compare`, () => panel.received.includes(expected[kind]), 20000)
       .catch(error => { console.log(JSON.stringify({ kind, received: panel.received })); throw error; });
     assert.ok(panel.panel.title.startsWith(`${kind[0]!.toUpperCase()}${kind.slice(1)}: `), panel.panel.title);
     panel.panel.dispose();
@@ -174,10 +173,10 @@ async function fileViews(panels: EmbeddedPanels, directory: string): Promise<voi
   await panel.handle("openTab", { kind: "edit", paths: [pairs.table[0]] });
   await until("Text Edit to open VS Code's editor", () => vscode.window.activeTextEditor?.document.uri.fsPath.toLowerCase() === pairs.table[0].toLowerCase() || undefined);
   panel.panel.dispose();
-  console.log("PASS: binary, picture and table pairs open read-only hex/picture/table views through the helper; patch files, byte reads, data URLs and Text Edit (VS Code editor) work.");
+  console.log("PASS: binary, picture and table pairs open read-only hex/picture/table views; patch files, byte reads, data URLs and Text Edit (VS Code editor) work.");
 }
 
-async function embeddedPanels(api: { embedded: EmbeddedPanels }, tempDirectory: string): Promise<void> {
+async function embeddedPanels(api: TestApi, tempDirectory: string, node: string, bundled: boolean): Promise<void> {
   assert.ok(api?.embedded, "Test-mode activation exposes embedded panels");
   const directory = await realpath(tempDirectory);
   const panels = api.embedded;
@@ -301,6 +300,10 @@ async function embeddedPanels(api: { embedded: EmbeddedPanels }, tempDirectory: 
   await fileViews(panels, directory);
   await folderViews(panels, directory);
   await folderUi(panels, directory);
+  await virtualWorkspace(api);
+  // A bundled helper can't be taken away; the universal package covers the WebAssembly fallback.
+  if (bundled) console.log("SKIP: WebAssembly fallback (this package bundles the helper).");
+  else await withoutHelper(api, directory, node);
 
   // Backend failures are reported to the view, not swallowed.
   const config = vscode.workspace.getConfiguration("comparecraft");

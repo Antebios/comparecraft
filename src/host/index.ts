@@ -28,8 +28,20 @@ export interface FileDropEvent {
   y: number;
 }
 
+/** What an embedding host allows. The desktop app allows everything and leaves `capabilities` undefined. */
+export interface HostCapabilities {
+  /** Opening comparisons in the CompareCraft desktop app (VS Code: a trusted local window, files on disk). */
+  readonly desktop: boolean;
+  /** Showing files in the operating system's file manager; otherwise VS Code reveals them in its Explorer. */
+  readonly revealInOS: boolean;
+  /** VS Code Restricted Mode: comparisons are read-only. */
+  readonly restricted: boolean;
+}
+
 export interface Host {
   readonly name: "tauri" | "vscode";
+  /** Current capabilities (reactive where the host can change them); undefined allows everything. */
+  capabilities?(): HostCapabilities;
   /** Restricts folder UI only; editable child file views retain their own capabilities. */
   readonly folderComparisonOnly?: boolean;
   listFontFamilies?(): Promise<string[]>;
@@ -66,6 +78,8 @@ export function host(): Host {
 }
 
 export const isEmbedded = () => current?.name === "vscode";
+export const canOpenDesktop = () => current?.capabilities?.().desktop ?? true;
+export const revealsInOS = () => current?.capabilities?.().revealInOS ?? true;
 export const folderComparisonOnly = () => current?.folderComparisonOnly === true;
 export const openDesktopFolder = (): Promise<void> => {
   const action = host().openDesktopFolder;

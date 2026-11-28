@@ -1,8 +1,14 @@
-// Verifies the packaged VSIX in an isolated VS Code profile: installs an older
+// Verifies a packaged VSIX in an isolated VS Code profile: installs an older
 // build, upgrades to the packaged one, checks the installed files, runs the host
-// tests against the installed copy, then uninstalls it. Never publishes.
+// and Restricted Mode tests against the installed copy, then uninstalls it. Never publishes.
+//
+//   node scripts/test-vsix.cjs [comparecraft-<version>[-<target>].vsix]
+//
+// Platform packages (named with their target, from scripts/package-targets.cjs) must bundle the helper
+// and are tested with it; the universal package must not, and is tested with COMPARECRAFT_BACKEND if set,
+// otherwise with the WebAssembly engine alone.
 const { downloadAndUnzipVSCode, resolveCliArgsFromVSCodeExecutablePath } = require("@vscode/test-electron");
-const { runHostTests } = require("./run-host-tests.cjs");
+const { runHostTests, runRestrictedModeTests } = require("./run-host-tests.cjs");
 const { spawnSync } = require("node:child_process");
 const { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } = require("node:fs");
 const os = require("node:os");
@@ -38,7 +44,9 @@ function packageOlderVsix(directory) {
     ".vscodeignore",
     manifest.icon,
     path.join("out", "src"),
+    path.join("out", "web", "extension.js"),
     path.join("media", "webview"),
+    path.join("media", "engine"),
   ]) {
     cpSync(path.join(root, item), path.join(staging, item), {
       recursive: true,
@@ -58,7 +66,15 @@ function listFiles(directory, prefix = "") {
   });
 }
 
-function checkInstalledFiles(installed) {
+/** The installed folder; VS Code appends the target platform for platform-specific packages. */
+function installedFolder(extensionsDir) {
+  const prefix = `${id}-${manifest.version}`;
+  const folder = readdirSync(extensionsDir).find(name => name.toLowerCase() === prefix || name.toLowerCase().startsWith(`${prefix}-`));
+  if (!folder) throw new Error(`${prefix} isn't installed in ${extensionsDir}.`);
+  return path.join(extensionsDir, folder);
+}
+
+function checkInstalledFiles(installed, helper) {
   const files = listFiles(installed);
   const lower = new Set(files.map(file => file.toLowerCase()));
   const screenshots = readdirSync(path.join(root, "media", "screenshots"))
@@ -71,12 +87,16 @@ function checkInstalledFiles(installed) {
     "license.txt",
     manifest.icon,
     manifest.main.replace(/^\.\//, ""),
+    manifest.browser.replace(/^\.\//, ""),
     "media/webview/webview.js",
     "media/webview/webview.css",
+    "media/engine/comparecraft-engine.wasm",
     ...screenshots,
+    ...(helper ? [helper] : []),
   ];
   const missing = required.filter(file => !lower.has(file.toLowerCase()));
-  const forbidden = files.filter(file => /^(src|test|scripts|node_modules|out\/test)\//.test(file)
+  const forbidden = files.filter(file => /^(src|test|scripts|node_modules|helpers|out\/test|out\/web\/test)\//.test(file)
+    || (!helper && file.startsWith("bin/"))
     || /\.(map|vsix)$/.test(file) || (/\.ts$/.test(file) && !/\.d\.ts$/.test(file))
     || /^(\.gitignore|tsconfig\.json|package-lock\.json|dev\.code-workspace|development\.md)$/i.test(file));
   if (missing.length || forbidden.length) {
@@ -98,6 +118,11 @@ function checkInstalledFiles(installed) {
 async function main() {
   const vsix = path.resolve(process.argv[2] ?? path.join(root, `${manifest.name}-${manifest.version}.vsix`));
   if (!existsSync(vsix)) throw new Error(`${vsix} not found. Run npm run package first.`);
+  const target = /-((?:win32|linux|alpine|darwin)-(?:x64|arm64|armhf))\.vsix$/.exec(path.basename(vsix))?.[1];
+  const helper = target && `bin/${target.startsWith("win32") ? "comparecraft-backend.exe" : "comparecraft-backend"}`;
+  // Platform packages are tested with their own helper, never one from the environment.
+  const helperEnv = helper ? { COMPARECRAFT_TEST_BUNDLED: "1" }
+    : process.env.COMPARECRAFT_BACKEND ? { COMPARECRAFT_TEST_BACKEND: process.env.COMPARECRAFT_BACKEND } : {};
   const executable = process.env.VSCODE_EXECUTABLE_PATH ?? resolveVSCodeExecutable(await downloadAndUnzipVSCode());
   const [cli, ...cliArgs] = resolveCliArgsFromVSCodeExecutablePath(executable, { reuseMachineInstall: true });
   const directory = mkdtempSync(path.join(os.tmpdir(), "comparecraft-vsix-"));
@@ -107,16 +132,16 @@ async function main() {
     .map(line => line.trim().toLowerCase()).find(line => line.startsWith(`${id}@`))?.slice(id.length + 1);
   const step = message => console.log(`VSIX: ${message}`);
   try {
-    step(`VS Code ${code("--version").split(/\r?\n/)[0]} (${process.platform}-${process.arch}), package ${path.basename(vsix)}`);
+    step(`VS Code ${code("--version").split(/\r?\n/)[0]} (${process.platform}-${process.arch}), package ${path.basename(vsix)} (${target ?? "universal"})`);
     code("--install-extension", packageOlderVsix(directory));
     if (installedVersion() !== olderVersion) throw new Error(`Expected ${id}@${olderVersion} after installing the older VSIX.`);
     step(`installed older ${olderVersion}`);
 
     code("--install-extension", vsix);
     if (installedVersion() !== manifest.version) throw new Error(`Expected ${id}@${manifest.version} after upgrading.`);
-    const installed = path.join(extensionsDir, `${id}-${manifest.version}`);
-    const count = checkInstalledFiles(installed);
-    step(`upgraded to ${manifest.version}; ${count} installed files passed the content check`);
+    const installed = installedFolder(extensionsDir);
+    const count = checkInstalledFiles(installed, helper);
+    step(`upgraded to ${manifest.version}; ${count} installed files passed the content check${helper ? `, including ${helper}` : ", no helper"}`);
 
     if (process.env.COMPARECRAFT_VSIX_SKIP_HOST === "1") {
       step("host tests skipped (COMPARECRAFT_VSIX_SKIP_HOST=1)");
@@ -132,10 +157,19 @@ async function main() {
         extensionTestsEnv: {
           COMPARECRAFT_TEST_NODE: process.execPath,
           COMPARECRAFT_TEST_DIRECTORY: workspace,
-          ...(process.env.COMPARECRAFT_BACKEND ? { COMPARECRAFT_TEST_BACKEND: process.env.COMPARECRAFT_BACKEND } : {})
+          ...helperEnv
         }
       });
       step("host tests passed against the installed extension files");
+      await runRestrictedModeTests({
+        vscodeExecutablePath: executable,
+        extensionDevelopmentPath: installed,
+        extensionTestsPath: path.join(root, "out", "test", "restricted.js"),
+        extensionTestsEnv: helperEnv,
+        // Without a helper, keep an installed desktop app's helper out of the test: Node has none beside it.
+        settings: Object.keys(helperEnv).length ? {} : { "comparecraft.desktopPath": process.execPath }
+      });
+      step("Restricted Mode tests passed against the installed extension files");
     }
 
     code("--uninstall-extension", id);
