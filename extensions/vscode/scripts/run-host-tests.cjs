@@ -85,7 +85,9 @@ async function runHostTests({ vscodeExecutablePath, extensionDevelopmentPath, ex
  * added to the profile's user settings.
  */
 async function runRestrictedModeTests({ vscodeExecutablePath, extensionDevelopmentPath, extensionTestsPath, extensionTestsEnv = {}, settings = {} }) {
-  const directory = mkdtempSync(path.join(os.tmpdir(), "comparecraft-vscode-restricted-"));
+  // VS Code listens on <profile>/<version>-main.sock (on Linux only without XDG_RUNTIME_DIR). Socket
+  // paths are limited to 103 characters on macOS, where the temporary directory alone takes about 50.
+  const directory = mkdtempSync(path.join(os.tmpdir(), "cc-restricted-"));
   try {
     const folder = path.join(directory, "untrusted");
     const profile = path.join(directory, "profile");
