@@ -144,21 +144,12 @@ async function fileViews(panels: EmbeddedPanels, directory: string): Promise<voi
   } as const;
   const expected = { hex: "hex_align", picture: "pix_compare", table: "compare_tables" } as const;
   const opened = (before: Set<unknown>) => until("a new panel", () => panels.all.find(item => !before.has(item)));
-  if (!(await panels.supportsView("hex"))) {
-    const before = new Set(panels.all);
-    await vscode.commands.executeCommand("comparecraft.compareSelectedEmbedded", vscode.Uri.file(pairs.hex[0]), pairs.hex.map(file => vscode.Uri.file(file)));
-    const panel = await opened(before);
-    assert.equal(panel.state.spec.kind ?? "text", "text", "older helpers keep the text comparison");
-    panel.panel.dispose();
-    console.log("SKIP: the configured helper has no T012 view methods; verified the text fallback. Point COMPARECRAFT_BACKEND at a newer helper to test the views.");
-    return;
-  }
   for (const kind of ["hex", "picture", "table"] as const) {
     const before = new Set(panels.all);
     await vscode.commands.executeCommand("comparecraft.compareSelectedEmbedded", vscode.Uri.file(pairs[kind][0]), pairs[kind].map(file => vscode.Uri.file(file)));
     const panel = await opened(before);
     assert.equal(panel.state.spec.kind, kind);
-    await until(`the ${kind} view to compare through the helper`, () => panel.received.includes(expected[kind]), 20000)
+    await until(`the ${kind} view to compare`, () => panel.received.includes(expected[kind]), 20000)
       .catch(error => { console.log(JSON.stringify({ kind, received: panel.received })); throw error; });
     assert.ok(panel.panel.title.startsWith(`${kind[0]!.toUpperCase()}${kind.slice(1)}: `), panel.panel.title);
     panel.panel.dispose();
@@ -174,7 +165,7 @@ async function fileViews(panels: EmbeddedPanels, directory: string): Promise<voi
   await panel.handle("openTab", { kind: "edit", paths: [pairs.table[0]] });
   await until("Text Edit to open VS Code's editor", () => vscode.window.activeTextEditor?.document.uri.fsPath.toLowerCase() === pairs.table[0].toLowerCase() || undefined);
   panel.panel.dispose();
-  console.log("PASS: binary, picture and table pairs open read-only hex/picture/table views through the helper; patch files, byte reads, data URLs and Text Edit (VS Code editor) work.");
+  console.log("PASS: binary, picture and table pairs open read-only hex/picture/table views; patch files, byte reads, data URLs and Text Edit (VS Code editor) work.");
 }
 
 async function embeddedPanels(api: { embedded: EmbeddedPanels }, tempDirectory: string): Promise<void> {

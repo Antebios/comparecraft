@@ -130,6 +130,16 @@ pub fn quick_compare(a: &Path, b: &Path, mode: QcMode) -> i32 {
     }
 }
 
+/// `quick_compare` on two in-memory inputs (never `UNKNOWN_ERROR`).
+pub fn quick_compare_data(a: &[u8], b: &[u8], mode: QcMode) -> i32 {
+    let verdict = |same: bool| if same { BINARY_SAME } else { BINARY_DIFFERENT };
+    match mode {
+        QcMode::Size | QcMode::Binary => verdict(a == b),
+        QcMode::Crc => verdict(a.len() == b.len() && crc32fast::hash(a) == crc32fast::hash(b)),
+        QcMode::Rules => rules_verdict(a, b),
+    }
+}
+
 fn quick_compare_inner(a: &Path, b: &Path, mode: QcMode) -> io::Result<i32> {
     let ma = fs::metadata(a)?;
     let mb = fs::metadata(b)?;
@@ -194,6 +204,9 @@ mod tests {
         let b1 = file(&d, "b1", &[0, 1, 2, 3]);
         let b2 = file(&d, "b2", &[0, 1, 2, 3, 4]);
         assert_eq!(quick_compare(&b1, &b2, QcMode::Rules), 11);
+        for (i, (data, mode, want)) in cases.iter().enumerate() {
+            assert_eq!(quick_compare_data(b"a\nb\n", data, *mode), *want, "data case {i}");
+        }
         assert_eq!(quick_compare(&x, &d.path().join("missing"), QcMode::Rules), 100);
         assert_eq!(quick_compare(d.path(), d.path(), QcMode::Rules), 100);
     }

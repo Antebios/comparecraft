@@ -7,9 +7,10 @@ pub mod hex;
 pub mod merge;
 pub mod pix;
 pub mod protocol;
+pub mod quick;
 pub mod table;
 
-// File-system and OS integration modules (feature `native`): folders, quick compare, reports, scripts,
+// File-system and OS integration modules (feature `native`): folders, reports, scripts,
 // sessions, settings, shell integration, the CLI and the headless helper.
 #[cfg(feature = "native")]
 pub mod backend;
@@ -19,8 +20,6 @@ pub mod cli;
 pub mod folder;
 #[cfg(feature = "native")]
 pub mod folder_merge;
-#[cfg(feature = "native")]
-pub mod quick;
 #[cfg(feature = "native")]
 pub mod report;
 #[cfg(feature = "native")]

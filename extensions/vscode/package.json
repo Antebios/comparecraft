@@ -1,7 +1,7 @@
 {
   "name": "comparecraft",
   "displayName": "CompareCraft",
-  "description": "Compare files, folders, editor text, and Git revisions in VS Code or your installed CompareCraft desktop app, and resolve Git conflicts with CompareCraft.",
+  "description": "Compare files, folders, editor text, and Git revisions in VS Code or your installed CompareCraft desktop app, and resolve Git conflicts with CompareCraft. Works in local, remote (SSH, WSL, Dev Containers), virtual, untrusted (read-only) and browser workspaces.",
   "version": "0.1.0",
   "publisher": "MacrossPlusInc",
   "license": "MIT",
@@ -22,31 +22,41 @@
     "Other"
   ],
   "main": "./out/src/extension.js",
+  "browser": "./out/web/extension.js",
   "activationEvents": [
+    "onStartupFinished",
     "onWebviewPanel:comparecraft.textCompare"
   ],
   "extensionKind": [
-    "ui"
+    "workspace"
   ],
   "capabilities": {
     "untrustedWorkspaces": {
-      "supported": false,
-      "description": "CompareCraft launches a locally installed executable and requires workspace trust."
+      "supported": "limited",
+      "description": "In Restricted Mode CompareCraft compares read-only in VS Code. Saving, Git commands and the desktop app need workspace trust.",
+      "restrictedConfigurations": [
+        "comparecraft.desktopPath",
+        "comparecraft.backendPath"
+      ]
     },
     "virtualWorkspaces": {
-      "supported": false,
-      "description": "CompareCraft currently requires local files and folders."
+      "supported": "limited",
+      "description": "Files of virtual workspaces are compared in VS Code and saved where the provider allows it; folders are compared from bounded read-only copies. Git commands and the desktop app need files on disk."
     }
   },
   "scripts": {
     "build": "tsc -p .",
     "build:webview": "npm --prefix ../.. run build:webview",
-    "build:all": "npm run build:webview && npm run build",
+    "build:engine": "node scripts/build-engine.cjs",
+    "build:web": "node scripts/build-web.cjs",
+    "build:all": "npm run build:webview && npm run build:engine && npm run build && npm run build:web",
     "typecheck": "tsc -p . --noEmit",
     "test": "npm run build && node --test out/test/*.test.js",
-    "test:integration": "npm run build:webview && npm run build && node scripts/test-integration.cjs",
-    "vscode:prepublish": "npm run build:webview && npm run build",
+    "test:integration": "npm run build:webview && npm run build:engine && npm run build && node scripts/test-integration.cjs",
+    "test:web": "npm run build:webview && npm run build:engine && node scripts/build-web.cjs --tests && node scripts/test-web.cjs",
+    "vscode:prepublish": "node scripts/prepublish.cjs",
     "package": "vsce package --no-dependencies",
+    "package:targets": "node scripts/package-targets.cjs",
     "test:vsix": "node scripts/test-vsix.cjs"
   },
   "contributes": {
@@ -205,72 +215,72 @@
       "explorer/context": [
         {
           "submenu": "comparecraft.comparisons",
-          "when": "resourceScheme == file",
+          "when": "resourceScheme in comparecraft.schemes",
           "group": "navigation@90"
         }
       ],
       "editor/context": [
         {
           "submenu": "comparecraft.comparisons",
-          "when": "resourceScheme == file || resourceScheme == untitled",
+          "when": "resourceScheme in comparecraft.schemes || resourceScheme == untitled",
           "group": "navigation@90"
         }
       ],
       "editor/title/context": [
         {
           "submenu": "comparecraft.comparisons",
-          "when": "resourceScheme == file",
+          "when": "resourceScheme in comparecraft.schemes",
           "group": "navigation@90"
         }
       ],
       "editor/title": [
         {
           "command": "comparecraft.compareActiveDiff",
-          "when": "isInDiffEditor",
+          "when": "isInDiffEditor && comparecraft.desktop",
           "group": "1_comparecraft@1"
         }
       ],
       "scm/resourceState/context": [
         {
           "submenu": "comparecraft.scm",
-          "when": "scmProvider == git",
+          "when": "scmProvider == git && comparecraft.git",
           "group": "comparecraft@1"
         }
       ],
       "comparecraft.scm": [
         {
           "command": "comparecraft.gitResolveConflictEmbedded",
-          "when": "scmProvider == git && scmResourceGroup == merge",
+          "when": "scmProvider == git && scmResourceGroup == merge && comparecraft.git",
           "group": "1_conflict@1"
         },
         {
           "command": "comparecraft.gitResolveConflict",
-          "when": "scmProvider == git && scmResourceGroup == merge",
+          "when": "scmProvider == git && scmResourceGroup == merge && comparecraft.git && comparecraft.desktop",
           "group": "1_conflict@2"
         },
         {
           "command": "comparecraft.gitStageResolved",
-          "when": "scmProvider == git && scmResourceGroup == merge",
+          "when": "scmProvider == git && scmResourceGroup == merge && comparecraft.git",
           "group": "1_conflict@3"
         },
         {
           "command": "comparecraft.gitCompareHead",
-          "when": "scmProvider == git && scmResourceGroup != merge",
+          "when": "scmProvider == git && scmResourceGroup != merge && comparecraft.git",
           "group": "2_compare@1"
         },
         {
           "command": "comparecraft.gitCompareIndex",
-          "when": "scmProvider == git && scmResourceGroup == workingTree",
+          "when": "scmProvider == git && scmResourceGroup == workingTree && comparecraft.git",
           "group": "2_compare@2"
         },
         {
           "command": "comparecraft.gitCompareHeadIndex",
-          "when": "scmProvider == git && scmResourceGroup == index",
+          "when": "scmProvider == git && scmResourceGroup == index && comparecraft.git",
           "group": "2_compare@3"
         },
         {
           "command": "comparecraft.gitCompareRevision",
-          "when": "scmProvider == git && scmResourceGroup != merge && scmResourceGroup != untracked",
+          "when": "scmProvider == git && scmResourceGroup != merge && scmResourceGroup != untracked && comparecraft.git",
           "group": "2_compare@4"
         }
       ],
@@ -281,38 +291,90 @@
         },
         {
           "command": "comparecraft.compareActiveDiff",
-          "when": "isInDiffEditor"
+          "when": "isInDiffEditor && comparecraft.desktop"
+        },
+        {
+          "command": "comparecraft.compareSelectedDesktop",
+          "when": "comparecraft.desktop"
+        },
+        {
+          "command": "comparecraft.openDesktop",
+          "when": "comparecraft.desktop"
+        },
+        {
+          "command": "comparecraft.locateDesktop",
+          "when": "comparecraft.desktop"
+        },
+        {
+          "command": "comparecraft.openSavedFolderSession",
+          "when": "comparecraft.folders"
+        },
+        {
+          "command": "comparecraft.gitResolveConflict",
+          "when": "comparecraft.git && comparecraft.desktop"
+        },
+        {
+          "command": "comparecraft.configureGitTools",
+          "when": "comparecraft.git && comparecraft.desktop"
+        },
+        {
+          "command": "comparecraft.gitCompareHead",
+          "when": "comparecraft.git"
+        },
+        {
+          "command": "comparecraft.gitCompareIndex",
+          "when": "comparecraft.git"
+        },
+        {
+          "command": "comparecraft.gitCompareHeadIndex",
+          "when": "comparecraft.git"
+        },
+        {
+          "command": "comparecraft.gitCompareRevision",
+          "when": "comparecraft.git"
+        },
+        {
+          "command": "comparecraft.gitResolveConflictEmbedded",
+          "when": "comparecraft.git"
+        },
+        {
+          "command": "comparecraft.gitStageResolved",
+          "when": "comparecraft.git"
+        },
+        {
+          "command": "comparecraft.removeGitTools",
+          "when": "comparecraft.git"
         }
       ],
       "comparecraft.comparisons": [
         {
           "command": "comparecraft.compareSelected",
-          "when": "resourceScheme == file",
+          "when": "resourceScheme in comparecraft.schemes",
           "group": "1_compare@1"
         },
         {
           "command": "comparecraft.compareSelectedDesktop",
-          "when": "resourceScheme == file",
+          "when": "resourceScheme in comparecraft.schemes && comparecraft.desktop",
           "group": "1_compare@2"
         },
         {
           "command": "comparecraft.compareSelectedEmbedded",
-          "when": "resourceScheme == file",
+          "when": "resourceScheme in comparecraft.schemes",
           "group": "1_compare@3"
         },
         {
           "command": "comparecraft.compareWithSaved",
-          "when": "editorTextFocus && activeEditorIsDirty && resourceScheme == file",
+          "when": "editorTextFocus && activeEditorIsDirty && resourceScheme in comparecraft.schemes",
           "group": "1_compare@4"
         },
         {
           "command": "comparecraft.selectLeft",
-          "when": "resourceScheme == file",
+          "when": "resourceScheme in comparecraft.schemes",
           "group": "2_left@1"
         },
         {
           "command": "comparecraft.compareWithLeft",
-          "when": "comparecraft.hasLeft && resourceScheme == file",
+          "when": "comparecraft.hasLeft && resourceScheme in comparecraft.schemes",
           "group": "2_left@2"
         },
         {
@@ -337,27 +399,28 @@
         },
         {
           "command": "comparecraft.compareFileWith",
-          "when": "resourceScheme == file && !explorerResourceIsFolder",
+          "when": "resourceScheme in comparecraft.schemes && !explorerResourceIsFolder",
           "group": "4_picker@1"
         },
         {
           "command": "comparecraft.compareFolderWith",
-          "when": "resourceScheme == file && explorerResourceIsFolder",
+          "when": "resourceScheme in comparecraft.schemes && explorerResourceIsFolder && comparecraft.folders",
           "group": "4_picker@2"
         },
         {
           "command": "comparecraft.compareParentFolderWith",
-          "when": "resourceScheme == file && !explorerResourceIsFolder",
+          "when": "resourceScheme in comparecraft.schemes && !explorerResourceIsFolder && comparecraft.folders",
           "group": "4_picker@3"
         },
         {
           "submenu": "comparecraft.git",
-          "when": "resourceScheme == file && !explorerResourceIsFolder",
+          "when": "comparecraft.git && resourceScheme in comparecraft.localSchemes && !explorerResourceIsFolder",
           "group": "5_git@1"
         },
         {
           "command": "comparecraft.openDesktop",
-          "group": "6_app@1"
+          "group": "6_app@1",
+          "when": "comparecraft.desktop"
         }
       ],
       "comparecraft.git": [
@@ -383,7 +446,8 @@
         },
         {
           "command": "comparecraft.gitResolveConflict",
-          "group": "2_conflict@2"
+          "group": "2_conflict@2",
+          "when": "comparecraft.desktop"
         },
         {
           "command": "comparecraft.gitStageResolved",
@@ -391,7 +455,8 @@
         },
         {
           "command": "comparecraft.configureGitTools",
-          "group": "3_tools@1"
+          "group": "3_tools@1",
+          "when": "comparecraft.desktop"
         },
         {
           "command": "comparecraft.removeGitTools",
@@ -409,7 +474,7 @@
             "desktop"
           ],
           "default": "embedded",
-          "description": "Default destination for comparisons. Embedded mode shows two-sided text comparisons (files, editor text, clipboard, Git revisions) in a VS Code panel; folder comparisons ask before opening the desktop app. Git conflicts open in an embedded three-way merge with CompareCraft: Resolve Conflict. Desktop mode always launches the installed app.",
+          "description": "Default destination for comparisons. Embedded mode shows comparisons (files, folders, editor text, clipboard, Git revisions) in VS Code panels. Git conflicts open in an embedded three-way merge with CompareCraft: Resolve Conflict. Desktop mode launches the installed app where it can open the files (not in remote windows, virtual workspaces, browser VS Code or Restricted Mode, which offer the embedded comparison instead).",
           "scope": "window"
         },
         "comparecraft.desktopPath": {
@@ -421,7 +486,7 @@
         "comparecraft.backendPath": {
           "type": "string",
           "default": "",
-          "description": "Absolute path to the headless comparecraft-backend executable used by embedded mode, not its directory. Empty uses the helper installed next to the desktop app. An invalid path fails without falling back.",
+          "description": "Absolute path to the headless comparecraft-backend executable used by embedded mode, not its directory. Empty uses the helper bundled with this extension, then the one installed next to the desktop app, and otherwise the built-in WebAssembly engine. An invalid path fails without falling back. In a remote window this is a setting of the remote host.",
           "scope": "machine"
         }
       }
@@ -431,7 +496,9 @@
     "@types/node": "^22.0.0",
     "@types/vscode": "1.95.0",
     "@vscode/test-electron": "^2.5.2",
+    "@vscode/test-web": "^0.0.81",
     "@vscode/vsce": "^3.9.2",
+    "esbuild": "^0.28.2",
     "typescript": "~5.9.3"
   }
 }

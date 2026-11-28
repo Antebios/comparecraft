@@ -3,3 +3,6 @@ out/
 .vscode-test/
 *.vsix
 media/webview/
+media/engine/
+bin/
+.vscode-test-web/

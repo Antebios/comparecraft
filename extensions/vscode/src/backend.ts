@@ -1,4 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { BackendError, ErrorCode } from "./errors";
+
+export { BackendError, ErrorCode } from "./errors";
 
 export const PROTOCOL_VERSION = 1;
 export const HANDSHAKE_TIMEOUT_MS = 10_000;
@@ -7,10 +10,6 @@ const DEFAULT_MAX_MESSAGE_BYTES = 64 * 1024 * 1024;
 const STDERR_TAIL_BYTES = 4 * 1024;
 const EXIT_GRACE_MS = 2_000;
 
-export const ErrorCode = {
-  parse: -32700, invalidRequest: -32600, methodNotFound: -32601, invalidParams: -32602, internal: -32603,
-  notInitialized: -32002, cancelled: -32800, unsupportedProtocol: -32010, io: -32020, tooLarge: -32021, busy: -32022
-} as const;
 
 export interface BackendInfo {
   protocolVersion: number;
@@ -18,12 +17,6 @@ export interface BackendInfo {
   /** `folderOptions` lists the accepted folder option fields; helpers from v0.5.0 and earlier omit it. */
   capabilities: { methods: string[]; folderOptions?: string[] };
   limits: { maxMessageBytes: number; maxConcurrentRequests: number; maxQueuedRequests: number; maxLinesPerSide: number };
-}
-
-export class BackendError extends Error {
-  constructor(message: string, readonly code?: number, readonly data?: unknown) {
-    super(message);
-  }
 }
 
 export interface BackendOptions {

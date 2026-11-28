@@ -5,7 +5,7 @@
 //! caller passes in: line arrays for `text.diff`/`text.merge`, and file contents for the WebAssembly
 //! engine's `*Data` methods. The contract is documented in `docs/vscode-extension/backend-protocol.md`.
 
-use crate::{diff, fileio, hex, merge, pix, table};
+use crate::{diff, fileio, hex, merge, pix, quick, table};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
@@ -19,7 +19,7 @@ pub const MAX_PICTURE_FILE_BYTES: u64 = 64 << 20;
 pub const MAX_DATA_BYTES: u64 = 64 << 20;
 
 /// Methods of the in-memory engine (`call_memory`).
-pub const MEMORY_METHODS: [&str; 9] = [
+pub const MEMORY_METHODS: [&str; 10] = [
     "engine.info",
     "text.diff",
     "text.merge",
@@ -29,6 +29,7 @@ pub const MEMORY_METHODS: [&str; 9] = [
     "table.compareData",
     "pix.compareData",
     "pix.imageData",
+    "quick.compareData",
 ];
 
 pub mod code {
@@ -161,6 +162,12 @@ struct HexDataParams {
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct QuickDataParams {
+    mode: String,
+}
+
+#[derive(Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct TableDataParams {
     left_name: String,
@@ -227,6 +234,19 @@ pub fn call_memory(method: &str, value: Value, a: &[u8], b: &[u8]) -> Result<Val
             limit_bytes(&p.name, a.len(), MAX_PICTURE_FILE_BYTES)?;
             to_value(pix::pix_image_data(&p.name, a).map_err(|e| RpcError::new(code::IO, format!("{}: {e}", p.name)))?)
         }
+        "quick.compareData" => {
+            let p: QuickDataParams = params(value)?;
+            let mode = match p.mode.as_str() {
+                "rules" => quick::QcMode::Rules,
+                "size" => quick::QcMode::Size,
+                "crc" => quick::QcMode::Crc,
+                "binary" => quick::QcMode::Binary,
+                _ => return Err(RpcError::new(code::INVALID_PARAMS, format!("invalid quick comparison mode: {}", p.mode))),
+            };
+            limit_bytes("left input", a.len(), MAX_DATA_BYTES)?;
+            limit_bytes("right input", b.len(), MAX_DATA_BYTES)?;
+            to_value(quick::quick_compare_data(a, b, mode))
+        }
         _ => Err(RpcError::new(code::METHOD_NOT_FOUND, format!("unknown method: {method}"))),
     }
 }
@@ -277,6 +297,9 @@ mod tests {
         let png = pix::encode_png(1, 1, &[255, 0, 0, 255]).unwrap();
         let got = call("pix.compareData", json!({ "leftName": "a.png", "rightName": "b.png" }), &png, &png).unwrap();
         assert_eq!(got["counts"]["important"], json!(0));
+        assert_eq!(call("quick.compareData", json!({ "mode": "rules" }), b"a\r\nb\r\n", b"a\nb\n").unwrap(), json!(2));
+        assert_eq!(call("quick.compareData", json!({ "mode": "binary" }), b"a", b"b").unwrap(), json!(11));
+        assert_eq!(call("quick.compareData", json!({ "mode": "nope" }), b"a", b"b").unwrap_err().code, code::INVALID_PARAMS);
         let url = call("pix.imageData", json!({ "name": "a.png" }), &png, &[]).unwrap();
         assert!(url.as_str().unwrap().starts_with("data:image/png;base64,"));
         let e = call("pix.imageData", json!({ "name": "broken.png" }), b"nope", &[]).unwrap_err();

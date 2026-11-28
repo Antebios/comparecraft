@@ -1,14 +1,9 @@
-import path from "node:path";
 import { requireObject, requireLines, type EmbeddedSpec } from "./embeddedCore";
 
-type Request = <T>(method: string, params: unknown) => Promise<T>;
-export type DiskVerdict = "sameBinary" | "same" | "similar" | "different" | "differentBinary";
+export { withinFolder } from "./paths";
 
-export function withinFolder(base: string, file: string): boolean {
-  if (!base || !file) return false;
-  const rel = path.relative(base, file);
-  return rel !== "" && !path.isAbsolute(rel) && rel !== ".." && !rel.startsWith(`..${path.sep}`);
-}
+type Request = <T>(method: string, params: Record<string, unknown>) => Promise<T>;
+export type DiskVerdict = "sameBinary" | "same" | "similar" | "different" | "differentBinary";
 
 /** Re-evaluates saved contents, never the editable buffer reported by a child. */
 export async function diskVerdict(spec: EmbeddedSpec, request: Request): Promise<DiskVerdict> {
