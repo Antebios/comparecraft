@@ -281,6 +281,44 @@ jobs:
           npx playwright install --with-deps chromium
           node scripts/test-web.cjs
 
+  # Remote-SSH and Dev Containers windows connected to disposable local containers run the linux-x64
+  # package's extension and helper on the "remote" side. They depend on Marketplace extensions and VS Code
+  # server downloads, so they report problems without holding up publishing.
+  remote:
+    name: Remote smoke (${{ matrix.via }})
+    needs: [version, package]
+    strategy:
+      fail-fast: false
+      matrix:
+        via: [ssh, container]
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: extensions/vscode
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: extensions/vscode/package-lock.json
+      - name: Set extension version from release tag
+        if: needs.version.outputs.version != ''
+        run: npm version "${{ needs.version.outputs.version }}" --no-git-tag-version --allow-same-version --ignore-scripts
+      - run: sudo apt-get update && sudo apt-get install -y xvfb
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/download-artifact@v4
+        with:
+          name: comparecraft-vscode-vsix
+          path: extensions/vscode/vsix
+      - name: Remote smoke test
+        timeout-minutes: 25
+        run: xvfb-run -a npm run test:remote -- --via ${{ matrix.via }} --vsix "vsix/comparecraft-$(node -p "require('./package.json').version")-linux-x64.vsix"
+
   publish:
     name: Publish to VS Code Marketplace
     needs: [version, package, test]
