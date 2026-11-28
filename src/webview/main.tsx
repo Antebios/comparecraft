@@ -16,6 +16,7 @@ import TableCompare from "../views/TableCompare";
 import TextCompare from "../views/TextCompare";
 import TextMerge from "../views/TextMerge";
 import FolderCompare from "../views/FolderCompare";
+import { initFileDrop } from "../fileDrop";
 import { ReplaceHost } from "../views/folderOps";
 import { ModalHost } from "../views/sessionMenu";
 import { request, vscode, vscodeHost } from "./host";
@@ -56,6 +57,7 @@ window.addEventListener("keydown", (e) => {
 window.addEventListener("keydown", handleKey);
 
 function Embedded(props: { id: string }) {
+  onCleanup(initFileDrop());
   const [primaryId, setPrimaryId] = createSignal(props.id);
   const tab = () => state.tabs.find((t) => t.id === primaryId());
   const [error, setError] = createSignal("");

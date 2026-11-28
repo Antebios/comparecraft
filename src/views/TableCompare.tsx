@@ -11,6 +11,7 @@ import { openTab, persistSession, reportComparison, updateTab, type Tab } from "
 import { tableStatus } from "../comparisonStatus";
 import { tableInfo } from "../components/InfoDialog";
 import { sessionCommands } from "./sessionMenu";
+import { dropTarget, sideDrop } from "../fileDrop";
 
 const COL_W = 140;
 type Filter = "all" | "diffs" | "same";
@@ -118,8 +119,12 @@ export default function TableCompare(props: { tab: Tab; active: boolean }) {
   });
 
   function setPath(i: 0 | 1, p: string) {
+    setPaths(i === 0 ? [p] : [undefined, p]);
+  }
+  /** Replaces the given sides (left, right) at once. */
+  function setPaths(next: (string | undefined)[]) {
     const paths = [...tab().paths];
-    paths[i] = p;
+    next.forEach((p, i) => p !== undefined && (paths[i] = p));
     updateTab(tab().id, { paths });
     void refresh().then(() => persistSession(tab()));
   }
@@ -396,7 +401,7 @@ export default function TableCompare(props: { tab: Tab; active: boolean }) {
   );
 
   return (
-    <div class="view">
+    <div class="view" ref={(el) => dropTarget(el, sideDrop({ el: () => el, folders: false, sides: 2, apply: setPaths }))}>
       <div class="toolbar">
         <SessionButtons tab={tab()} />
         <div class="seg">
@@ -445,8 +450,8 @@ export default function TableCompare(props: { tab: Tab; active: boolean }) {
         </div>
       </Show>
       <div class="paths two">
-        <PathBar value={left()} title={tab().titles?.[0]} onCommit={(p) => setPath(0, p)} />
-        <PathBar value={right()} title={tab().titles?.[1]} onCommit={(p) => setPath(1, p)} />
+        <PathBar side={0} value={left()} title={tab().titles?.[0]} onCommit={(p) => setPath(0, p)} />
+        <PathBar side={1} value={right()} title={tab().titles?.[1]} onCommit={(p) => setPath(1, p)} />
       </div>
       <Show when={error()}>
         <div class="banner err">{error()}</div>

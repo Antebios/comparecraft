@@ -99,7 +99,7 @@ When both sides are filled in, CompareCraft compares them. You can also start an
 
 ### With Quick compare
 
-1. Type or paste a path into **Left file or folder…** and **Right file or folder…**, or click **…** next to a box to browse.
+1. Type or paste a path into **Left file or folder…** and **Right file or folder…**, click **…** next to a box to browse, or drag files and folders onto the Home view (see [Drag and drop](#drag-and-drop)).
 2. Click **Compare** or press `Enter`.
 
 CompareCraft picks the view for you:
@@ -122,6 +122,17 @@ Each comparison has a path bar above each side:
 - A **RO** badge means that side is read-only. A **●** badge means that side has unsaved changes.
 
 To exchange the left and right sides, click **⇄ Swap** on the toolbar or choose **Session > Swap Sides**.
+
+### Drag and drop
+
+You can drag files and folders from your file manager onto CompareCraft. While you drag, the path box that will receive an item is outlined.
+
+- **On a comparison:** drop one item on a side's path box, or anywhere on that half of the view, to replace that side. Drop two items to replace the left and right sides together. In Text Merge and Folder Merge, a third item replaces the base. If a side has unsaved changes, you are asked first.
+- **Items of another kind:** folders dropped on a file comparison, or files dropped on a folder comparison, open in a new tab with the matching view.
+- **On the Home view:** one item fills the next empty Quick compare box. When both boxes are filled, it starts a new pair. Two items open their comparison at once, and three open a merge.
+- **On the tab bar:** the items open in a new tab.
+
+In the [VS Code extension](https://github.com/Antebios/comparecraft/tree/main/extensions/vscode), hold `Shift` and drag from the VS Code Explorer or an editor tab. VS Code doesn't pass the paths of files dropped from the system file manager to the comparison; use **…** or the Explorer's **CompareCraft** commands instead.
 
 ## Work with tabs
 

@@ -9,6 +9,7 @@ import { persistSession, reportComparison, updateTab, type Tab } from "../store"
 import { pictureStatus } from "../comparisonStatus";
 import { pictureInfo } from "../components/InfoDialog";
 import { sessionCommands } from "./sessionMenu";
+import { dropTarget, sideDrop } from "../fileDrop";
 
 const DEFAULTS: PixOptions = {
   mode: "tolerance",
@@ -412,8 +413,12 @@ export default function PictureCompare(props: { tab: Tab; active: boolean }) {
   }
 
   function setPath(i: 0 | 1, p: string) {
+    setPaths(i === 0 ? [p] : [undefined, p]);
+  }
+  /** Replaces the given sides (left, right) at once. */
+  function setPaths(sides: (string | undefined)[]) {
     const next = [...tab().paths];
-    next[i] = p;
+    sides.forEach((p, i) => p !== undefined && (next[i] = p));
     updateTab(tab().id, { paths: next });
     void load().then(() => persistSession(tab()));
   }
@@ -426,7 +431,7 @@ export default function PictureCompare(props: { tab: Tab; active: boolean }) {
   const plural = (n: number, s: string) => `${n.toLocaleString()} ${s}${n === 1 ? "" : "s"}`;
 
   return (
-    <div class="view">
+    <div class="view" ref={(el) => dropTarget(el, sideDrop({ el: () => el, folders: false, sides: 2, apply: setPaths }))}>
       <div class="toolbar">
         <SessionButtons tab={tab()} />
         <div class="seg">
@@ -459,8 +464,8 @@ export default function PictureCompare(props: { tab: Tab; active: boolean }) {
         <Btn title="Reload files" kbd="F5" onClick={load}>⟳ Reload</Btn>
       </div>
       <div class="paths two">
-        <PathBar value={paths()[0]} title={tab().titles?.[0]} onCommit={(p) => setPath(0, p)} info={info(0)} />
-        <PathBar value={paths()[1]} title={tab().titles?.[1]} onCommit={(p) => setPath(1, p)} info={info(1)} />
+        <PathBar side={0} value={paths()[0]} title={tab().titles?.[0]} onCommit={(p) => setPath(0, p)} info={info(0)} />
+        <PathBar side={1} value={paths()[1]} title={tab().titles?.[1]} onCommit={(p) => setPath(1, p)} info={info(1)} />
       </div>
       <div class="pix-body">
         <div class="pics">

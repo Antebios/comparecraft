@@ -10,6 +10,7 @@ import { persistSession, reportComparison, updateTab, type Tab } from "../store"
 import { hexStatus } from "../comparisonStatus";
 import { hexInfo } from "../components/InfoDialog";
 import { sessionCommands } from "./sessionMenu";
+import { dropTarget, sideDrop } from "../fileDrop";
 
 const PAGE = 64 * 1024;
 
@@ -285,10 +286,15 @@ export default function HexCompare(props: { tab: Tab; active: boolean }) {
   };
 
   function setPath(i: 0 | 1, p: string) {
+    setPaths(i === 0 ? [p] : [undefined, p]);
+  }
+  /** Replaces the given sides (left, right) at once. */
+  function setPaths(next: (string | undefined)[]) {
     const paths = [...tab().paths];
-    paths[i] = p;
+    next.forEach((p, i) => p !== undefined && (paths[i] = p));
     updateTab(tab().id, { paths });
-    (i === 0 ? lc : rc).reset();
+    if (next[0] !== undefined) lc.reset();
+    if (next[1] !== undefined) rc.reset();
     void persistSession({ ...tab(), paths });
   }
 
@@ -324,7 +330,7 @@ export default function HexCompare(props: { tab: Tab; active: boolean }) {
     o == null ? "—" : `0x${o.toString(16).toUpperCase()} (${hex2(get(o))})`;
 
   return (
-    <div class="view">
+    <div class="view" ref={(el) => dropTarget(el, sideDrop({ el: () => el, folders: false, sides: 2, apply: setPaths }))}>
       <div class="toolbar">
         <SessionButtons tab={tab()} />
         <div class="seg">
@@ -357,8 +363,8 @@ export default function HexCompare(props: { tab: Tab; active: boolean }) {
         <Btn title="Reload files" kbd="F5" onClick={reload}>⟳ Reload</Btn>
       </div>
       <div class="paths two">
-        <PathBar value={left()} title={tab().titles?.[0]} onCommit={(p) => setPath(0, p)} info={<span class="muted small">{fmtSize(hd()?.leftSize)}</span>} />
-        <PathBar value={right()} title={tab().titles?.[1]} onCommit={(p) => setPath(1, p)} info={<span class="muted small">{fmtSize(hd()?.rightSize)}</span>} />
+        <PathBar side={0} value={left()} title={tab().titles?.[0]} onCommit={(p) => setPath(0, p)} info={<span class="muted small">{fmtSize(hd()?.leftSize)}</span>} />
+        <PathBar side={1} value={right()} title={tab().titles?.[1]} onCommit={(p) => setPath(1, p)} info={<span class="muted small">{fmtSize(hd()?.rightSize)}</span>} />
       </div>
       <Show when={diff() && "error" in diff()!}>
         <div class="banner err">{(diff() as { error: string }).error}</div>

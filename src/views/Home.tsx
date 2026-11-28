@@ -4,6 +4,7 @@ import { api, fmtTime, type Session, type ViewKind } from "../api";
 import { PathBar } from "../components/common";
 import { settings } from "../settings";
 import { KIND_LABEL, openAuto, openSession, openTab, sessionsVersion, setSessionsVersion } from "../store";
+import { dropTarget, openDropped, type DropItem } from "../fileDrop";
 
 const NEW_KINDS: { kind: ViewKind; icon: string; help: string }[] = [
   { kind: "folder", icon: "📁", help: "Compare two folder trees and copy, delete or sync items." },
@@ -67,8 +68,23 @@ export default function Home() {
     </Show>
   );
 
+  /** One dropped item fills the next empty Quick compare box (or starts a new pair); more open a comparison. */
+  const nextBox = () => (a() && !b() ? 1 : 0);
+  function dropOnHome(items: DropItem[]) {
+    if (items.length > 1) return openDropped(items);
+    if (nextBox() === 1) return setB(items[0].path);
+    if (a() && b()) setB("");
+    setA(items[0].path);
+  }
+
   return (
-    <div class="home">
+    <div
+      class="home"
+      ref={(el) => dropTarget(el, {
+        drop: dropOnHome,
+        highlight: (items) => [...el.querySelectorAll(items.length > 1 ? ".quick" : `.quick .pathbar[data-side="${nextBox()}"]`)],
+      })}
+    >
       <div class="home-col">
         <h2>New session</h2>
         <div class="new-grid">
@@ -84,8 +100,8 @@ export default function Home() {
         </div>
         <h2>Quick compare</h2>
         <div class="quick">
-          <PathBar value={a()} onCommit={setA} placeholder="Left file or folder…" />
-          <PathBar value={b()} onCommit={setB} placeholder="Right file or folder…" />
+          <PathBar side={0} dropKind="any" value={a()} onCommit={setA} placeholder="Left file or folder…" />
+          <PathBar side={1} dropKind="any" value={b()} onCommit={setB} placeholder="Right file or folder…" />
           <button class="primary" disabled={!a() || !b()} onClick={() => void compare()}>
             Compare
           </button>
@@ -94,7 +110,7 @@ export default function Home() {
               {qcResult()} <button class="link-btn" onClick={() => void openAuto([a(), b()])}>Open view</button>
             </div>
           </Show>
-          <div class="muted small">The viewer is chosen automatically from the file type (folder, text, table, image or binary). Type a path and press Enter, or use ‘…’ to browse.</div>
+          <div class="muted small">The viewer is chosen automatically from the file type (folder, text, table, image or binary). Type a path and press Enter, use ‘…’ to browse, or drag files or folders here: one fills the next box, two open the comparison at once.</div>
         </div>
       </div>
       <div class="home-col">

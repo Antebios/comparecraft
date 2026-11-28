@@ -6,7 +6,7 @@ Text Compare shows two text files side by side, lines up the matching lines, and
 
 ## Start a text comparison
 
-- On the Home view, click the **Text Compare** card or choose **Session > New Text Compare**, then type a file path in each path bar and press `Enter` (or click **…** to browse).
+- On the Home view, click the **Text Compare** card or choose **Session > New Text Compare**, then type a file path in each path bar and press `Enter` (or click **…** to browse). You can also drag files onto either side; see [Drag and drop](getting-started.md#drag-and-drop).
 - On the Home view, enter two text files under **Quick compare** and click **Compare**.
 - In a [Folder Compare](folder-compare.md), double-click a text file.
 - From a terminal, run `comparecraft left.txt right.txt`.

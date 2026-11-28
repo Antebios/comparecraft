@@ -36,7 +36,8 @@ async function openFolder(page: Page, config: { failOpen?: boolean; failSave?: b
           if (cmd === "list_sessions") result = [];
           if (cmd === "find_session") result = { id: "saved-id", name: "Saved Folder", kind: "folder", paths: ["/left", "/right"], options: {}, saved: true, locked: !!config.locked };
           if (cmd === "save_session" && config.failSave && (args.session as { saved: boolean }).saved) error = "Storage unavailable";
-          if (cmd === "path_info") result = { path: args.path, exists: true, isDir: false, size: 5, modified: 1000, kind: "text" };
+          // Paths with an extension are files; others are folders.
+          if (cmd === "path_info") result = { path: args.path, exists: true, isDir: !/\.\w+$/.test(String(args.path)), size: 5, modified: 1000, kind: "text" };
           const file = (rel: string, status: string, right = 2000) => ({
             name: rel.split("/").pop(), rel, dir: false, status, ...(status === "diff" ? { newer: "right" } : {}),
             left: { name: rel.split("/").pop(), size: 5, modified: 1000 },
@@ -55,6 +56,7 @@ async function openFolder(page: Page, config: { failOpen?: boolean; failSave?: b
             summary: { files: 1, same: 0, similar: 0, diff: 1, leftOnly: 0, rightOnly: 0, errors: 0 },
           };
         }
+        if (m.method === "dropPaths") result = (m.params?.uris as string[]).map((uri) => decodeURIComponent(new URL(uri).pathname));
         if (m.method === "openTab") {
           if (config.failOpen) error = "Child panel unavailable";
           else result = m.params?.origin ? { originToken: `token-${++token}` } : null;
@@ -90,6 +92,34 @@ test("embedded folder icons follow the VS Code dark theme colors", async ({ page
   expect(await fill("older", 0)).toBe("rgb(125, 132, 148)");
   expect(await fill("older", 1)).toBe("rgb(255, 143, 143)");
   expect(await fill("same", 0)).toBe("rgb(216, 178, 90)");
+});
+
+test("embedded drops take VS Code URIs, refuse files on a folder view and explain system file-manager drops", async ({ page }) => {
+  await openFolder(page);
+  /** Dispatches a browser drag onto an element: enter and over, then drop unless `hover`. */
+  const drag = (selector: string, data: { uris?: string[]; file?: boolean; hover?: boolean }) => page.evaluate(([selector, data]) => {
+    const r = document.querySelector(selector)!.getBoundingClientRect();
+    const dt = new DataTransfer();
+    if (data.uris) dt.setData("text/uri-list", data.uris.join("\r\n"));
+    if (data.file) dt.items.add(new File(["x"], "a.txt"));
+    const init = { dataTransfer: dt, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2, bubbles: true, cancelable: true };
+    const el = document.elementFromPoint(init.clientX, init.clientY)!;
+    for (const type of data.hover ? ["dragenter", "dragover"] : ["dragenter", "dragover", "drop"]) el.dispatchEvent(new DragEvent(type, init));
+  }, [selector, data] as const);
+  const messages = async () => (await harness(page)).calls.filter((c) => c.method === "message").map((c) => String(c.params?.message));
+
+  await drag('.pathbar[data-side="0"]', { uris: ["file:///other%20left"], hover: true });
+  await expect(page.locator('.pathbar[data-side="0"]')).toHaveClass(/drop-target/);
+  await drag('.pathbar[data-side="0"]', { uris: ["file:///other%20left"] });
+  await expect(page.locator(".drop-target")).toHaveCount(0);
+  await expect.poll(async () => (await harness(page)).calls.some((c) => c.method === "dropPaths")).toBe(true);
+  await expect.poll(async () => (await harness(page)).calls.some((c) =>
+    c.params?.cmd === "compare_folders" && (c.params.args as { left?: string }).left === "/other left")).toBe(true);
+
+  await drag(".fscroll", { uris: ["file:///notes.txt"] });
+  await expect.poll(messages).toContainEqual(expect.stringMatching(/compares folders/));
+  await drag(".fscroll", { file: true });
+  await expect.poll(messages).toContainEqual(expect.stringMatching(/Hold Shift and drag files from the VS Code Explorer/));
 });
 
 test("embedded folder hides deferred commands, nested external apps, shortcuts and snapshot settings", async ({ page }) => {

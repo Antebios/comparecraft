@@ -1,7 +1,7 @@
 // VS Code webview implementation of the shared UI host. Every privileged operation is a
 // request to the extension, which validates it; the webview has no file system access.
 import type { EventCallback, UnlistenFn } from "@tauri-apps/api/event";
-import type { Host } from "../host";
+import type { FileDropEvent, Host } from "../host";
 
 interface VsCodeApi {
   postMessage(message: unknown): void;
@@ -62,6 +62,72 @@ function publishState(state: unknown) {
 
 const dialogOptions = (options: unknown) => (typeof options === "string" ? { title: options } : options ?? {});
 
+const URI_TYPES = ["application/vnd.code.uri-list", "resourceurls", "text/uri-list"];
+const isFileDrag = (e: DragEvent) => [...(e.dataTransfer?.types ?? [])].some((t) => t === "Files" || URI_TYPES.includes(t));
+
+/** URIs of items dragged from VS Code (Explorer, editor tabs) or a file manager that shares them. */
+function droppedUris(data: DataTransfer): string[] {
+  for (const type of URI_TYPES) {
+    const raw = data.getData(type);
+    if (!raw) continue;
+    if (type !== "text/uri-list") {
+      try {
+        const list = JSON.parse(raw);
+        if (Array.isArray(list)) return list.filter((u): u is string => typeof u === "string");
+      } catch {
+        continue;
+      }
+    }
+    return raw.split(/\r?\n/).map((u) => u.trim()).filter((u) => u && !u.startsWith("#"));
+  }
+  return [];
+}
+
+/**
+ * Drops reach the webview as browser drag events. VS Code passes items dragged from its Explorer or
+ * editor tabs (with Shift held) as URIs, which the extension turns into paths; files dropped from the
+ * system file manager arrive without paths, so they are reported with an empty list.
+ */
+async function onFileDrop(handler: (event: FileDropEvent) => void): Promise<() => void> {
+  let depth = 0;
+  const enter = (e: DragEvent) => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    if (depth++ === 0) handler({ type: "enter", x: e.clientX, y: e.clientY });
+  };
+  const over = (e: DragEvent) => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+    handler({ type: "over", x: e.clientX, y: e.clientY });
+  };
+  const leave = (e: DragEvent) => {
+    if (!isFileDrag(e) || --depth > 0) return;
+    depth = 0;
+    handler({ type: "leave", x: 0, y: 0 });
+  };
+  const drop = (e: DragEvent) => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    depth = 0;
+    const uris = e.dataTransfer ? droppedUris(e.dataTransfer) : [];
+    const at = { x: e.clientX, y: e.clientY };
+    if (!uris.length) return handler({ type: "drop", paths: [], ...at });
+    request<string[]>("dropPaths", { uris }).then(
+      (paths) => handler({ type: "drop", paths, ...at }),
+      (error) => {
+        handler({ type: "leave", x: 0, y: 0 });
+        void request("message", { message: `Cannot open the dropped items: ${error instanceof Error ? error.message : String(error)}`, kind: "error" });
+      },
+    );
+  };
+  const events = { dragenter: enter, dragover: over, dragleave: leave, drop } as const;
+  for (const [name, fn] of Object.entries(events)) document.addEventListener(name, fn as EventListener);
+  return () => {
+    for (const [name, fn] of Object.entries(events)) document.removeEventListener(name, fn as EventListener);
+  };
+}
+
 export const vscodeHost: Host = {
   name: "vscode",
   folderComparisonOnly: true,
@@ -87,6 +153,7 @@ export const vscodeHost: Host = {
     close: () => request("close"),
     onCloseRequested: async () => () => {},
   }),
+  onFileDrop,
   emit(event, payload) {
     if (event === "text-state") publishState(payload);
   },

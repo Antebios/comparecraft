@@ -10,6 +10,7 @@ import { persistSession, updateTab, type Tab } from "../store";
 import { unwrap } from "solid-js/store";
 import { mergeInfo } from "../components/InfoDialog";
 import { sessionCommands } from "./sessionMenu";
+import { dropTarget, sideDrop } from "../fileDrop";
 
 type Choice = "base" | "left" | "right" | "lr" | "rl" | { custom: string[] } | null;
 
@@ -327,6 +328,14 @@ export default function TextMerge(props: { tab: Tab; active: boolean }) {
     updateTab(tab().id, { paths, ...(i === 3 ? { output: p } : {}) });
     if (i < 3) void loadAll().then(() => persistSession(tab()));
   }
+  /** Replaces the given inputs (left, right, base) at once. */
+  function setInputs(next: (string | undefined)[]) {
+    const paths = [...tab().paths];
+    while (paths.length < 4) paths.push("");
+    next.slice(0, 3).forEach((p, i) => p !== undefined && (paths[i] = p));
+    updateTab(tab().id, { paths });
+    void loadAll().then(() => persistSession(tab()));
+  }
 
   const kindClass = (ci: number) => `ck-${merge()?.chunks[ci].kind}`;
 
@@ -362,7 +371,17 @@ export default function TextMerge(props: { tab: Tab; active: boolean }) {
   });
 
   return (
-    <div class="view">
+    <div
+      class="view"
+      ref={(el) => dropTarget(el, sideDrop({
+        el: () => el, folders: false, sides: 3, apply: setInputs,
+        // The panes show left, base and right from left to right.
+        sideAt: (p) => {
+          const r = el.getBoundingClientRect();
+          return [0, 2, 1][Math.min(2, Math.max(0, Math.floor(((p.x - r.left) / r.width) * 3)))];
+        },
+      }))}
+    >
       <div class="toolbar">
         <Btn title="Previous change" kbd={displayKeys("Ctrl+P")} onClick={() => nav(-1, false)}>▲ Change</Btn>
         <Btn title="Next change" kbd={displayKeys("Ctrl+N")} onClick={() => nav(1, false)}>▼ Change</Btn>
@@ -396,7 +415,7 @@ export default function TextMerge(props: { tab: Tab; active: boolean }) {
         {[0, 2, 1].map((i) => (
           <div class="labeled">
             <span class="plabel">{LABELS[i]}</span>
-            <PathBar value={path(i)} title={tab().titles?.[i]} onCommit={(p) => setPath(i, p)} info={errors()[i] ? <span class="err-text">{errors()[i]}</span> : undefined} />
+            <PathBar side={i} value={path(i)} title={tab().titles?.[i]} onCommit={(p) => setPath(i, p)} info={errors()[i] ? <span class="err-text">{errors()[i]}</span> : undefined} />
           </div>
         ))}
       </div>

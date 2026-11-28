@@ -114,6 +114,12 @@ Right-click resources in Explorer, a text editor, or an editor tab and open the
 Compare two different files or two different folders, not a file against a
 folder. Remembered selections last until cleared or VS Code restarts.
 
+To replace a side of an open comparison, hold **Shift** and drag a file or
+folder from the Explorer or an editor tab onto that side, or onto its path box.
+Dropping two items replaces both sides. VS Code doesn't share the paths of files
+dropped from the system file manager with extensions, so for those use the
+**…** button or the Explorer commands above.
+
 ## Compare editor text
 
 Right-click inside an editor (including untitled ones) and open **CompareCraft**:
@@ -239,6 +245,10 @@ start-up, and errors.
 - Binary (Hex), CSV/TSV (Table), Picture, and Patch views are read-only inside
   VS Code. Table and Picture views support files up to 64 MB.
 - Unsaved files, Git revisions, and clipboard content are always compared as text.
+- Drag and drop works with Shift+drag from the VS Code Explorer and editor tabs
+  only. Some VS Code versions (1.140 and later) block Shift+drag into webviews
+  ([microsoft/vscode#339278](https://github.com/microsoft/vscode/issues/339278));
+  use the **…** button until that is fixed.
 - Named folder sessions are supported; reports, backups and external Open With
   remain desktop features.
 
