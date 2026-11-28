@@ -3,8 +3,9 @@
 ## Status
 
 **Implemented on `feature/vscode-workspaces`, verified on Linux (2026-11-28);
-not pushed, merged or released.** The branch was rebased onto `main` at
-`7ee0131`. Its commits:
+not merged or released.** The branch was rebased onto `main` at `7ee0131`.
+`origin` and `macross` received it through `f15700d` during the work (pushes the
+agent didn't make); the later commits are local until pushed. Its commits:
 
 | Commit | Content |
 |---|---|
@@ -17,7 +18,8 @@ not pushed, merged or released.** The branch was rebased onto `main` at
 | `67d399d` | Remote smoke tests over Remote-SSH and Dev Containers |
 | `9fc51b5` | Removed the view-method table the engine router replaced |
 | `bddc16c` | CI attaches the VSIX packages and Linux helpers to releases |
-| (docs commit) | Documentation and this handoff |
+| (docs commits) | Documentation and this handoff |
+| (fix commit) | `test:remote` removes its profile only after VS Code has exited |
 
 The plan is [host-support-plan.md](host-support-plan.md); owner decisions are in
 [decisions.md](decisions.md#host-support). The local extension's own history and
