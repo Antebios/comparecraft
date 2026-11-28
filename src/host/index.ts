@@ -16,6 +16,18 @@ export interface HostWindow {
   onCloseRequested(handler: (event: CloseRequest) => void | Promise<void>): Promise<() => void>;
 }
 
+/**
+ * Files dragged over or dropped on the window. `x`/`y` are CSS pixels in the viewport. `paths` is
+ * known on desktop from the start of a drag; an embedded webview only learns them at the drop, and
+ * gets an empty list when the platform withholds them.
+ */
+export interface FileDropEvent {
+  type: "enter" | "over" | "drop" | "leave";
+  paths?: string[];
+  x: number;
+  y: number;
+}
+
 export interface Host {
   readonly name: "tauri" | "vscode";
   /** Restricts folder UI only; editable child file views retain their own capabilities. */
@@ -34,6 +46,8 @@ export interface Host {
   openPath: typeof Opener.openPath;
   revealItemInDir: typeof Opener.revealItemInDir;
   window(): HostWindow;
+  /** Reports files dragged onto the window; hosts without file drops leave this undefined. */
+  onFileDrop?(handler: (event: FileDropEvent) => void): Promise<() => void>;
   /** Publishes view state to an embedding host (VS Code). Desktop leaves this undefined. */
   emit?(event: string, payload: unknown): void;
 }
@@ -69,4 +83,6 @@ export const openUrl: typeof Opener.openUrl = (url, openWith) => host().openUrl(
 export const openPath: typeof Opener.openPath = (path, openWith) => host().openPath(path, openWith);
 export const revealItemInDir: typeof Opener.revealItemInDir = (path) => host().revealItemInDir(path);
 export const getCurrentWindow = (): HostWindow => host().window();
+export const onFileDrop = (handler: (event: FileDropEvent) => void): Promise<() => void> =>
+  current?.onFileDrop ? current.onFileDrop(handler) : Promise.resolve(() => {});
 export const emit = (event: string, payload: unknown): void => current?.emit?.(event, payload);

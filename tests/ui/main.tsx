@@ -1,6 +1,6 @@
 import { render } from "solid-js/web";
 import App from "../../src/App";
-import { setHost } from "../../src/host";
+import { setHost, type FileDropEvent } from "../../src/host";
 import type { EventCallback, EventName } from "@tauri-apps/api/event";
 import "../../src/styles.css";
 
@@ -48,6 +48,11 @@ setHost({
   openPath: async () => {},
   revealItemInDir: async () => {},
   window: () => ({ close: async () => {}, onCloseRequested: async () => () => {} }),
+  onFileDrop: async (handler) => {
+    const receive = (e: Event) => handler((e as CustomEvent<FileDropEvent>).detail);
+    window.addEventListener("comparecraft-test-drop", receive);
+    return () => window.removeEventListener("comparecraft-test-drop", receive);
+  },
 });
 
 render(() => <App />, document.getElementById("root")!);

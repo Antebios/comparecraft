@@ -4,7 +4,7 @@ import { access, constants, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { BackendError, type BackendManager } from "./backend";
 import {
-  dialogFilters, DocumentGuard, FOLDER_METHODS, isFileView, joinLines, parseSpec, pathKey, readBytes, readDataUrl, requireAbsolute, requireLines, requireObject, requireString,
+  dialogFilters, DocumentGuard, dropPaths, FOLDER_METHODS, isFileView, joinLines, parseSpec, pathKey, readBytes, readDataUrl, requireAbsolute, requireLines, requireObject, requireString,
   deleteEmbeddedSession, readEmbeddedSessions, textFileFromBuffer, titleOf, unsupportedCommand, upsertEmbeddedSession,
   VIEW_METHODS, type EmbeddedSessionRecord, type EmbeddedSpec, type FileView, type TextFileResult
 } from "./embeddedCore";
@@ -410,6 +410,8 @@ export class EmbeddedPanel {
       case "close":
         this.panel.dispose();
         return null;
+      case "dropPaths":
+        return dropPaths(p.uris);
       case "desktopFolder":
         if (this.spec.kind !== "folder") throw new Error("This action requires a folder panel.");
         await this.owner.host.openInDesktop("folder", this.spec.paths);

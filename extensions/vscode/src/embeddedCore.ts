@@ -1,5 +1,6 @@
 import { open, readFile, stat } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { SideInput } from "./contracts";
 
 /** Same cap as the desktop `read_bytes` command. */
@@ -321,6 +322,28 @@ export function dialogFilters(value: unknown): Record<string, string[]> | undefi
 export function requireString(value: unknown, name: string): string {
   if (typeof value !== "string") throw new Error(`Invalid ${name}.`);
   return value;
+}
+
+/** Most items accepted from one drag and drop. */
+export const MAX_DROP_ITEMS = 16;
+
+/** Local paths of URIs dropped on a webview (from the VS Code Explorer or editor tabs). */
+export function dropPaths(value: unknown): string[] {
+  if (!Array.isArray(value) || !value.length || value.length > MAX_DROP_ITEMS || !value.every(item => typeof item === "string" && item.length <= 8192)) {
+    throw new Error("Invalid dropped items.");
+  }
+  return value.map(uri => {
+    let url: URL;
+    try {
+      url = new URL(uri as string);
+    } catch {
+      throw new Error(`Invalid dropped item: ${uri}`);
+    }
+    if (url.protocol !== "file:") throw new Error("Only local files can be dropped.");
+    const file = fileURLToPath(url);
+    if (!path.isAbsolute(file)) throw new Error(`Invalid dropped item: ${uri}`);
+    return file;
+  });
 }
 
 export function requireAbsolute(value: unknown, name = "path"): string {

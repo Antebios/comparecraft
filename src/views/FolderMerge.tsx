@@ -10,6 +10,7 @@ import { backupSpec, settings } from "../settings";
 import { openAuto, openTab, persistSession, updateTab, type Tab } from "../store";
 import { defaultOptions } from "./FolderCompare";
 import { sessionCommands } from "./sessionMenu";
+import { dropTarget, sideDrop } from "../fileDrop";
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
@@ -85,6 +86,11 @@ export default function FolderMerge(props: { tab: Tab; active: boolean }) {
   function setPath(i: number, p: string) {
     const paths = [0, 1, 2, 3].map((k) => (k === i ? p : path(k)));
     updateTab(tab().id, { paths, ...(i === 3 ? { output: undefined } : {}) });
+    void refresh().then(() => persistSession(tab()));
+  }
+  /** Replaces the given inputs (left, right, base) at once. */
+  function setInputs(next: (string | undefined)[]) {
+    updateTab(tab().id, { paths: [0, 1, 2, 3].map((k) => (k < 3 ? next[k] : undefined) ?? path(k)) });
     void refresh().then(() => persistSession(tab()));
   }
   function setOption(o: Partial<FolderOptions>) {
@@ -248,7 +254,7 @@ export default function FolderMerge(props: { tab: Tab; active: boolean }) {
   const count = (st: MergeStatus) => result()?.summary[st] ?? 0;
 
   return (
-    <div class="view">
+    <div class="view" ref={(el) => dropTarget(el, sideDrop({ el: () => el, folders: true, sides: 3, apply: setInputs }))}>
       <div class="toolbar">
         <SessionButtons tab={tab()} />
         <div class="seg">
@@ -276,9 +282,9 @@ export default function FolderMerge(props: { tab: Tab; active: boolean }) {
         <Btn title="Refresh" kbd="F5" onClick={() => void refresh()}>⟳ Refresh</Btn>
       </div>
       <div class="paths three">
-        <PathBar folder value={left()} title={tab().titles?.[0]} placeholder="Left folder…" onCommit={(p) => setPath(0, p)} />
-        <PathBar folder value={base()} title={tab().titles?.[2]} placeholder="Base (common ancestor) folder…" onCommit={(p) => setPath(2, p)} />
-        <PathBar folder value={right()} title={tab().titles?.[1]} placeholder="Right folder…" onCommit={(p) => setPath(1, p)} />
+        <PathBar side={0} folder value={left()} title={tab().titles?.[0]} placeholder="Left folder…" onCommit={(p) => setPath(0, p)} />
+        <PathBar side={2} folder value={base()} title={tab().titles?.[2]} placeholder="Base (common ancestor) folder…" onCommit={(p) => setPath(2, p)} />
+        <PathBar side={1} folder value={right()} title={tab().titles?.[1]} placeholder="Right folder…" onCommit={(p) => setPath(1, p)} />
       </div>
       <div class="paths fm-output">
         <PathBar folder value={output()} placeholder="Output folder (often the left folder)…" onCommit={(p) => setPath(3, p)} />

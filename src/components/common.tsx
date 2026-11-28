@@ -1,4 +1,5 @@
 import { open, save } from "../host";
+import { dropTarget, type DropItem } from "../fileDrop";
 import { createEffect, createSignal, Index, onCleanup, onMount, Show, type JSX } from "solid-js";
 import { editorRowHeight } from "../settings";
 import { clipSpans } from "../wrap";
@@ -17,6 +18,10 @@ export function PathBar(props: {
   /** Shows a per-side "Save" button, enabled while the side has unsaved changes. */
   onSave?: () => void;
   saveTitle?: string;
+  /** Side index this box sets (left 0, right 1, base 2), for drops on the surrounding view. */
+  side?: number;
+  /** What a dropped item may be; by default a folder for folder boxes, else a file. */
+  dropKind?: "file" | "folder" | "any";
 }) {
   const [text, setText] = createSignal(props.value);
   createEffect(() => setText(props.value));
@@ -29,8 +34,17 @@ export function PathBar(props: {
       props.onCommit(picked);
     }
   };
+  // One item of the right kind sets this box; anything else goes to the enclosing view.
+  const kind = () => props.dropKind ?? (props.folder ? "folder" : "file");
+  const takes = (items: DropItem[]) =>
+    items.length === 1 && (items[0].dir === undefined || kind() === "any" || (items[0].exists !== false && items[0].dir === (kind() === "folder")));
   return (
-    <div class="pathbar" classList={{ dirty: !!props.dirty }}>
+    <div
+      class="pathbar"
+      classList={{ dirty: !!props.dirty }}
+      data-side={props.side}
+      ref={(el) => dropTarget(el, { accepts: takes, drop: (items) => props.onCommit(items[0].path) })}
+    >
       {props.title ? (
         <div class="path-title" title={props.value}>
           {props.title}

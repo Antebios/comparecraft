@@ -28,6 +28,7 @@ import FolderMerge from "./views/FolderMerge";
 import TextEdit from "./views/TextEdit";
 import PatchView from "./views/PatchView";
 import { APP_VERSION } from "./version";
+import { dropTarget, initFileDrop, openDropped } from "./fileDrop";
 
 function TabView(props: { tab: Tab }) {
   const active = () => state.active === props.tab.id;
@@ -204,6 +205,7 @@ export default function App() {
     }
   };
 
+  onCleanup(initFileDrop());
   onMount(async () => {
     window.addEventListener("keydown", onKey);
     await loadSettings();
@@ -229,7 +231,7 @@ export default function App() {
   return (
     <div class="app" classList={{ "no-toolbar": !settings.showToolbar }}>
       <MenuBar scope={state.active} />
-      <div class="tabbar" style={{ display: settings.tabSingleHide && state.tabs.length === 0 ? "none" : undefined }}>
+      <div class="tabbar" ref={(el) => dropTarget(el, { drop: openDropped })} style={{ display: settings.tabSingleHide && state.tabs.length === 0 ? "none" : undefined }}>
         <button class="tab home-tab" classList={{ active: state.active === "home" }} onClick={() => activate("home")} title="Home">
           ⌂ CompareCraft
         </button>

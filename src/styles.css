@@ -2723,3 +2723,10 @@ kbd {
   white-space: pre-wrap;
   overflow-wrap: break-word;
 }
+
+/* Drag and drop: where dropped files or folders will go */
+.drop-target {
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+  background-color: color-mix(in srgb, var(--accent) 12%, transparent);
+}

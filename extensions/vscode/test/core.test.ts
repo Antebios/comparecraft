@@ -9,7 +9,8 @@ import { comparisonArguments, launchDesktop } from "../src/process";
 import type { LaunchMode, LocalResource, ResourceKind, SideInput } from "../src/contracts";
 import { assertSavedResources } from "../src/resources";
 import { SnapshotStore, type SnapshotSession } from "../src/snapshots";
-import { deleteEmbeddedSession, readEmbeddedSessions, upsertEmbeddedSession } from "../src/embeddedCore";
+import { deleteEmbeddedSession, dropPaths, MAX_DROP_ITEMS, readEmbeddedSessions, upsertEmbeddedSession } from "../src/embeddedCore";
+import { pathToFileURL } from "node:url";
 
 const file = (name: string): LocalResource => ({ path: path.resolve(name), kind: "file" });
 const folder = (name: string): LocalResource => ({ path: path.resolve(name), kind: "folder" });
@@ -315,5 +316,16 @@ test("desktop process launch uses a real argument array and surfaces spawn and e
   } finally {
     clearInterval(keepAlive);
     await rm(dir, { recursive: true });
+  }
+});
+
+test("dropped URIs become local paths and anything else is refused", () => {
+  const files = [path.join(tmpdir(), "with space & 100%.txt"), path.join(tmpdir(), "folder")];
+  assert.deepEqual(dropPaths(files.map(file => pathToFileURL(file).href)), files);
+  assert.throws(() => dropPaths(["vscode-remote://wsl+ubuntu/home/a.txt"]), /Only local files/);
+  assert.throws(() => dropPaths(["untitled:Untitled-1"]), /Only local files/);
+  assert.throws(() => dropPaths(["not a uri"]), /Invalid dropped item/);
+  for (const value of [[], "file:///a", [1], Array(MAX_DROP_ITEMS + 1).fill(pathToFileURL(files[0]!).href)]) {
+    assert.throws(() => dropPaths(value), /Invalid dropped items/);
   }
 });

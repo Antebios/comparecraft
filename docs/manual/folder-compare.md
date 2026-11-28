@@ -6,7 +6,7 @@ Folder Compare shows two folder trees side by side and marks which files and fol
 
 ## Start a folder comparison
 
-- On the Home view, click the **Folder Compare** card, or choose **Session > New Folder Compare**. Then type a folder path in each path bar and press `Enter`, or click **…** to browse.
+- On the Home view, click the **Folder Compare** card, or choose **Session > New Folder Compare**. Then type a folder path in each path bar and press `Enter`, click **…** to browse, or drag folders onto either side (see [Drag and drop](getting-started.md#drag-and-drop)).
 - On the Home view, enter two folders under **Quick compare** and click **Compare**.
 - From a terminal, run `comparecraft folderA folderB`.
 

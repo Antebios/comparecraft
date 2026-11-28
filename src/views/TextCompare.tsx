@@ -5,6 +5,7 @@ import { api, basename, defaultRules, errText, fmtSize, fmtTime, type DiffResult
 import { Btn, editorRowHeight, Highlighted, Modal, PathBar, useViewport, WrappedText } from "../components/common";
 import { fixedLayout, layoutRange, PROBE, rowLayout, useWrapMetrics, wrapper } from "../wrap";
 import { mapOffset, ordered, type TextPos, type TextSel } from "../textSelection";
+import { dropTarget, sideDrop } from "../fileDrop";
 import { showContextMenu } from "../components/ContextMenu";
 import { externalCommands, shellWords } from "../components/external";
 import FindBar from "../components/FindBar";
@@ -1530,7 +1531,12 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
   const isBinary = () => meta()[0]?.binary || meta()[1]?.binary;
 
   return (
-    <div class="view">
+    <div
+      class="view"
+      ref={(el) => dropTarget(el, sideDrop({ el: () => el, folders: false, sides: 2, apply: async (next) => {
+        for (const s of [0, 1] as Side[]) if (next[s] !== undefined) await changePath(s, next[s]!);
+      } }))}
+    >
       <div class="toolbar">
         <SessionButtons tab={tab()} />
         <Btn title="Previous difference" kbd={k("prev")} onClick={() => nextHunk(-1)}>▲ Prev</Btn>
@@ -1590,8 +1596,8 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
         </div>
       </Show>
       <div class="paths two">
-        <PathBar value={tab().paths[0] ?? ""} title={tab().titles?.[0]} onCommit={(p) => changePath(0, p)} readOnly={readOnly(0)} dirty={dirty()[0]} info={sideInfo(0)} onSave={() => saveSide(0)} saveTitle="Save left file" />
-        <PathBar value={tab().paths[1] ?? ""} title={tab().titles?.[1]} onCommit={(p) => changePath(1, p)} readOnly={readOnly(1)} dirty={dirty()[1]} info={sideInfo(1)} onSave={() => saveSide(1)} saveTitle="Save right file" />
+        <PathBar side={0} value={tab().paths[0] ?? ""} title={tab().titles?.[0]} onCommit={(p) => changePath(0, p)} readOnly={readOnly(0)} dirty={dirty()[0]} info={sideInfo(0)} onSave={() => saveSide(0)} saveTitle="Save left file" />
+        <PathBar side={1} value={tab().paths[1] ?? ""} title={tab().titles?.[1]} onCommit={(p) => changePath(1, p)} readOnly={readOnly(1)} dirty={dirty()[1]} info={sideInfo(1)} onSave={() => saveSide(1)} saveTitle="Save right file" />
       </div>
       <div class="tcompare">
         <div

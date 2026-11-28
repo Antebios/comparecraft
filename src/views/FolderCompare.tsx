@@ -22,6 +22,7 @@ import {
 import { Btn, editorRowHeight, Modal, PathBar, useViewport } from "../components/common";
 import { FolderIcon } from "../components/FolderIcon";
 import { folderLooks, lookOf, type FolderLook } from "../folderLook";
+import { dropTarget, sideDrop } from "../fileDrop";
 import type { ComparisonListener } from "../comparisonStatus";
 import { showContextMenu } from "../components/ContextMenu";
 import { externalCommands, shellWords, sideOf } from "../components/external";
@@ -1797,7 +1798,10 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
   };
 
   return (
-    <div class="view">
+    <div
+      class="view"
+      ref={(el) => dropTarget(el, sideDrop({ el: () => el, folders: true, sides: 2, apply: (next) => setBases([next[0] ?? left(), next[1] ?? right()]) }))}
+    >
       <Show when={comparisonOnly}>
         <div class="filterbar" role="note">
           <span>Folder comparison reads saved files on disk.</span>
@@ -1872,8 +1876,8 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
         </Show>
       </div>
       <div class="paths two">
-        <PathBar folder value={left()} title={tab().titles?.[0]} onCommit={(p) => setPath(0, p)} />
-        <PathBar folder value={right()} title={tab().titles?.[1]} onCommit={(p) => setPath(1, p)} />
+        <PathBar side={0} folder value={left()} title={tab().titles?.[0]} onCommit={(p) => setPath(0, p)} />
+        <PathBar side={1} folder value={right()} title={tab().titles?.[1]} onCommit={(p) => setPath(1, p)} />
       </div>
       <Show when={busy() && progress()}>
         {(state) => (
