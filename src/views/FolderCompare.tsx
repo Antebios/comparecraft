@@ -1,4 +1,4 @@
-import { folderComparisonOnly, listen, message, openDesktopFolder, open as openDialog } from "../host";
+import { canOpenDesktop, folderComparisonOnly, listen, message, openDesktopFolder, open as openDialog } from "../host";
 import { createEffect, createMemo, createSignal, For, Index, type JSX, on, onCleanup, onMount, Show } from "solid-js";
 import { createStore } from "solid-js/store";
 import {
@@ -1735,7 +1735,7 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
   const cmds = availableCommands.filter((c) => !comparisonOnly || !COMPARISON_ONLY_UNSUPPORTED.has(c.id));
   if (comparisonOnly) cmds.push({
     id: "desktop-folder", menu: "Session", group: "using", label: "Open Folder Comparison in Desktop App",
-    enabled: () => !!left() && !!right(), run: desktopFolder,
+    enabled: () => !!left() && !!right(), visible: canOpenDesktop, run: desktopFolder,
   });
   registerCommands(tab().id, cmds);
 
@@ -1806,7 +1806,9 @@ export default function FolderCompare(props: { tab: Tab; active: boolean }) {
         <div class="filterbar" role="note">
           <span>Folder comparison reads saved files on disk.</span>
           <span class="spacer" />
-          <Btn title="Open Folder Comparison in Desktop App" onClick={desktopFolder} disabled={!left() || !right()}>Open in Desktop App</Btn>
+          <Show when={canOpenDesktop()}>
+            <Btn title="Open Folder Comparison in Desktop App" onClick={desktopFolder} disabled={!left() || !right()}>Open in Desktop App</Btn>
+          </Show>
         </div>
       </Show>
       <div class="toolbar">

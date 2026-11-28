@@ -5,7 +5,8 @@ const harness = (page: Page) => page.evaluate(() => (window as unknown as { harn
 test.setTimeout(60_000);
 
 /** Mock only the platform transport: this exercises the actual bundled shared folder frontend. */
-async function openFolder(page: Page, config: { failOpen?: boolean; failSave?: boolean; earlyReceipt?: boolean; locked?: boolean; editorFont?: string; folders?: boolean; unsupported?: string[] } = {}) {
+type Capabilities = { desktop: boolean; revealInOS: boolean; restricted: boolean };
+async function openFolder(page: Page, config: { failOpen?: boolean; failSave?: boolean; earlyReceipt?: boolean; locked?: boolean; editorFont?: string; folders?: boolean; unsupported?: string[]; capabilities?: Capabilities } = {}) {
   await page.addInitScript((config) => {
     const w = window as unknown as {
       acquireVsCodeApi: () => unknown;
@@ -62,6 +63,7 @@ async function openFolder(page: Page, config: { failOpen?: boolean; failSave?: b
           };
         }
         if (m.method === "folderSupport") result = { unsupported: config.unsupported ?? [] };
+        if (m.method === "capabilities") result = config.capabilities ?? { desktop: true, revealInOS: true, restricted: false };
         if (m.method === "dropPaths") result = (m.params?.uris as string[]).map((uri) => decodeURIComponent(new URL(uri).pathname));
         if (m.method === "openTab") {
           if (config.failOpen) error = "Child panel unavailable";
@@ -163,6 +165,23 @@ test("folder reload state preserves identity/options/lock and desktop launch is 
   await page.getByText("Session Settings…", { exact: true }).click();
   await expect(page.getByRole("option", { name: "Also update saved session" })).toHaveCount(0);
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.getByRole("button", { name: "Open in Desktop App" }).click();
+  expect((await harness(page)).calls.some((c) => c.method === "desktopFolder")).toBe(true);
+});
+
+test("Restricted Mode is noted and the desktop app is only offered once the host allows it", async ({ page }) => {
+  await openFolder(page, { capabilities: { desktop: false, revealInOS: false, restricted: true } });
+  await expect(page.getByRole("note").filter({ hasText: "Restricted Mode" })).toContainText("Trust the workspace to save changes");
+  await expect(page.getByRole("button", { name: "Open in Desktop App" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Session", exact: true }).click();
+  await expect(page.getByText("Session Settings…", { exact: true })).toBeVisible();
+  await expect(page.getByText("Open Folder Comparison in Desktop App")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  // Trusting the workspace updates open panels.
+  await page.evaluate(() => window.dispatchEvent(new MessageEvent("message", {
+    data: { type: "event", event: "host-capabilities", payload: { desktop: true, revealInOS: true, restricted: false } },
+  })));
+  await expect(page.getByText("Restricted Mode")).toHaveCount(0);
   await page.getByRole("button", { name: "Open in Desktop App" }).click();
   expect((await harness(page)).calls.some((c) => c.method === "desktopFolder")).toBe(true);
 });
