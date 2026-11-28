@@ -10,7 +10,8 @@ name: vscode-extension
 #
 # Only release creation publishes, after all checks pass, the exact files that were tested. Pre-release
 # tags (vN.N.N-pre) are tested and packaged but not published: the Marketplace doesn't accept pre-release
-# version numbers. Releases also get helper-only Linux archives for remote hosts.
+# version numbers. Every release (pre-releases included) gets the tested VSIX files and helper-only Linux
+# archives for remote hosts as assets.
 on:
   push:
     branches: [main]
@@ -356,8 +357,8 @@ jobs:
           fi
           npx --no-install vsce publish --packagePath "$RUNNER_TEMP"/vsix/*.vsix
 
-  release-helpers:
-    name: Attach Linux helpers to the release
+  release-assets:
+    name: Attach VSIX packages and Linux helpers to the release
     needs: [version, package, test]
     if: github.event_name == 'release' && github.event.action == 'created'
     runs-on: ubuntu-22.04
@@ -366,10 +367,14 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
+          name: comparecraft-vscode-vsix
+          path: assets
+      - uses: actions/download-artifact@v4
+        with:
           name: comparecraft-backend-linux
-          path: archives
-      - name: Upload helper-only archives
+          path: assets
+      - name: Upload the tested VSIX files and helper-only archives
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.release.tag_name }}
-        run: gh release upload "$TAG" archives/*.tar.gz --clobber --repo "$GITHUB_REPOSITORY"
+        run: gh release upload "$TAG" assets/*.vsix assets/*.tar.gz --clobber --repo "$GITHUB_REPOSITORY"
