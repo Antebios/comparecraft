@@ -192,7 +192,12 @@ async function main() {
     console.log("REMOTE: PASS");
     passed = true;
   } finally {
-    if (window && window.exitCode === null) await killTree(window.pid, true).catch(() => undefined);
+    if (window && window.exitCode === null && window.signalCode === null) {
+      // VS Code writes its logs until it exits; remove the profile only after that.
+      const exited = new Promise(resolve => window.once("exit", resolve));
+      await killTree(window.pid, true).catch(() => undefined);
+      await Promise.race([exited, sleep(15_000)]);
+    }
     const created = [container, ...devContainers(directory)];
     if (!passed && process.argv.includes("--keep")) {
       step(`kept ${directory} and containers ${created.join(", ")}; remove them with: docker rm -f ${created.join(" ")}; rm -rf ${directory}`);
