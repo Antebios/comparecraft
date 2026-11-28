@@ -130,9 +130,15 @@ pub fn parse_csv(text: &str, delim: char) -> Vec<Vec<String>> {
 }
 
 fn load(path: &str, opts: &TableOptions) -> io::Result<(Vec<Vec<String>>, char)> {
-    let (text, _, _) = decode(&read_all(Path::new(path))?);
-    let d = opts.delimiter.chars().next().unwrap_or_else(|| detect_delimiter(path, &text));
-    Ok((parse_csv(&text, d), d))
+    Ok(parse_table(path, &read_all(Path::new(path))?, opts))
+}
+
+/// Decodes and parses the contents of the table file `name` (whose extension picks a default
+/// delimiter); returns the rows and the delimiter used.
+pub fn parse_table(name: &str, bytes: &[u8], opts: &TableOptions) -> (Vec<Vec<String>>, char) {
+    let (text, _, _) = decode(bytes);
+    let d = opts.delimiter.chars().next().unwrap_or_else(|| detect_delimiter(name, &text));
+    (parse_csv(&text, d), d)
 }
 
 fn norm(s: &str, o: &TableOptions) -> String {
@@ -226,8 +232,15 @@ fn mk(l: Option<usize>, r: Option<usize>, left: &[Vec<String>], right: &[Vec<Str
 }
 
 pub fn compare_tables(left_path: &str, right_path: &str, o: &TableOptions) -> io::Result<TableResult> {
-    let (mut left, d) = load(left_path, o)?;
-    let (mut right, _) = load(right_path, o)?;
+    Ok(compare_parsed(load(left_path, o)?, load(right_path, o)?, o))
+}
+
+/// Compares the contents of two table files; `compare_tables` without the file reads.
+pub fn compare_table_data(left_name: &str, left: &[u8], right_name: &str, right: &[u8], o: &TableOptions) -> TableResult {
+    compare_parsed(parse_table(left_name, left, o), parse_table(right_name, right, o), o)
+}
+
+fn compare_parsed((mut left, d): (Vec<Vec<String>>, char), (mut right, _): (Vec<Vec<String>>, char), o: &TableOptions) -> TableResult {
     let mut header = Vec::new();
     if o.header {
         if !left.is_empty() {
@@ -277,7 +290,7 @@ pub fn compare_tables(left_path: &str, right_path: &str, o: &TableOptions) -> io
             }
         }
     }
-    Ok(TableResult { header, left, right, rows, delimiter: d.to_string(), columns })
+    TableResult { header, left, right, rows, delimiter: d.to_string(), columns }
 }
 
 #[cfg(test)]

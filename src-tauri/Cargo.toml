@@ -14,42 +14,83 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [[bin]]
 name = "comparecraft"
 path = "src/main.rs"
+required-features = ["desktop"]
 
 # Console version: runs scripts and quick compares in the console, waits for GUI comparisons to close.
 [[bin]]
 name = "ccomp"
 path = "src/console.rs"
+required-features = ["native"]
 
 # Headless helper for the VS Code extension: JSON-RPC over stdio, no window. See docs/vscode-extension/backend-protocol.md.
 [[bin]]
 name = "comparecraft-backend"
 path = "src/backend_main.rs"
+required-features = ["native"]
+
+[[test]]
+name = "backend"
+required-features = ["native"]
+
+[[test]]
+name = "console"
+required-features = ["native"]
+
+[[test]]
+name = "script_golden"
+required-features = ["native"]
+
+# The default build is the desktop app and its console programs. Narrower builds share the same engine sources:
+# - `--no-default-features --features native`: the Tauri-free `comparecraft-backend` helper (portable static builds).
+# - `--no-default-features --target wasm32-unknown-unknown`: the WebAssembly engine used by the VS Code extension
+#   where no helper can run (browser VS Code, virtual workspaces). See docs/vscode-extension/backend-protocol.md.
+[features]
+default = ["desktop"]
+desktop = [
+    "native",
+    "dep:tauri",
+    "dep:tauri-build",
+    "dep:tauri-plugin-dialog",
+    "dep:tauri-plugin-single-instance",
+    "dep:tauri-plugin-opener",
+    "dep:tauri-plugin-clipboard-manager",
+    "dep:font-kit",
+]
+native = [
+    "dep:comparecraft-menu",
+    "dep:dirs",
+    "dep:trash",
+    "dep:filetime",
+    "dep:chrono",
+    "dep:unicode-normalization",
+    "dep:ignore",
+]
 
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
+tauri-build = { version = "2", features = [], optional = true }
 
 [dependencies]
-comparecraft-menu = { path = "shell-menu" }
-tauri = { version = "2", features = [] }
-tauri-plugin-dialog = "2"
-tauri-plugin-single-instance = "2"
+comparecraft-menu = { path = "shell-menu", optional = true }
+tauri = { version = "2", features = [], optional = true }
+tauri-plugin-dialog = { version = "2", optional = true }
+tauri-plugin-single-instance = { version = "2", optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 similar = "2"
 encoding_rs = "0.8"
 crc32fast = "1.4"
-dirs = "6"
-trash = "5"
+dirs = { version = "6", optional = true }
+trash = { version = "5", optional = true }
 base64 = "0.22"
-tauri-plugin-opener = "2"
-filetime = "0.2"
+tauri-plugin-opener = { version = "2", optional = true }
+filetime = { version = "0.2", optional = true }
 regex = "1"
-tauri-plugin-clipboard-manager = "2"
+tauri-plugin-clipboard-manager = { version = "2", optional = true }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "bmp", "tiff", "webp", "ico", "tga", "pnm", "qoi"] }
-chrono = "0.4.45"
-unicode-normalization = "0.1"
-font-kit = "0.14"
-ignore = "0.4.35"
+chrono = { version = "0.4.45", optional = true }
+unicode-normalization = { version = "0.1", optional = true }
+font-kit = { version = "0.14", optional = true }
+ignore = { version = "0.4.35", optional = true }
 
 [dev-dependencies]
 tempfile = "3"

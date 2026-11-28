@@ -168,21 +168,32 @@ pub fn load_text(path: &str) -> io::Result<TextFile> {
         return Err(io::Error::other(format!("{path} is a folder")));
     }
     let bytes = read_all(p)?;
-    let binary = looks_binary(&bytes);
-    let (text, encoding, bom) = decode(&bytes);
-    let (lines, eol, final_newline) = split_lines(&text);
     Ok(TextFile {
+        size: meta.len(),
+        modified: modified_ms(&meta),
+        read_only: meta.permissions().readonly(),
+        ..text_from_bytes(path, &bytes)
+    })
+}
+
+/// Decodes file contents like `load_text` (encoding, BOM, line endings, binary detection) without
+/// touching the file system: no modification time, and not read-only.
+pub fn text_from_bytes(path: &str, bytes: &[u8]) -> TextFile {
+    let binary = looks_binary(bytes);
+    let (text, encoding, bom) = decode(bytes);
+    let (lines, eol, final_newline) = split_lines(&text);
+    TextFile {
         path: path.to_string(),
         lines,
         encoding,
         bom,
         eol,
         final_newline,
-        size: meta.len(),
-        modified: modified_ms(&meta),
+        size: bytes.len() as u64,
+        modified: None,
         binary,
-        read_only: meta.permissions().readonly(),
-    })
+        read_only: false,
+    }
 }
 
 pub fn eol_str(eol: &str) -> &'static str {
@@ -305,25 +316,39 @@ const TABLE_EXTS: &[&str] = &["csv", "tsv", "tab"];
 /// Picks the file viewer for a path, similar to how a diff tool associates
 /// file formats with views: pictures, tables, binary (hex) or text.
 pub fn detect_kind(path: &str) -> String {
-    let ext = Path::new(path)
+    let mut buf = vec![0u8; 8192];
+    let mut n = 0;
+    if kind_by_name(path).is_none() {
+        if let Ok(mut f) = fs::File::open(path) {
+            n = f.read(&mut buf).unwrap_or(0);
+        }
+    }
+    kind_of(path, &buf[..n])
+}
+
+/// The viewer for a file named `name` whose contents start with `head`; see `detect_kind`.
+pub fn kind_of(name: &str, head: &[u8]) -> String {
+    if let Some(kind) = kind_by_name(name) {
+        return kind.into();
+    }
+    if looks_binary(head) {
+        return "hex".into();
+    }
+    "text".into()
+}
+
+fn kind_by_name(name: &str) -> Option<&'static str> {
+    let ext = Path::new(name)
         .extension()
         .map(|e| e.to_string_lossy().to_lowercase())
         .unwrap_or_default();
     if IMAGE_EXTS.contains(&ext.as_str()) {
-        return "picture".into();
+        return Some("picture");
     }
     if TABLE_EXTS.contains(&ext.as_str()) {
-        return "table".into();
+        return Some("table");
     }
-    let mut buf = vec![0u8; 8192];
-    if let Ok(mut f) = fs::File::open(path) {
-        if let Ok(n) = f.read(&mut buf) {
-            if looks_binary(&buf[..n]) {
-                return "hex".into();
-            }
-        }
-    }
-    "text".into()
+    None
 }
 
 #[cfg(test)]
