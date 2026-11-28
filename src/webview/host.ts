@@ -154,6 +154,7 @@ export const vscodeHost: Host = {
     onCloseRequested: async () => () => {},
   }),
   onFileDrop,
+  unsupportedFolderOptions: () => request<{ unsupported: string[] }>("folderSupport").then((r) => r.unsupported),
   emit(event, payload) {
     if (event === "text-state") publishState(payload);
   },

@@ -1,6 +1,6 @@
 import { createEffect, createSignal, onCleanup, Show } from "solid-js";
 import { render } from "solid-js/web";
-import { dispatchKey } from "../commands";
+import { chordOf, dispatchKey } from "../commands";
 import { ContextMenuHost } from "../components/ContextMenu";
 import MenuBar from "../components/MenuBar";
 import { PromptHost } from "../components/Prompt";
@@ -43,18 +43,24 @@ export interface EmbeddedSpec {
 }
 
 let scope = "";
+// Chords that always belong to VS Code, even where a view binds them (Shift+Ctrl+P is an
+// alternate "previous difference" key in Text Compare).
+const VSCODE_CHORDS = new Set(["Shift+Ctrl+P"]);
 const handleKey = (e: KeyboardEvent) => {
-  if (scope && dispatchKey(e, scope)) e.stopImmediatePropagation();
+  if (!scope || VSCODE_CHORDS.has(chordOf(e))) return;
+  if (dispatchKey(e, scope)) e.stopPropagation();
 };
-// VS Code's webview wrapper adds its keydown listener to this window before the page loads and
-// calls preventDefault on undo/redo/save/find/print chords (keyCodes Z, Y, S, F, P) so the
-// workbench can handle them. Claim those chords in the capture phase, before that listener runs.
+// VS Code's webview wrapper adds a keydown listener to this window before the page's scripts run.
+// It forwards every key to the workbench keybindings, and calls preventDefault on undo/redo/save/
+// find/print chords (keyCodes Z, Y, S, F, P). Claim those chords in the capture phase, before it
+// runs; dispatch the rest on the document, after the views' own handlers, and stop handled chords
+// there so they never reach the wrapper (Ctrl+R would also open Open Recent, F5 start debugging).
+// Chords the view doesn't handle still reach VS Code.
 const WRAPPER_PREVENTED = new Set([90, 89, 83, 70, 80]);
 window.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && WRAPPER_PREVENTED.has(e.keyCode)) handleKey(e);
 }, true);
-// Other handled chords (Ctrl+R, F5, ...) also must not run workbench keybindings.
-window.addEventListener("keydown", handleKey);
+document.addEventListener("keydown", handleKey);
 
 function Embedded(props: { id: string }) {
   onCleanup(initFileDrop());

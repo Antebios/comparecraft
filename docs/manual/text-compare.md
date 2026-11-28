@@ -58,7 +58,7 @@ The number of context lines (3 by default) is set with **Context lines (Show Con
 
 Long lines wrap at word boundaries to fit the panes, so you can read them without scrolling sideways. A word that is wider than the pane is split. The left and right sides of a wrapped line stay side by side: each line takes as many rows as the longer of its two sides. The details pane wraps too.
 
-Click **↵ Wrap** on the toolbar, choose **View > Word Wrap** or press `Alt+Z` to turn wrapping on or off for the current tab. The choice is saved with the session. New comparisons use **Word wrap long lines** on the [Text Editing page of the Options](options.md#text-editing), which is on by default.
+Click **↵ Wrap** on the toolbar, choose **View > Word Wrap** or press `Alt+Z` to turn wrapping on or off for the current tab. The choice is saved with the session. New comparisons use **Word wrap long lines** on the [Text Editing page of the Options](options.md#text-editing), which is on by default. In the VS Code extension, new comparisons wrap when VS Code's **Editor: Word Wrap** (`editor.wordWrap`) setting is on.
 
 ## Move between differences
 

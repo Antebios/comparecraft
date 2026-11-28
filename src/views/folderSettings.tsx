@@ -3,8 +3,8 @@
  * Name Filters, Other Filters and Misc, with a "Use for this view only /
  * Also update session defaults / Also update saved session" choice.
  */
-import { folderComparisonOnly, open as openDialog } from "../host";
-import { createSignal, For, type JSX, Match, Show, Switch } from "solid-js";
+import { folderComparisonOnly, open as openDialog, unsupportedFolderOptions } from "../host";
+import { createResource, createSignal, For, type JSX, Match, Show, Switch } from "solid-js";
 import { createStore, unwrap } from "solid-js/store";
 import { errText, fmtSize, type FolderOptions, type OtherFilter } from "../api";
 import { Modal } from "../components/common";
@@ -33,6 +33,8 @@ const TABS: [SettingsTab, string][] = [
   ["other", "Other Filters"],
   ["misc", "Misc"],
 ];
+
+const OLD_ENGINE = "The installed CompareCraft desktop app is too old for this option. Update CompareCraft to use it.";
 
 const split = (s: string | undefined) => (s ?? "").split(/[;\n]/).map((x) => x.trim()).filter(Boolean);
 const lines = (a: string[]) => a.join("\n");
@@ -107,6 +109,8 @@ export default function FolderSettingsDialog(props: {
   const [editFilter, setEditFilter] = createSignal<{ i: number; f: OtherFilter } | null>(null);
   const [selFilter, setSelFilter] = createSignal(-1);
   const [selAlign, setSelAlign] = createSignal(-1);
+  const [unsupported] = createResource(unsupportedFolderOptions, { initialValue: [] });
+  const off = (key: "respectGitignore" | "detectMoves") => unsupported().includes(key);
 
   function build(): FolderOptions {
     const out = JSON.parse(JSON.stringify(unwrap(o))) as FolderOptions;
@@ -224,8 +228,8 @@ export default function FolderSettingsDialog(props: {
                 <label class="opt-check indent"><input type="radio" name="cm" disabled={!contentsOn()} checked={contentsMode() === "rules"} onChange={() => setContentsMode("rules")} /> Rules-based comparison</label>
                 {na("Override quick test results")}
                 {na("Compare versions")}
-                <label class="opt-check" title="Left-only and right-only files with identical contents (size, CRC and bytes) are marked as moved or renamed.">
-                  <input type="checkbox" checked={o.detectMoves !== false} onChange={(e) => setO("detectMoves", e.currentTarget.checked)} /> Detect moved and renamed files
+                <label class="opt-check" classList={{ muted: off("detectMoves") }} title={off("detectMoves") ? OLD_ENGINE : "Left-only and right-only files with identical contents (size, CRC and bytes) are marked as moved or renamed."}>
+                  <input type="checkbox" disabled={off("detectMoves")} checked={!off("detectMoves") && o.detectMoves !== false} onChange={(e) => setO("detectMoves", e.currentTarget.checked)} /> Detect moved and renamed files
                 </label>
               </>,
             )}
@@ -349,8 +353,8 @@ export default function FolderSettingsDialog(props: {
             <label class="opt-check">
               <input type="checkbox" checked={!!o.excludeHidden} onChange={(e) => setO("excludeHidden", e.currentTarget.checked)} /> Exclude protected operating system files (Recommended)
             </label>
-            <label class="opt-check" title="Items ignored by either side's .gitignore files (including the enclosing repository's) are excluded, as are .git folders.">
-              <input type="checkbox" checked={o.respectGitignore !== false} onChange={(e) => setO("respectGitignore", e.currentTarget.checked)} /> Respect .gitignore files
+            <label class="opt-check" classList={{ muted: off("respectGitignore") }} title={off("respectGitignore") ? OLD_ENGINE : "Items ignored by either side's .gitignore files (including the enclosing repository's) are excluded, as are .git folders."}>
+              <input type="checkbox" disabled={off("respectGitignore")} checked={!off("respectGitignore") && o.respectGitignore !== false} onChange={(e) => setO("respectGitignore", e.currentTarget.checked)} /> Respect .gitignore files
             </label>
             <Show when={editFilter()}>
               <OtherFilterEditor

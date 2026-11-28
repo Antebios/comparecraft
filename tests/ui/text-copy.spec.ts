@@ -121,3 +121,26 @@ test("dragging past the bottom auto-scrolls and copies rows that were out of vie
   await pane.evaluate((el) => (el.scrollTop = 0));
   await expect(right2.locator(".trow").filter({ has: page.locator(".ln", { hasText: /^1$/ }) }).locator(".tx")).toHaveText("L1");
 });
+
+test("a native copy event takes the tracked drag selection, including rows scrolled out of view", async ({ page, folders }) => {
+  const left = Array.from({ length: 300 }, (_, i) => `L${i + 1}`);
+  await openText(page, folders, left, left.map((l) => l.replace("L", "R")));
+  const pane = panes(page).first();
+  const start = await pointAt(page, 0, 1, 0);
+  const box = (await pane.boundingBox())!;
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(start.x, box.y + box.height + 40, { steps: 5 });
+  await expect.poll(() => pane.evaluate((el) => el.scrollTop)).toBeGreaterThan(500);
+  await page.mouse.up();
+  const end = Number(await pane.locator(".trow.kb-target .ln").textContent());
+  // What VS Code's Edit > Copy does inside the webview.
+  const copied = await pane.evaluate((el) => {
+    const data = new DataTransfer();
+    el.dispatchEvent(new ClipboardEvent("copy", { clipboardData: data, bubbles: true, cancelable: true }));
+    return data.getData("text/plain");
+  });
+  expect(copied.split("\n").slice(0, end - 1)).toEqual(left.slice(0, end - 1));
+  await page.keyboard.press("Control+c");
+  await expect.poll(() => page.evaluate(() => (window as unknown as { clipboardText?: string }).clipboardText)).toBe(copied);
+});

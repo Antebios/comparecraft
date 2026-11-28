@@ -1331,6 +1331,20 @@ export default function TextCompare(props: { tab: Tab; active: boolean }) {
 
   let endDrag: (() => void) | undefined;
   onCleanup(() => endDrag?.());
+  // A native copy (VS Code's Edit > Copy runs one in the webview) takes the same text as Ctrl+C:
+  // rows scrolled out of view during a long drag are no longer part of the DOM selection.
+  const onCopy = (e: ClipboardEvent) => {
+    if (!props.active || !e.clipboardData) return;
+    if (e.target instanceof Element && e.target.closest("input, textarea, [contenteditable='true']")) return;
+    const native = window.getSelection();
+    if (native?.toString() && native.anchorNode && !paneL.contains(native.anchorNode) && !paneR.contains(native.anchorNode)) return;
+    const text = selectionText();
+    if (!text) return;
+    e.clipboardData.setData("text/plain", text);
+    e.preventDefault();
+  };
+  document.addEventListener("copy", onCopy);
+  onCleanup(() => document.removeEventListener("copy", onCopy));
   /** Tracks a mouse drag from the caret row: the selected text by row and column, auto-scrolling at the edges. */
   function startDrag(s: Side, e: MouseEvent) {
     endDrag?.();

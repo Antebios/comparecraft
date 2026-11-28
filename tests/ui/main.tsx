@@ -43,7 +43,7 @@ setHost({
   open: async () => null,
   save: async () => null,
   readText: async () => "",
-  writeText: async () => {},
+  writeText: async (text: string) => { (window as unknown as { clipboardText?: string }).clipboardText = text; },
   openUrl: async () => {},
   openPath: async () => {},
   revealItemInDir: async () => {},

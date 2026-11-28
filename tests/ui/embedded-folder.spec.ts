@@ -1,17 +1,22 @@
 import { test, expect, type Page } from "@playwright/test";
 
-type Harness = { calls: { method: string; params?: Record<string, unknown> }[]; states: Record<string, unknown>[] };
+type Harness = { calls: { method: string; params?: Record<string, unknown> }[]; states: Record<string, unknown>[]; forwarded: string[] };
 const harness = (page: Page) => page.evaluate(() => (window as unknown as { harness: Harness }).harness);
 test.setTimeout(60_000);
 
 /** Mock only the platform transport: this exercises the actual bundled shared folder frontend. */
-async function openFolder(page: Page, config: { failOpen?: boolean; failSave?: boolean; earlyReceipt?: boolean; locked?: boolean; editorFont?: string; folders?: boolean } = {}) {
+async function openFolder(page: Page, config: { failOpen?: boolean; failSave?: boolean; earlyReceipt?: boolean; locked?: boolean; editorFont?: string; folders?: boolean; unsupported?: string[] } = {}) {
   await page.addInitScript((config) => {
     const w = window as unknown as {
       acquireVsCodeApi: () => unknown;
       harness: Harness;
     };
-    w.harness = { calls: [], states: [] };
+    w.harness = { calls: [], states: [], forwarded: [] };
+    // VS Code's webview wrapper listens on the window before the page's scripts run and forwards
+    // every keydown it sees to the workbench keybindings.
+    window.addEventListener("keydown", (e) => {
+      w.harness.forwarded.push([e.shiftKey && "Shift", e.ctrlKey && "Ctrl", e.altKey && "Alt", e.key].filter(Boolean).join("+"));
+    });
     let state: unknown;
     let token = 0;
     const event = (name: string, payload: unknown) => window.dispatchEvent(new MessageEvent("message", {
@@ -56,6 +61,7 @@ async function openFolder(page: Page, config: { failOpen?: boolean; failSave?: b
             summary: { files: 1, same: 0, similar: 0, diff: 1, leftOnly: 0, rightOnly: 0, errors: 0 },
           };
         }
+        if (m.method === "folderSupport") result = { unsupported: config.unsupported ?? [] };
         if (m.method === "dropPaths") result = (m.params?.uris as string[]).map((uri) => decodeURIComponent(new URL(uri).pathname));
         if (m.method === "openTab") {
           if (config.failOpen) error = "Child panel unavailable";
@@ -223,4 +229,25 @@ test("settings broadcasts reload the shared library without overwriting folder s
   await page.evaluate(() => window.dispatchEvent(new MessageEvent("message", { data: { type: "event", event: "settings-changed" } })));
   await expect.poll(async () => (await harness(page)).calls.filter((c) => c.params?.cmd === "load_settings").length).toBe(loads + 1);
   expect((await harness(page)).states.at(-1)?.options).toEqual(before?.options);
+});
+
+test("chords the panel handles never reach VS Code's keybindings; other chords still do", async ({ page }) => {
+  await openFolder(page);
+  await page.locator(".frow").first().click();
+  // F5 refreshes and Ctrl+N/Ctrl+P find differences. Folder copy (Ctrl+R) isn't offered in VS Code, so
+  // Ctrl+R stays Open Recent, and Shift+Ctrl+P always opens the Command Palette.
+  for (const chord of ["F5", "Control+n", "Control+p", "Control+r", "Control+k", "Control+Shift+p"]) await page.keyboard.press(chord);
+  const forwarded = (await harness(page)).forwarded.filter((k) => !/(Control|Shift)$/.test(k));
+  expect(forwarded).toEqual(["Ctrl+r", "Ctrl+k", "Shift+Ctrl+p"]);
+});
+
+test("options an older desktop backend rejects are shown disabled in Session Settings", async ({ page }) => {
+  await openFolder(page, { unsupported: ["respectGitignore", "detectMoves"] });
+  await page.getByTitle("Edit file filters (Session Settings › Name Filters)").click();
+  await page.locator(".settings-tab", { hasText: "Other Filters" }).click();
+  const gitignore = page.getByRole("checkbox", { name: "Respect .gitignore files" });
+  await expect(gitignore).toBeDisabled();
+  await expect(gitignore).not.toBeChecked();
+  await page.locator(".settings-tab", { hasText: "Comparison" }).click();
+  await expect(page.getByRole("checkbox", { name: "Detect moved and renamed files" })).toBeDisabled();
 });

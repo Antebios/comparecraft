@@ -65,6 +65,34 @@ export const VIEW_METHODS: Record<FileView, readonly string[]> = {
 
 export const FOLDER_METHODS = ["folder.compare", "folder.compareItems", "file.quickCompare"] as const;
 
+/** Folder option fields accepted by helpers from v0.5.0 and earlier, which don't advertise `folderOptions`. */
+export const LEGACY_FOLDER_OPTIONS: readonly string[] = [
+  "criteria", "timeToleranceSecs", "include", "exclude", "includeFolders", "otherFilters", "excludeHidden",
+  "flatten", "ignoreDst", "ignoreTz", "ignoreCaseNames", "followSymlinks", "dotNamesFirst", "align",
+];
+
+/**
+ * Folder options the helper accepts: its advertised `folderOptions`, or the v0.5.0 list.
+ * Older helpers reject unknown fields, so options they don't know are dropped and reported.
+ */
+export function supportedFolderOptions(options: Record<string, unknown>, advertised: readonly string[] | undefined): { options: Record<string, unknown>; dropped: string[] } {
+  const known = new Set(Array.isArray(advertised) ? advertised : LEGACY_FOLDER_OPTIONS);
+  const kept: Record<string, unknown> = {};
+  const dropped: string[] = [];
+  for (const [key, value] of Object.entries(options)) {
+    if (known.has(key)) kept[key] = value;
+    else dropped.push(key);
+  }
+  return { options: kept, dropped };
+}
+
+/** Folder Session Settings fields the webview offers; those the helper doesn't accept are shown disabled. */
+export const WEBVIEW_FOLDER_OPTIONS = ["respectGitignore", "detectMoves"] as const;
+
+export function unsupportedFolderOptions(advertised: readonly string[] | undefined): string[] {
+  return supportedFolderOptions(Object.fromEntries(WEBVIEW_FOLDER_OPTIONS.map(key => [key, true])), advertised).dropped;
+}
+
 /** Initial state of an embedded text comparison; also the persisted webview state. */
 export interface EmbeddedSpec {
   /**

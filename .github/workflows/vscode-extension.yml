@@ -1,7 +1,9 @@
 name: vscode-extension
 
 # Tests and packages the VS Code extension on CI and release runs.
-# Only release creation publishes, after all platform checks pass.
+# Only release creation publishes, after all platform checks pass. Pre-release tags
+# (vN.N.N-pre) are tested and packaged but not published: the Marketplace doesn't accept
+# pre-release version numbers.
 on:
   push:
     branches: [main]
@@ -34,6 +36,7 @@ jobs:
     name: Extension (${{ matrix.os }})
     outputs:
       version: ${{ steps.release-version.outputs.version }}
+      prerelease: ${{ steps.release-version.outputs.prerelease }}
     strategy:
       fail-fast: false
       matrix:
@@ -61,13 +64,18 @@ jobs:
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          if [[ ! "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
-            echo "::error::Release tag must use the format vN.N.N (for example, v1.2.3)."
+          if ! version="$(node ../../scripts/version.mjs --check "$RELEASE_TAG")"; then
+            echo "::error::Release tag must use the format vN.N.N or vN.N.N-pre (for example, v1.2.3 or v1.2.3-beta.1)."
             exit 1
           fi
-          version="${RELEASE_TAG#v}"
           npm version "$version" --no-git-tag-version --allow-same-version --ignore-scripts
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [[ "$version" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Pre-release $version: the VSIX is tested and uploaded as a workflow artifact, but not published to the Marketplace."
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
           # The backend helper built below reports this version (CompareCraft: Check Embedded Backend).
           echo "COMPARECRAFT_VERSION=$version" >> "$GITHUB_ENV"
       - name: Linux deps
@@ -115,7 +123,7 @@ jobs:
   publish:
     name: Publish to VS Code Marketplace
     needs: extension
-    if: github.event_name == 'release' && github.event.action == 'created'
+    if: github.event_name == 'release' && github.event.action == 'created' && needs.extension.outputs.prerelease != 'true'
     runs-on: ubuntu-22.04
     environment: vscode-marketplace
     concurrency:

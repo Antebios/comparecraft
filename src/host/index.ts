@@ -50,6 +50,8 @@ export interface Host {
   onFileDrop?(handler: (event: FileDropEvent) => void): Promise<() => void>;
   /** Publishes view state to an embedding host (VS Code). Desktop leaves this undefined. */
   emit?(event: string, payload: unknown): void;
+  /** Folder options the comparison engine doesn't accept (an older desktop install behind VS Code). */
+  unsupportedFolderOptions?(): Promise<string[]>;
 }
 
 let current: Host | undefined;
@@ -86,3 +88,5 @@ export const getCurrentWindow = (): HostWindow => host().window();
 export const onFileDrop = (handler: (event: FileDropEvent) => void): Promise<() => void> =>
   current?.onFileDrop ? current.onFileDrop(handler) : Promise.resolve(() => {});
 export const emit = (event: string, payload: unknown): void => current?.emit?.(event, payload);
+export const unsupportedFolderOptions = (): Promise<string[]> =>
+  current?.unsupportedFolderOptions ? current.unsupportedFolderOptions().catch(() => []) : Promise.resolve([]);

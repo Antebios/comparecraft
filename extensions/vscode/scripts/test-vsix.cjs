@@ -67,6 +67,7 @@ function checkInstalledFiles(installed) {
   const required = [
     "package.json",
     "readme.md",
+    "changelog.md",
     "license.txt",
     manifest.icon,
     manifest.main.replace(/^\.\//, ""),

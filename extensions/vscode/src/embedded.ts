@@ -5,7 +5,7 @@ import path from "node:path";
 import { BackendError, type BackendManager } from "./backend";
 import {
   dialogFilters, DocumentGuard, dropPaths, FOLDER_METHODS, isFileView, joinLines, parseSpec, pathKey, readBytes, readDataUrl, requireAbsolute, requireLines, requireObject, requireString,
-  deleteEmbeddedSession, readEmbeddedSessions, textFileFromBuffer, titleOf, unsupportedCommand, upsertEmbeddedSession,
+  deleteEmbeddedSession, readEmbeddedSessions, supportedFolderOptions, textFileFromBuffer, titleOf, unsupportedCommand, unsupportedFolderOptions, upsertEmbeddedSession,
   VIEW_METHODS, type EmbeddedSessionRecord, type EmbeddedSpec, type FileView, type TextFileResult
 } from "./embeddedCore";
 import { FOLDER_SESSIONS_KEY, parseFolderSession, type FolderSession } from "./folderSessions";
@@ -25,6 +25,11 @@ export interface EmbeddedHost {
   /** Called after a merge result is written; offers explicit review and staging. */
   afterMergeSaved(file: string): Promise<void>;
 }
+
+/** Whether VS Code wraps lines by default (`editor.wordWrap` other than "off"). */
+export const editorWordWrap = () => vscode.workspace.getConfiguration("editor").get<string>("wordWrap", "off") !== "off";
+
+const FOLDER_OPTION_NAMES: Record<string, string> = { respectGitignore: ".gitignore handling", detectMoves: "moved-file detection" };
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 const errorText = (error: unknown) => error instanceof Error ? error.message : String(error);
@@ -52,6 +57,8 @@ export class EmbeddedPanels implements vscode.Disposable {
           panel.dispose();
         }
       }
+    }), vscode.workspace.onDidChangeConfiguration(event => {
+      if (event.affectsConfiguration("editor.wordWrap")) this.broadcastSettings();
     }));
   }
 
@@ -113,6 +120,32 @@ export class EmbeddedPanels implements vscode.Disposable {
 
   async supportsFolder(): Promise<boolean> {
     return (await this.backend.get()).supports(...FOLDER_METHODS);
+  }
+
+  private warnedFolderOptions = false;
+
+  /**
+   * Leaves out folder options the helper doesn't accept: an older desktop install rejects unknown
+   * fields, which would fail every folder comparison. Warns once when an enabled option is dropped.
+   */
+  async folderOptions(options: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const backend = await this.backend.get();
+    const { options: kept, dropped } = supportedFolderOptions(options, backend.info.capabilities.folderOptions);
+    const enabled = dropped.filter(key => options[key] === true);
+    if (enabled.length && !this.warnedFolderOptions) {
+      this.warnedFolderOptions = true;
+      const names = enabled.map(key => FOLDER_OPTION_NAMES[key] ?? key).join(" and ");
+      this.host.log(`The CompareCraft backend ${backend.info.server.version} does not accept folder options: ${dropped.join(", ")}.`);
+      void vscode.window.showWarningMessage(
+        `The installed CompareCraft desktop app (${backend.info.server.version}) is older than this extension, so ${names} ${enabled.length > 1 ? "are" : "is"} off in folder comparisons. Update CompareCraft to use ${enabled.length > 1 ? "them" : "it"}.`
+      );
+    }
+    return kept;
+  }
+
+  /** Folder Session Settings options the installed helper doesn't accept; the webview shows them disabled. */
+  async unsupportedFolderOptions(): Promise<string[]> {
+    return unsupportedFolderOptions((await this.backend.get()).info.capabilities.folderOptions);
   }
 
   folderSessions(): FolderSession[] {
@@ -412,6 +445,8 @@ export class EmbeddedPanel {
         return null;
       case "dropPaths":
         return dropPaths(p.uris);
+      case "folderSupport":
+        return { unsupported: await this.owner.unsupportedFolderOptions() };
       case "desktopFolder":
         if (this.spec.kind !== "folder") throw new Error("This action requires a folder panel.");
         await this.owner.host.openInDesktop("folder", this.spec.paths);
@@ -510,12 +545,12 @@ export class EmbeddedPanel {
         this.owner.releaseOrigins(this);
         return this.backendRequest("folder.compare", {
           left: requireAbsolute(args.left, "left folder"), right: requireAbsolute(args.right, "right folder"),
-          options: requireObject(args.options, "folder options")
+          options: await this.owner.folderOptions(requireObject(args.options, "folder options"))
         });
       case "compare_items":
         return this.backendRequest("folder.compareItems", {
           left: requireAbsolute(args.left, "left folder"), right: requireAbsolute(args.right, "right folder"),
-          rels: requireLines(args.rels, "relative items"), options: requireObject(args.options, "folder options")
+          rels: requireLines(args.rels, "relative items"), options: await this.owner.folderOptions(requireObject(args.options, "folder options"))
         });
       case "quick_compare": {
         const mode = requireString(args.mode, "comparison mode");
@@ -544,7 +579,8 @@ export class EmbeddedPanel {
       case "pix_image":
         return this.backendRequest("pix.image", { path: requireAbsolute(args.path) });
       case "load_settings":
-        return state.get<Record<string, unknown>>(SETTINGS_KEY) ?? {};
+        // The embedded UI has no Options dialog: wrapping follows VS Code (per-tab View > Word Wrap still applies).
+        return { ...state.get<Record<string, unknown>>(SETTINGS_KEY), textWordWrap: editorWordWrap() };
       case "save_settings":
         await state.update(SETTINGS_KEY, requireObject(args.settings, "settings"));
         this.owner.broadcastSettings();

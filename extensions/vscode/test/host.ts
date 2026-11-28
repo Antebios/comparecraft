@@ -202,6 +202,22 @@ async function embeddedPanels(api: { embedded: EmbeddedPanels }, tempDirectory: 
   await until("the second webview to load", () => second.received.includes("diff_texts"));
   console.log("PASS: two concurrent embedded panels loaded the webview bundle, both files, and helper diffs.");
 
+  // The embedded UI has no Options dialog, so the default word wrap follows VS Code's editor.wordWrap.
+  const editorConfig = () => vscode.workspace.getConfiguration("editor");
+  const wraps = async () => (await panel.handle("invoke", { cmd: "load_settings", args: {} }) as { textWordWrap: boolean }).textWordWrap;
+  const settingsLoads = () => panel.received.filter(item => item === "load_settings").length;
+  try {
+    await editorConfig().update("wordWrap", "off", vscode.ConfigurationTarget.Global);
+    assert.equal(await wraps(), false);
+    const loads = settingsLoads();
+    await editorConfig().update("wordWrap", "bounded", vscode.ConfigurationTarget.Global);
+    assert.equal(await wraps(), true);
+    await until("the webview to reload settings after editor.wordWrap changed", () => settingsLoads() > loads);
+  } finally {
+    await editorConfig().update("wordWrap", undefined, vscode.ConfigurationTarget.Global);
+  }
+  console.log("PASS: the embedded default word wrap follows editor.wordWrap and open panels reload it when it changes.");
+
   // Guarded writes through VS Code documents. `c` is not shown by the view, so it never reloads it.
   const c = path.join(directory, "embedded c.txt");
   await writeFile(c, "alpha\r\nbeta\r\n");
@@ -321,6 +337,29 @@ async function folderViews(panels: EmbeddedPanels, directory: string): Promise<v
   assert.equal(scan.summary.files, 1);
   assert.equal(scan.summary.same, 1);
   assert.equal(await invoke("quick_compare", { left: a, right: b, mode: "binary" }), 1);
+
+  // .gitignore handling and moved-file detection reach a helper that advertises them.
+  const movesLeft = path.join(directory, "embedded-moves-left"), movesRight = path.join(directory, "embedded-moves-right");
+  await mkdir(path.join(movesLeft, "old"), { recursive: true });
+  await mkdir(path.join(movesLeft, "build"));
+  await mkdir(path.join(movesRight, "new"), { recursive: true });
+  await writeFile(path.join(movesLeft, "old", "moved.txt"), "moved contents\n");
+  await writeFile(path.join(movesRight, "new", "moved.txt"), "moved contents\n");
+  await writeFile(path.join(movesLeft, "build", "out.o"), "ignored\n");
+  for (const side of [movesLeft, movesRight]) await writeFile(path.join(side, ".gitignore"), "build/\n");
+  type Tree = { name: string; moved?: string | null; children?: Tree[] };
+  const names = (node: Tree): string[] => [node.name, ...(node.children ?? []).flatMap(names)];
+  const compareMoves = (options: Record<string, unknown>) => invoke("compare_folders", { left: movesLeft, right: movesRight, options }) as Promise<{ root: Tree; summary: { moved?: number } }>;
+  const moves = await compareMoves({ respectGitignore: true, detectMoves: true });
+  assert.equal(moves.summary.moved, 1);
+  assert.ok(!names(moves.root).includes("build"), "ignored folders are left out");
+  const plain = await compareMoves({ respectGitignore: false, detectMoves: false });
+  assert.equal(plain.summary.moved ?? 0, 0);
+  assert.ok(names(plain.root).includes("build"));
+  assert.deepEqual(await parent.handle("folderSupport", {}), { unsupported: [] });
+  const dropped = await parent.handle("dropPaths", { uris: [vscode.Uri.file(a).toString(), vscode.Uri.file(right).toString()] }) as string[];
+  assert.deepEqual(dropped.map(pathKey), [a, right].map(pathKey));
+  console.log("PASS: embedded folder comparisons pass .gitignore and moved-file options to the helper; dropped Explorer URIs become local paths.");
   const nestedLeft = path.join(left, "nested"), nestedRight = path.join(right, "nested");
   await mkdir(nestedLeft);
   await mkdir(nestedRight);
@@ -426,7 +465,7 @@ function folderProbe(panel: EmbeddedPanel) {
         row.dispatchEvent(new MouseEvent("dblclick", {bubbles:true,button:0}));
       }
       if (m.action === "compare") document.querySelector(".preset-run-wrap button")?.click();
-      if (m.action === "selectAll") window.dispatchEvent(new KeyboardEvent("keydown", {key:"a",code:"KeyA",ctrlKey:${process.platform !== "darwin"},metaKey:${process.platform === "darwin"},bubbles:true}));
+      if (m.action === "selectAll") document.body.dispatchEvent(new KeyboardEvent("keydown", {key:"a",code:"KeyA",ctrlKey:${process.platform !== "darwin"},metaKey:${process.platform === "darwin"},bubbles:true}));
       if (m.action === "refresh") {
         [...document.querySelectorAll("button")].find(b => /Refresh/i.test(b.title + " " + b.getAttribute("aria-label")))?.click();
       }

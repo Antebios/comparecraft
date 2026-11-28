@@ -9,6 +9,8 @@ On macOS, `Ctrl` in this list means the Command key (⌘), and the menus show sh
 
 You can change any shortcut on the [Toolbars, Shortcuts page of the Options](options.md#toolbars-shortcuts).
 
+In the VS Code extension, a focused CompareCraft tab handles the shortcuts of its view before VS Code does: for example `Ctrl+R` copies to the right rather than opening a recent folder, and `F5` refreshes rather than starting debugging. Keys the view doesn't use still reach VS Code, and `Shift+Ctrl+P` always opens the Command Palette (in Text Compare it isn't an alternative shortcut for **Previous Difference** there). The extension uses the default shortcuts.
+
 ## All views
 
 | Command | Shortcut |

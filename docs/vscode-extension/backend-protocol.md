@@ -87,6 +87,12 @@ JSON-RPC 2.0. Requests carry `id` (number or string), `method`, and optional
          "path.info", "text.load", "text.diff", "text.merge", "hex.align",
          "table.compare", "pix.compare", "pix.image", "folder.compare",
          "folder.compareItems", "file.quickCompare"
+       ],
+       "folderOptions": [
+         "criteria", "timeToleranceSecs", "include", "exclude", "includeFolders",
+         "otherFilters", "excludeHidden", "flatten", "ignoreDst", "ignoreTz",
+         "ignoreCaseNames", "followSymlinks", "dotNamesFirst", "align",
+         "respectGitignore", "detectMoves"
        ]
      },
      "limits": { "maxMessageBytes": 67108864, "maxConcurrentRequests": 4, "maxQueuedRequests": 64, "maxLinesPerSide": 2000000 }
@@ -99,7 +105,11 @@ JSON-RPC 2.0. Requests carry `id` (number or string), `method`, and optional
    gets `-32600`.
 2. Clients must check `capabilities.methods` before calling a method.
    Methods may be added within protocol 1; changes to existing methods need a
-   new protocol version.
+   new protocol version. `capabilities.folderOptions` lists the folder
+   `options` fields the server accepts; new optional fields may be added within
+   protocol 1, so clients leave out fields that aren't listed. Helpers from
+   v0.5.0 and earlier don't send `folderOptions`; they accept every field
+   listed above except `respectGitignore` and `detectMoves`.
 3. `shutdown` (request): returns `null` once it has stopped accepting new
    work; later requests get `-32600`.
 4. `exit` (notification): the process exits with code 0 after `shutdown`,
@@ -161,7 +171,9 @@ document APIs (decision for T010).
 object. Its optional fields are `criteria` (`timesize`, `size`, `binary`,
 `crc` or `rules`), `timeToleranceSecs`, `include`, `exclude`, `includeFolders`,
 `otherFilters`, `excludeHidden`, `flatten`, `ignoreDst`, `ignoreTz`,
-`ignoreCaseNames`, `followSymlinks`, `dotNamesFirst`, and `align`.
+`ignoreCaseNames`, `followSymlinks`, `dotNamesFirst`, `align`,
+`respectGitignore` and `detectMoves` (both default `false`; see
+`capabilities.folderOptions`).
 `dotNamesFirst` defaults to `true`: folders sort before files, with dot-prefixed
 names first within each group. Set it to `false` for alphabetical sorting within
 each group; item comparisons still retain the requested item order.

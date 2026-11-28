@@ -117,8 +117,19 @@ generate the shell-extension resources required by the Tauri build.
 
 For folder integration checks, point `COMPARECRAFT_BACKEND` at the helper built
 from the same source as the webview. Folder method capabilities alone do not
-establish support for newly added options such as `dotNamesFirst`. Do not count
+establish support for newly added options such as `dotNamesFirst`. Helpers
+after v0.5.0 advertise the folder option fields they accept
+(`capabilities.folderOptions`); the extension leaves out the others (for older
+helpers, everything added after v0.5.0) and the webview shows them disabled.
+When the shared folder UI gains an option, add it to `WEBVIEW_FOLDER_OPTIONS` in
+`src/embeddedCore.ts` and to the helper's `OPTION_FIELDS`. Do not count
 skipped real-helper tests as successful folder verification.
+
+VS Code's webview wrapper forwards every keydown it sees on the webview window
+to the workbench keybindings. The webview entry point (`src/webview/main.tsx` in
+the repository root) dispatches CompareCraft shortcuts on the document and stops
+the ones its view handles there, so they never reach VS Code; it leaves
+`Shift+Ctrl+P` to VS Code. The extension contributes no keybindings.
 
 ## Package and verify the VSIX
 
@@ -136,7 +147,7 @@ npm run test:vsix
 1. Package and install an older-version copy of the same code.
 2. Upgrade to the real VSIX.
 3. Check the installed files: compiled code, webview bundle, screenshots, README,
-   and license, without source, tests, scripts, maps, `node_modules`, or this
+   CHANGELOG and license, without source, tests, scripts, maps, `node_modules`, or this
    development guide.
 4. Run the host tests against the installed extension files.
 5. Uninstall the extension and confirm it is no longer listed.
@@ -168,9 +179,13 @@ helper built from source, then uploads the VSIX as a workflow artifact. Relevant
 pushes to `main`, pull requests, and manual dispatch run all these checks without
 publishing, using the checked-in extension version. When a GitHub release is
 created, the workflow uses the release's tagged source. The tag must use `vN.N.N`
-(for example, `v1.2.3`); CI sets the extension manifest and lockfile version to
-`N.N.N` before testing and packaging, without committing those changes. Only
-release creation publishes the tested artifact, after every platform passes.
+or `vN.N.N-pre` (for example, `v1.2.3` or `v1.2.3-beta.1`, checked by
+`scripts/version.mjs`); CI sets the extension manifest and lockfile version to
+the tag's version before testing and packaging, without committing those changes.
+Only release creation publishes the tested artifact, after every platform passes.
+Pre-release tags are tested and packaged but not published, because the
+Marketplace doesn't accept pre-release version numbers; their VSIX stays a
+workflow artifact for side-loading.
 Native installer, signing, menus, and desktop GUI checks remain separate from CI.
 
 ## Documentation screenshots
@@ -180,11 +195,26 @@ relative image link for every PNG in the [README](README.md). `test:vsix`
 checks that each image is packaged and its README link points to the extension
 subdirectory in the repository.
 
-The folder, preset, saved-session and difference-map screenshots were captured
-from a real Extension Development Host using an isolated profile, a local
-helper and synthetic release files. Do not capture personal workspaces,
-credentials or unrelated windows. Use the same demo data for related images,
-dismiss notifications, and crop menus or dialogs without changing their content.
+All extension screenshots were captured from a real Extension Development Host
+using an isolated profile, a local helper and synthetic demo files. Do not
+capture personal workspaces, credentials or unrelated windows. Use the same demo
+data for related images, dismiss notifications, and crop menus or dialogs without
+changing their content.
+
+The current set was captured on Linux with the downloaded test VS Code on an
+Xvfb display (1920×1140 for images 01–03, 1440×900 for the others) in the
+Default Dark Modern theme:
+
+- VS Code ran with `--ozone-platform=x11 --force-device-scale-factor=1`, without
+  `WAYLAND_DISPLAY` and `GDK_SCALE`, and with `--remote-debugging-port`.
+- A private `XDG_CONFIG_HOME` kept user fontconfig aliases out, and
+  `editor.fontFamily` was set to Liberation Mono, a font without ligatures.
+- An `--extensionTestsPath` script opened each scene through the test-mode API.
+  The merge came from a real Git merge conflict, opened with **Resolve Conflict
+  in VS Code**.
+- Playwright's `connectOverCDP` clicked and hovered in the webview (menus, the
+  presets dialog, saving a session), and `import -window root` took the image.
+- Crops use the webview or dialog bounds.
 
 The [manual image directory](../../docs/manual/images) contains copies of the
 extension images needed by the standalone manual. Refresh those copies together
@@ -217,7 +247,8 @@ resetting the view during capture. Validate with the root `npm run docs:build`,
 
 1. Complete the pending platform/sign-off checks in the release handoff. Confirm
   the desktop app and helper for the extension's release line are available.
-2. Merge the release changes into **main** and tag the release commit with a new
+2. Move the [CHANGELOG](CHANGELOG.md) **Unreleased** entries under the new version,
+  merge the release changes into **main** and tag the release commit with a new
   version such as `v1.2.3`. Do not reuse a published version.
 3. Create a GitHub release for that tag directly, without saving a draft first.
   The `release.created` event starts the workflow; draft releases do not trigger
@@ -226,7 +257,7 @@ resetting the view during capture. Validate with the root `npm run docs:build`,
 4. Wait for the Linux, Windows, and macOS tests, then approve the
   **vscode-marketplace** deployment if required. The publish job downloads the
   tested Linux VSIX and publishes it without rebuilding or changing its version.
-5. Verify the listing, icon, screenshots, and installation from the Marketplace.
+5. Verify the listing, icon, screenshots, changelog and installation from the Marketplace.
   After the first successful publication, update the distribution status at the
   top of this guide. This workflow does not publish to Open VSX or GitHub Releases.
 

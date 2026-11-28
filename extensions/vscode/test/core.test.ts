@@ -9,7 +9,7 @@ import { comparisonArguments, launchDesktop } from "../src/process";
 import type { LaunchMode, LocalResource, ResourceKind, SideInput } from "../src/contracts";
 import { assertSavedResources } from "../src/resources";
 import { SnapshotStore, type SnapshotSession } from "../src/snapshots";
-import { deleteEmbeddedSession, dropPaths, MAX_DROP_ITEMS, readEmbeddedSessions, upsertEmbeddedSession } from "../src/embeddedCore";
+import { deleteEmbeddedSession, dropPaths, MAX_DROP_ITEMS, readEmbeddedSessions, supportedFolderOptions, unsupportedFolderOptions, upsertEmbeddedSession } from "../src/embeddedCore";
 import { pathToFileURL } from "node:url";
 
 const file = (name: string): LocalResource => ({ path: path.resolve(name), kind: "file" });
@@ -328,4 +328,17 @@ test("dropped URIs become local paths and anything else is refused", () => {
   for (const value of [[], "file:///a", [1], Array(MAX_DROP_ITEMS + 1).fill(pathToFileURL(files[0]!).href)]) {
     assert.throws(() => dropPaths(value), /Invalid dropped items/);
   }
+});
+
+test("folder options an older helper rejects are dropped instead of failing the comparison", () => {
+  const options = { criteria: "crc", exclude: "*.tmp", respectGitignore: true, detectMoves: false };
+  const legacy = supportedFolderOptions(options, undefined);
+  assert.deepEqual(legacy.options, { criteria: "crc", exclude: "*.tmp" });
+  assert.deepEqual(legacy.dropped, ["respectGitignore", "detectMoves"]);
+  assert.deepEqual(unsupportedFolderOptions(undefined), ["respectGitignore", "detectMoves"]);
+
+  const advertised = ["criteria", "exclude", "respectGitignore", "detectMoves"];
+  assert.deepEqual(supportedFolderOptions(options, advertised), { options, dropped: [] });
+  assert.deepEqual(unsupportedFolderOptions(advertised), []);
+  assert.deepEqual(unsupportedFolderOptions(["criteria", "detectMoves"]), ["respectGitignore"]);
 });

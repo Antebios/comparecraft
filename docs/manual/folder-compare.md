@@ -42,9 +42,13 @@ helper requirements and limitations.
 
 Embedded comparisons show an indeterminate progress indicator. The desktop
 progress strip also provides the scanning and completed/total file counts
-described above.
+described above. Folder colors, [moved and renamed files](#moved-and-renamed-files)
+and [.gitignore files](filters.md#gitignore-files) work as in the desktop app.
+With a desktop app from 0.5.0 or earlier installed, the extension's
+**Respect .gitignore files** and **Detect moved and renamed files** options are
+disabled until you update CompareCraft.
 
-![Folder comparison in VS Code showing expanded trees and a notice that comparisons read saved files on disk](images/vscode-folder-compare.png)
+![Folder comparison in VS Code showing folders colored by their contents on each side, a moved file and a notice that comparisons read saved files on disk](images/vscode-folder-compare.png)
 
 *The comparison-only VS Code panel provides a desktop handoff for folder operations.*
 

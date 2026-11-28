@@ -34,10 +34,12 @@ installed separately.**
 
 ### Compare local folders in a VS Code tab
 
-![Embedded folder comparison with expanded trees, difference and orphan markers, presets and the saved-disk notice](media/screenshots/04-folder-comparison.png)
+![Embedded folder comparison with expanded trees, folders colored by their contents on each side, a moved file, presets and the saved-disk notice](media/screenshots/04-folder-comparison.png)
 
-Folder results come from saved disk contents. Use **Open in Desktop App** for
-folder operations.
+Folder results come from saved disk contents. Folders are colored separately on
+each side by what they contain, files moved or renamed between the sides are
+marked **⇌**, and items your `.gitignore` files ignore are left out. Use
+**Open in Desktop App** for folder operations.
 
 ### Choose a comparison method and scope
 
@@ -141,6 +143,15 @@ before comparing their folders in the desktop app.
 
 - Inspect the shared folder tree and gutter, select files, configure inclusion
   and display filters, use CRC/Binary/Rules-based comparison presets, and refresh.
+- Folder names and icons are colored separately on each side by what the folder
+  contains (newer, different or orphan files); hover over a folder for details, or
+  choose **View > Legend**.
+- **Respect .gitignore files** (Session Settings > Other Filters) leaves out items
+  either side's `.gitignore` ignores, and `.git` folders. **Detect moved and
+  renamed files** (Session Settings > Comparison) pairs identical left-only and
+  right-only files and marks them **⇌**; toggle **⇌ Moved** on the toolbar to hide
+  them. Both are on by default. They need a CompareCraft desktop app released
+  after 0.5.0; with an older one they are shown disabled and a notice suggests updating.
 - Folder comparisons read **saved files on disk**. Unsaved editor buffers are
   shown in child text comparisons but never treated as saved-disk gutter results.
   No files are automatically saved.
@@ -200,6 +211,24 @@ Git settings change only when you run **Configure as Git Merge/Diff Tool...**
 and confirm. To undo that setup, run **Remove Git Tool Configuration...** before
 uninstalling the extension.
 
+## Text comparisons
+
+- Long lines wrap by default when VS Code's **Editor: Word Wrap**
+  (`editor.wordWrap`) setting is on (any value other than `off`). Turn wrapping
+  on or off for one tab with **↵ Wrap**, **View > Word Wrap** or `Alt+Z`.
+- Drag across text to select part of a line or several lines, then use **Copy to
+  Left** / **Copy to Right** (`Ctrl+L` / `Ctrl+R`) to replace the matching text on
+  the other side, or `Ctrl+C` to copy it. Dragging past the edge of a pane scrolls it.
+
+## Keyboard shortcuts
+
+While a CompareCraft tab has focus, its own shortcuts take precedence over
+VS Code's: for example `Ctrl+R` copies to the right instead of opening a recent
+folder, `F5` refreshes instead of starting debugging, and `Ctrl+N` / `Ctrl+P`
+move between differences. Keys the current view doesn't use still reach VS Code,
+and `Ctrl+Shift+P` always opens the Command Palette. On macOS, `Ctrl` in
+CompareCraft shortcuts is `Cmd`.
+
 ## Editing and saving
 
 - Text comparisons include your current VS Code edits. Save in the CompareCraft
@@ -222,6 +251,7 @@ uninstalling the extension.
 
 Executable paths must be set in your **User** settings, not workspace settings.
 Comparison preferences inside VS Code are separate from the desktop app's settings.
+Text comparisons wrap long lines when VS Code's `editor.wordWrap` setting is on.
 
 ## Troubleshooting
 
@@ -233,6 +263,8 @@ start-up, and errors.
 | "CompareCraft is not installed" | Install the desktop app, or run **Locate Desktop Executable...** for portable/AppImage/custom installs. |
 | A comparison tab fails to open | Run **CompareCraft: Check Embedded Backend** from the Command Palette. Update the desktop app to match your extension version, then reopen the comparison. |
 | A view offers to open in the desktop app | Your installed app does not support that view inside VS Code yet. Update CompareCraft. |
+| **Respect .gitignore files** or **Detect moved and renamed files** is disabled | The installed desktop app is older than the extension. Update CompareCraft to use these options. |
+| A CompareCraft shortcut runs a VS Code command too, or a VS Code shortcut does nothing in a CompareCraft tab | CompareCraft handles the keys its current view uses (see [Keyboard shortcuts](#keyboard-shortcuts)). Click outside the tab, or use the Command Palette (`Ctrl+Shift+P`). |
 | Commands are missing or disabled | Trust the workspace; remote and virtual workspaces are not supported. |
 | Save in a CompareCraft tab is refused | The file changed in an editor or on disk after the tab loaded it, or (merge tabs) the result file has unsaved edits elsewhere. Save or revert, click **Refresh**, then save. |
 | Resolve Conflict is refused | Binary, symbolic link, submodule, and modify/delete conflicts must be resolved with Git directly. |

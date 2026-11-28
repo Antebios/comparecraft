@@ -308,28 +308,31 @@ fn reject_unknown_fields(value: &Value, path: &str, allowed: &[&str]) -> Result<
     Ok(())
 }
 
+/// Folder `options` fields this backend accepts; advertised in `initialize` so clients can leave out newer fields
+/// when talking to an older backend.
+const OPTION_FIELDS: &[&str] = &[
+    "criteria",
+    "timeToleranceSecs",
+    "include",
+    "exclude",
+    "includeFolders",
+    "otherFilters",
+    "excludeHidden",
+    "flatten",
+    "ignoreDst",
+    "ignoreTz",
+    "ignoreCaseNames",
+    "followSymlinks",
+    "dotNamesFirst",
+    "align",
+    "respectGitignore",
+    "detectMoves",
+];
+
 fn folder_options(value: Option<Value>) -> Result<folder::FolderOptions, RpcError> {
     let Some(value) = value.filter(|v| !v.is_null()) else {
         return Ok(folder::FolderOptions::default());
     };
-    const OPTION_FIELDS: &[&str] = &[
-        "criteria",
-        "timeToleranceSecs",
-        "include",
-        "exclude",
-        "includeFolders",
-        "otherFilters",
-        "excludeHidden",
-        "flatten",
-        "ignoreDst",
-        "ignoreTz",
-        "ignoreCaseNames",
-        "followSymlinks",
-        "dotNamesFirst",
-        "align",
-        "respectGitignore",
-        "detectMoves",
-    ];
     const FILTER_FIELDS: &[&str] = &[
         "kind",
         "enabled",
@@ -725,7 +728,7 @@ pub fn serve<R: BufRead>(mut input: R, output: Box<dyn Write + Send>, log: Logge
                         Ok(json!({
                             "protocolVersion": PROTOCOL_VERSION,
                             "server": { "name": SERVER_NAME, "version": crate::APP_VERSION },
-                            "capabilities": { "methods": METHODS },
+                            "capabilities": { "methods": METHODS, "folderOptions": OPTION_FIELDS },
                             "limits": {
                                 "maxMessageBytes": MAX_MESSAGE_BYTES,
                                 "maxConcurrentRequests": workers,
@@ -951,6 +954,7 @@ mod tests {
         let inits: Vec<&Value> = out.iter().filter(|m| m["id"] == json!(0)).collect();
         assert_eq!(inits[0]["result"]["server"]["name"], json!(SERVER_NAME));
         assert_eq!(inits[0]["result"]["capabilities"]["methods"], json!(METHODS));
+        assert_eq!(inits[0]["result"]["capabilities"]["folderOptions"], json!(OPTION_FIELDS));
         assert_eq!(
             json!(METHODS),
             json!([

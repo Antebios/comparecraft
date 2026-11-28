@@ -15,7 +15,8 @@ export const ErrorCode = {
 export interface BackendInfo {
   protocolVersion: number;
   server: { name: string; version: string };
-  capabilities: { methods: string[] };
+  /** `folderOptions` lists the accepted folder option fields; helpers from v0.5.0 and earlier omit it. */
+  capabilities: { methods: string[]; folderOptions?: string[] };
   limits: { maxMessageBytes: number; maxConcurrentRequests: number; maxQueuedRequests: number; maxLinesPerSide: number };
 }
 
