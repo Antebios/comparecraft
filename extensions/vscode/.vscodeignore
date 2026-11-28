@@ -11,5 +11,6 @@ dev.code-workspace
 DEVELOPMENT.md
 .vscode-test/**
 .vscode-test-web/**
+helpers/**
 .gitignore
 *.vsix

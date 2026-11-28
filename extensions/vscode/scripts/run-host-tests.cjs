@@ -1,5 +1,5 @@
 const childProcess = require("node:child_process");
-const { existsSync, readFileSync, rmSync } = require("node:fs");
+const { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { getProfileArguments, killTree } = require("@vscode/test-electron/out/util");
@@ -79,4 +79,35 @@ async function runHostTests({ vscodeExecutablePath, extensionDevelopmentPath, ex
   }
 }
 
-module.exports = { runHostTests };
+/**
+ * Runs `extensionTestsPath` (out/test/restricted.js) in a window whose folder opens untrusted
+ * (Restricted Mode): workspace trust stays on and the profile never prompts for it. `settings` are
+ * added to the profile's user settings.
+ */
+async function runRestrictedModeTests({ vscodeExecutablePath, extensionDevelopmentPath, extensionTestsPath, extensionTestsEnv = {}, settings = {} }) {
+  const directory = mkdtempSync(path.join(os.tmpdir(), "comparecraft-vscode-restricted-"));
+  try {
+    const folder = path.join(directory, "untrusted");
+    const profile = path.join(directory, "profile");
+    mkdirSync(folder);
+    mkdirSync(path.join(profile, "User"), { recursive: true });
+    writeFileSync(path.join(profile, "User", "settings.json"), JSON.stringify({
+      "security.workspace.trust.enabled": true,
+      "security.workspace.trust.startupPrompt": "never",
+      "security.workspace.trust.banner": "never",
+      ...settings,
+    }));
+    await runHostTests({
+      vscodeExecutablePath,
+      extensionDevelopmentPath,
+      extensionTestsPath,
+      workspaceTrust: true,
+      launchArgs: [folder, "--disable-extensions", "--user-data-dir", profile],
+      extensionTestsEnv: { ...extensionTestsEnv, COMPARECRAFT_TEST_DIRECTORY: folder },
+    });
+  } finally {
+    rmSync(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 });
+  }
+}
+
+module.exports = { runHostTests, runRestrictedModeTests };

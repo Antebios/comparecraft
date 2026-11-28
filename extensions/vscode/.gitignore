@@ -6,3 +6,4 @@ media/webview/
 media/engine/
 bin/
 .vscode-test-web/
+helpers/

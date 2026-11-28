@@ -68,17 +68,21 @@ async function runChecks(): Promise<void> {
     assert.equal(await readFile(a, "utf8"), "one\ntwo\n");
     panel.panel.dispose();
 
-    // Folder comparisons are read-only and stay available.
+    // Folder comparisons are read-only and stay available where the helper is installed.
     const left = path.join(directory, "left"), right = path.join(directory, "right");
     await mkdir(left);
     await mkdir(right);
     await writeFile(path.join(left, "x.txt"), "x");
-    const before2 = new Set(api.embedded.all);
-    await vscode.commands.executeCommand("comparecraft.compareSelectedEmbedded", vscode.Uri.file(left), [vscode.Uri.file(left), vscode.Uri.file(right)]);
-    const folder = await until("the folder comparison", () => api.embedded.all.find(item => !before2.has(item)));
-    assert.equal(folder.state.spec.kind, "folder");
-    folder.panel.dispose();
-    console.log(`PASS: Restricted Mode compares read-only with the ${check.engine} engine, shows folders, and refuses saving, Git and the desktop app.`);
+    if (check.engine === "helper") {
+      const before2 = new Set(api.embedded.all);
+      await vscode.commands.executeCommand("comparecraft.compareSelectedEmbedded", vscode.Uri.file(left), [vscode.Uri.file(left), vscode.Uri.file(right)]);
+      const folder = await until("the folder comparison", () => api.embedded.all.find(item => !before2.has(item)));
+      assert.equal(folder.state.spec.kind, "folder");
+      folder.panel.dispose();
+    } else {
+      assert.match(await api.embedded.folderUnsupported([left, right]) ?? "", /isn't installed here/);
+    }
+    console.log(`PASS: Restricted Mode compares read-only with the ${check.engine} engine, ${check.engine === "helper" ? "shows folders" : "explains folders need the helper"}, and refuses saving, Git and the desktop app.`);
   } finally {
     if (helper) await config.update("backendPath", undefined, vscode.ConfigurationTarget.Global);
   }

@@ -57,6 +57,7 @@
     "vscode:prepublish": "node scripts/prepublish.cjs",
     "package": "vsce package --no-dependencies",
     "package:targets": "node scripts/package-targets.cjs",
+    "stage:helper": "node scripts/stage-helper.cjs",
     "test:vsix": "node scripts/test-vsix.cjs"
   },
   "contributes": {
