@@ -2,10 +2,10 @@
 
 ## Status
 
-**Implemented on `feature/vscode-workspaces`, verified on Linux (2026-11-28);
-not merged or released.** The branch was rebased onto `main` at `7ee0131`.
-`origin` and `macross` received it through `f15700d` during the work (pushes the
-agent didn't make); the later commits are local until pushed. Its commits:
+**Implemented on `feature/vscode-workspaces` and verified on Linux, plus the
+first CI run on Linux, Windows and macOS (2026-11-28); not merged or released.**
+The branch was rebased onto `main` at `7ee0131` and is open as pull request #22.
+Its commits:
 
 | Commit | Content |
 |---|---|
@@ -18,8 +18,9 @@ agent didn't make); the later commits are local until pushed. Its commits:
 | `67d399d` | Remote smoke tests over Remote-SSH and Dev Containers |
 | `9fc51b5` | Removed the view-method table the engine router replaced |
 | `bddc16c` | CI attaches the VSIX packages and Linux helpers to releases |
-| (docs commits) | Documentation and this handoff |
-| (fix commit) | `test:remote` removes its profile only after VS Code has exited |
+| `3442b6c`, `ead3947` | Documentation and this handoff |
+| `e9e76cb` | `test:remote` removes its profile only after VS Code has exited |
+| `b5b66ed` | Shorter Restricted Mode test profile path, for macOS's socket path limit (CI evidence in the next commit) |
 
 The plan is [host-support-plan.md](host-support-plan.md); owner decisions are in
 [decisions.md](decisions.md#host-support). The local extension's own history and
@@ -27,9 +28,9 @@ evidence remain in [handoff.md](handoff.md). This file is repository-tracked so
 work can resume from a clean checkout on another computer; keep it current with
 code changes.
 
-What remains needs other machines or GitHub (see [Next actions](#next-actions)):
-WSL, host tests of the Arm64 Linux/Windows, Intel macOS and Alpine packages, and
-the first run of the new CI workflow.
+What remains (see [Next actions](#next-actions)): a CI rerun to confirm the
+macOS fix, WSL, and host tests of the Arm64 Linux/Windows, Intel macOS and
+Alpine packages.
 
 ## Task ledger
 
@@ -53,11 +54,11 @@ when its evidence is recorded. Planning is not implementation evidence.
 | H013 | H4 | done | Folder copies with file/size limits, cancellation, invalid and case-colliding names, sweep; integration compare of provider folders |
 | H014 | H5 | done | Browser entry and WebAssembly engine; text compare, merge and save in VS Code for the Web |
 | H015 | H5 | done | Hex/Table/Picture in the browser; folder, Git and desktop refused with explanations (no browser Git reads, by decision) |
-| H016 | H6 | done | Unit, parity, Electron, Restricted Mode, browser, VSIX and remote suites; CI workflow (not yet run on GitHub: H020) |
+| H016 | H6 | done | Unit, parity, Electron, Restricted Mode, browser, VSIX and remote suites; CI workflow (first run: H020) |
 | H017 | H6 | done | README, manual page (screenshots refreshed), DEVELOPMENT, CHANGELOG, decisions, backend protocol, plan, folder roadmap. No new screenshots: environments differ only in available actions and messages |
 | H018 | H6 | done | This handoff |
 | H019 | H2 | pending | WSL on Windows: install the `linux-x64` package in a WSL window and repeat the remote checks (`test/remote.ts` expects `remoteName` `wsl`) |
-| H020 | H6 | pending | First GitHub Actions run of `vscode-extension.yml` (helpers, packages, Linux/Windows/macOS package tests, web, remote) |
+| H020 | H6 | in_progress | First run on PR #22 (run 46169716620): every job passed except Test (darwin-arm64), whose Restricted Mode launch hit macOS's socket path limit; fixed and verified locally, CI rerun pending |
 | H021 | H6 | pending | Host tests of `linux-arm64`, `win32-arm64`, `darwin-x64` and Alpine packages on matching hardware (CI only builds them and checks the helpers) |
 
 ## Evidence log
@@ -98,6 +99,30 @@ VS Code 1.148.0 (`@vscode/test-electron` download), Docker 29.9.2:
 | 2026-11-28 | H003, H007-H009 | remote | `node scripts/test-remote.cjs --via container ...`: Dev Containers 0.481.0, folder opened in a dev container (remote user `tester`, local Git config and credential helpers not copied) | Pass: the same checks in the `dev-container` extension host ("a window connected to a dev container"); containers and derived images removed afterwards |
 | — | H019 | remote | WSL | Pending: needs Windows |
 
+First CI run: GitHub Actions run 46169716620 of `vscode-extension.yml` for PR #22
+at `ead3947`, 2026-11-28 (job results from the run page; the macOS log was
+downloaded):
+
+| Job | Runner | Result and evidence |
+|---|---|---|
+| Helper (all six jobs, eight targets) | ubuntu-22.04, windows-latest, macos-latest | Pass: static Linux helpers (Alpine x64 smoke in Docker, Arm64 under QEMU); Windows x64 and macOS Arm64 `--version`; Windows Arm64 and Intel macOS cross-compiled |
+| Package | ubuntu-22.04 | Pass: eight platform packages and the universal package; Linux helper archives |
+| Test (linux-x64) | ubuntu-22.04 | Pass: unit and parity tests with the Linux helper; platform package host tests and Restricted Mode; universal package without a helper; VS Code for the Web |
+| Test (win32-x64) | windows-latest | Pass: unit and parity tests with the Windows helper; platform package install, upgrade, host tests with the bundled helper, Restricted Mode, uninstall |
+| Test (darwin-arm64) | macos-26 Arm64 (image 20261123.0526) | Fail: 84/84 unit tests and every platform package host check with the bundled helper passed; the Restricted Mode launch failed with `listen EINVAL` on `<tmp>/comparecraft-vscode-restricted-XXXXXX/profile/1.14-main.sock`, 109 characters where macOS allows 103 |
+| Remote smoke (ssh), (container) | ubuntu-22.04 | Pass |
+
+The macOS fix (Restricted Mode runs keep their profile under `cc-restricted-XXXXXX`,
+92 characters on macOS) was checked on Linux, which allows 107 characters, with
+`XDG_RUNTIME_DIR` unset (VS Code then puts its socket in the profile, as on
+macOS) and `TMPDIR` set 4 characters longer than macOS's:
+
+| Date | Task | Kind | Command or journey | Result and evidence |
+|---|---|---|---|---|
+| 2026-11-28 | H020 | packaged | Restricted Mode launch alone, before the fix | Fail as on macOS: `listen EINVAL` on a 113-character socket path |
+| 2026-11-28 | H020 | packaged | Restricted Mode launch alone, after the fix | Pass |
+| 2026-11-28 | H020 | packaged | `node scripts/test-vsix.cjs comparecraft-0.1.0-linux-x64.vsix` under the same conditions | Pass: content check with the helper, every host check with the bundled helper, Restricted Mode, uninstall |
+
 Record further evidence the same way: date, task, host and versions, exact
 command, and whether it is unit, integration, browser, packaged, remote or
 manual evidence. Redact hostnames and private paths.
@@ -111,6 +136,13 @@ manual evidence. Redact hostnames and private paths.
   (minimap viewport) failed 1 of 15 repeats on the code before these changes.
 - **VS Code 1.148 hangs on exit after tests:** the runners stop it once the
   tests have recorded their result (`scripts/run-host-tests.cjs`).
+- **Socket path limit for test profiles:** VS Code listens on
+  `<profile>/<version>-main.sock` on macOS (and on Linux without
+  `XDG_RUNTIME_DIR`); socket paths are limited to 103 characters on macOS, and
+  its temporary directory takes about 50. Keep test profile paths short. The
+  integration runner's main profile (`comparecraft-vscode-host-XXXXXX/profile`)
+  reaches exactly 103 there, the length at which VS Code starts warning; shorten
+  it if `npm run test:integration` fails on a Mac (CI doesn't run it there).
 - **Wayland desktops:** Electron tests under Xvfb need `WAYLAND_DISPLAY` (and
   `OZONE_PLATFORM`/`GDK_BACKEND` overrides) cleared; see DEVELOPMENT.md.
 - **Attaching to running containers** asks a modal trust question that test
@@ -141,12 +173,9 @@ used or changed; remote tests used disposable containers bound to 127.0.0.1.
 
 ## Next actions
 
-1. Owner: review and push `feature/vscode-workspaces`, open a pull request and
-   watch the first CI run (H020). Fix any platform-specific failures there
-   (Windows and macOS packages haven't run locally).
+1. Push the macOS fix and confirm Test (darwin-arm64) passes on the rerun (H020).
 2. On Windows with WSL: install the `linux-x64` VSIX in a WSL window and repeat
-   the remote checks; also run `npm run test:vsix` on the `win32-x64` package
-   (H019).
+   the remote checks (H019). CI now covers the `win32-x64` package.
 3. Where hardware exists, host-test the Arm64 and Intel macOS packages (H021).
 4. Consider scoping saved sessions by remote authority before advertising
    remote folder sessions (folder roadmap Phase C/D).
