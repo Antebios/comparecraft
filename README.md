@@ -302,7 +302,8 @@ not changed. Other builds show the checked-in version with `-dev` (for example `
 
 Tags must be `vN.N.N` or a pre-release such as `v1.2.3-beta.1`. For a pre-release, the MSI and macOS bundle
 versions use `1.2.3` (Windows and macOS only accept numbers there), and no `.rpm` is built because RPM versions
-cannot contain `-`. The VS Code extension accepts only `vN.N.N` tags.
+cannot contain `-`. Pre-release tags also build and test the VS Code extension, but only `vN.N.N` tags publish it
+to the Marketplace, which doesn't accept pre-release versions.
 
 ## Command line
 

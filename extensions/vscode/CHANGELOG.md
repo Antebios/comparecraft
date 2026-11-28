@@ -4,7 +4,7 @@ The extension is released together with the CompareCraft desktop app and uses
 the same version numbers. Earlier changes are listed in the
 [GitHub releases](https://github.com/Antebios/comparecraft/releases).
 
-## Unreleased
+## 0.6.0
 
 ### Added
 
