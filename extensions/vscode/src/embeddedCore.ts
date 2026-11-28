@@ -45,14 +45,6 @@ export function pairViewKind(infos: readonly { exists: boolean; isDir: boolean; 
   return kind === "hex" || kind === "table" || kind === "picture" ? kind : undefined;
 }
 
-/** Helper methods each read-only view needs; older helpers lack them. */
-export const VIEW_METHODS: Record<FileView, readonly string[]> = {
-  hex: ["hex.align"],
-  table: ["table.compare"],
-  picture: ["pix.compare", "pix.image"],
-  patch: [],
-};
-
 export const FOLDER_METHODS = ["folder.compare", "folder.compareItems", "file.quickCompare"] as const;
 
 /** Folder option fields accepted by helpers from v0.5.0 and earlier, which don't advertise `folderOptions`. */

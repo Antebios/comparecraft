@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import {
   ConflictError, dialogFilters, DocumentGuard, joinLines, MAX_READ_BYTES, pairViewKind, parseSpec, readBytes, readDataUrl, specFromInputs, splitLines,
-  textFileFromBuffer, titleOf, unsupportedCommand, VIEW_METHODS
+  textFileFromBuffer, titleOf, unsupportedCommand
 } from "../src/embeddedCore";
 import { desktopViewArguments } from "../src/process";
 import { NodeFiles } from "../src/nodeFiles";
@@ -30,8 +30,6 @@ test("read-only view specs keep their kind, files, titles and options only", () 
   assert.equal(titleOf(parseSpec({ kind: "table", paths: [a, a] })), "Table: a.txt");
   assert.equal(titleOf(parseSpec({ kind: "picture", paths: [png, ""], titles: [null, "Right"] })), "Picture: b.png ↔ Right");
   assert.equal(titleOf(parseSpec({ kind: "patch", paths: [path.resolve("fix.patch")] })), "Patch: fix.patch");
-  assert.deepEqual(VIEW_METHODS.patch, []);
-  assert.deepEqual(VIEW_METHODS.picture, ["pix.compare", "pix.image"]);
 });
 
 test("folder specs persist only local paths, options and session identity", () => {
