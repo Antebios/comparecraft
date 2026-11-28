@@ -2,8 +2,10 @@ import * as vscode from "vscode";
 import assert from "node:assert/strict";
 import { mkdir, writeFile, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
+import type { TestApi } from "../src/activate";
 import type { EmbeddedPanel, EmbeddedPanels } from "../src/embedded";
 import { pathKey } from "../src/embeddedCore";
+import { virtualWorkspace, withoutHelper } from "./environments";
 
 /** Records the outcome for the runner, which stops VS Code if it hangs on shutdown (scripts/run-host-tests.cjs). */
 export async function run(): Promise<void> {
@@ -101,7 +103,7 @@ async function runChecks(): Promise<void> {
       assert.equal(await realpath(result.executable), await realpath(helper));
       assert.equal(result.protocolVersion, 1);
       console.log(`PASS: Check Embedded Backend started ${helper} (version ${result.version}) and completed a sample comparison.`);
-      await embeddedPanels(extension.exports as { embedded: EmbeddedPanels }, directory);
+      await embeddedPanels(extension.exports as TestApi, directory, node);
     } else {
       console.log("SKIP: Check Embedded Backend and embedded panels (set COMPARECRAFT_BACKEND to a helper executable).");
     }
@@ -168,7 +170,7 @@ async function fileViews(panels: EmbeddedPanels, directory: string): Promise<voi
   console.log("PASS: binary, picture and table pairs open read-only hex/picture/table views; patch files, byte reads, data URLs and Text Edit (VS Code editor) work.");
 }
 
-async function embeddedPanels(api: { embedded: EmbeddedPanels }, tempDirectory: string): Promise<void> {
+async function embeddedPanels(api: TestApi, tempDirectory: string, node: string): Promise<void> {
   assert.ok(api?.embedded, "Test-mode activation exposes embedded panels");
   const directory = await realpath(tempDirectory);
   const panels = api.embedded;
@@ -292,6 +294,8 @@ async function embeddedPanels(api: { embedded: EmbeddedPanels }, tempDirectory: 
   await fileViews(panels, directory);
   await folderViews(panels, directory);
   await folderUi(panels, directory);
+  await virtualWorkspace(api);
+  await withoutHelper(api, directory, node);
 
   // Backend failures are reported to the view, not swallowed.
   const config = vscode.workspace.getConfiguration("comparecraft");

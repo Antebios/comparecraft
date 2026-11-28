@@ -182,11 +182,13 @@ test("virtual folders are copied with their sizes and times, refreshed per item,
 
     const tooMany = new VirtualFolderSnapshots(root, new TreeFiles(base, Object.fromEntries(Array.from({ length: 11 }, (_, i) => [`f${i}`, "x"]))), { maxFiles: 10, maxBytes: 1000 });
     await assert.rejects(tooMany.copy("big", "left", base, progress), (error: Error) => error instanceof UnavailableError && /more than 10 files/.test(error.message));
+    await assert.rejects(stat(tooMany.side("big", "left")), "no partial copy is kept");
     const tooLarge = new VirtualFolderSnapshots(root, new TreeFiles(base, { a: "x".repeat(600), b: "y".repeat(600) }), { maxFiles: 10, maxBytes: 1000 });
     await assert.rejects(tooLarge.copy("big", "left", base, progress), /MB of files/);
     const badName = new VirtualFolderSnapshots(root, new TreeFiles(base, { "a\u0000b": "x" }));
     await assert.rejects(badName.copy("bad", "left", base, progress), /can't be stored as a file name/);
     await assert.rejects(copies.copy("cancel", "left", base, { report() {}, cancelled: () => true }), /cancelled/);
+    await assert.rejects(stat(copies.side("cancel", "left")));
 
     await copies.release("panel");
     await assert.rejects(stat(copies.side("panel", "left")));

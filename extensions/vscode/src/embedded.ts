@@ -729,6 +729,7 @@ export class EmbeddedPanel {
     const key = pathKey(file);
     const existing = await this.owner.files.stat(file);
     if (existing && existing.type !== "file") throw new Error(`${file} is not a file.`);
+    if (existing?.readOnly) throw new Error(`${basename(file)} is read-only.`);
     this.saving.add(key);
     try {
       if (!existing) {
@@ -750,7 +751,8 @@ export class EmbeddedPanel {
         if (text !== current) {
           const edit = new vscode.WorkspaceEdit();
           edit.replace(uri, new vscode.Range(document.positionAt(0), document.positionAt(current.length)), text);
-          if (!(await vscode.workspace.applyEdit(edit))) throw new Error(`VS Code rejected the edit to ${file}.`);
+          // Read-only documents can accept the request without changing.
+          if (!(await vscode.workspace.applyEdit(edit)) || document.getText() !== text) throw new Error(`VS Code rejected the edit to ${file}.`);
         }
         if (document.isDirty && !(await document.save())) throw new Error(`VS Code could not save ${file}.`);
         const saved = document.getText();

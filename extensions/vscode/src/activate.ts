@@ -32,7 +32,14 @@ export interface EngineCheck {
   readonly environment: string;
 }
 
-export function activateCompareCraft(context: vscode.ExtensionContext, createPlatform: (log: (line: string) => void) => Platform): { embedded: EmbeddedPanels } | undefined {
+/** Returned only in test runs (`ExtensionMode.Test`); nothing is exported to other extensions. */
+export interface TestApi {
+  readonly embedded: EmbeddedPanels;
+  readonly engine: ComparisonEngine;
+  denial(operation: Operation, paths?: readonly string[]): { reason: string; fix?: "trust" } | undefined;
+}
+
+export function activateCompareCraft(context: vscode.ExtensionContext, createPlatform: (log: (line: string) => void) => Platform): TestApi | undefined {
   const output = vscode.window.createOutputChannel("CompareCraft");
   context.subscriptions.push(output);
   const log = (line: string) => output.appendLine(line);
@@ -463,6 +470,6 @@ export function activateCompareCraft(context: vscode.ExtensionContext, createPla
     for (const id of GIT_COMMANDS) register(id, async () => require("git"));
   }
 
-  // Integration tests drive embedded panels directly; nothing is exported to other extensions.
-  return context.extensionMode === vscode.ExtensionMode.Test ? { embedded } : undefined;
+  // Integration tests drive embedded panels and check the policy directly.
+  return context.extensionMode === vscode.ExtensionMode.Test ? { embedded, engine, denial: denialFor } : undefined;
 }

@@ -69,7 +69,13 @@ export class VirtualFolderSnapshots {
     const target = this.side(owner, side);
     await rm(target, { recursive: true, force: true });
     await mkdir(target, { recursive: true });
-    await this.copyTree(source, target, { files: 0, bytes: 0 }, progress);
+    try {
+      await this.copyTree(source, target, { files: 0, bytes: 0 }, progress);
+    } catch (error) {
+      // Don't keep a partial copy of a cancelled, oversized or unreadable folder; panels release the rest.
+      await rm(target, { recursive: true, force: true }).catch(() => undefined);
+      throw error;
+    }
     return target;
   }
 
@@ -119,7 +125,10 @@ export class VirtualFolderSnapshots {
       }
       for (let start = 0; start < files.length; start += CONCURRENT_READS) {
         if (progress.cancelled()) throw new CancelledError();
-        await Promise.all(files.slice(start, start + CONCURRENT_READS).map(([item, copy]) => this.copyFile(item, copy, counts)));
+        // Let every write of the batch finish before failing, so no copy is still open during cleanup.
+        const results = await Promise.allSettled(files.slice(start, start + CONCURRENT_READS).map(([item, copy]) => this.copyFile(item, copy, counts)));
+        const failed = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
+        if (failed) throw failed.reason;
         progress.report(counts.files, counts.bytes);
       }
     }

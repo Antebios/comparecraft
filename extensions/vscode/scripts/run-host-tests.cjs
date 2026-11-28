@@ -15,7 +15,7 @@ const number = (name, fallback) => {
  * after the tests are done (1.148 hangs shutting down its Agent Host), so once the result exists
  * VS Code gets a grace period to quit and is then killed; the recorded result decides the run.
  */
-async function runHostTests({ vscodeExecutablePath, extensionDevelopmentPath, extensionTestsPath, launchArgs = [], extensionTestsEnv = {} }) {
+async function runHostTests({ vscodeExecutablePath, extensionDevelopmentPath, extensionTestsPath, launchArgs = [], extensionTestsEnv = {}, workspaceTrust = false }) {
   const result = path.join(os.tmpdir(), `comparecraft-host-result-${process.pid}-${Date.now()}`);
   rmSync(result, { force: true });
   const grace = number("COMPARECRAFT_HOST_EXIT_GRACE_MS", 30_000);
@@ -23,7 +23,8 @@ async function runHostTests({ vscodeExecutablePath, extensionDevelopmentPath, ex
   const args = [
     ...launchArgs,
     "--no-sandbox", "--disable-gpu-sandbox", "--disable-updates", "--skip-welcome", "--skip-release-notes",
-    "--disable-workspace-trust",
+    // Restricted Mode tests keep workspace trust on (the profile's settings open folders untrusted).
+    ...(workspaceTrust ? [] : ["--disable-workspace-trust"]),
     `--extensionTestsPath=${extensionTestsPath}`,
     `--extensionDevelopmentPath=${extensionDevelopmentPath}`,
   ];
