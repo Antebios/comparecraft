@@ -2,11 +2,14 @@
 
 ## Status and source of truth
 
-**Proposed; implementation has not started.** The local desktop extension work
-is tracked in [plan.md](plan.md) and [handoff.md](handoff.md). This follow-on
-plan and its companion [handoff-host-support.md](handoff-host-support.md) are
-the portable source of truth for extending support to other workspace hosts.
-No prior chat or session database is needed to continue.
+**Implemented on `feature/vscode-workspaces` (2026-11-28); not yet merged or
+released.** H001-H018 are done except the verifications that need other
+machines: WSL (Windows) and host tests of the Arm64 Linux/Windows, Intel macOS
+and Alpine packages, which CI builds but can't run. Status and dated evidence
+are in [handoff-host-support.md](handoff-host-support.md). The local desktop
+extension work is tracked in [plan.md](plan.md) and [handoff.md](handoff.md).
+This plan and its handoff are the portable source of truth; no prior chat or
+session database is needed to continue.
 
 The owner requested support for untrusted workspaces, Remote SSH, Remote WSL,
 Remote Dev Containers, virtual workspaces, and browser-only VS Code, with these
@@ -23,13 +26,27 @@ decisions:
 - **Feature coverage:** publish a tiered capability matrix with clear
   unavailable-action explanations instead of promising full parity everywhere.
 
-These are product targets, not claims of current support. The current extension
-continues to require a trusted local desktop workspace until the corresponding
-implementation and verification gates pass.
+The H0 gate review (2026-11-28) settled the open questions:
 
-## Current constraints
+- **Engine:** the Rust engine compiled to WebAssembly, not a TypeScript engine.
+  Cargo features build it without Tauri; parity tests compare it with the helper.
+- **Helper installation:** platform-specific VSIX packages bundle the helper
+  (static musl on Linux); the universal VSIX has none and compares files with
+  the WebAssembly engine. Releases also carry helper-only Linux archives. The
+  desktop app becomes optional.
+- **Trust:** Restricted Mode allows read-only comparisons only. **No Git at all**
+  (stricter than the decision above: a repository's configuration can run
+  programs), no saving and no desktop app until the folder is trusted.
+- **Virtual folders:** compared from bounded read-only copies in desktop VS Code.
+- **CI:** builds the WebAssembly engine and runs browser and Restricted Mode
+  tests, besides per-platform package tests.
 
-The implemented extension currently:
+The [decisions](decisions.md#host-support) record these and the resulting
+behavior.
+
+## Starting point (2026-10-28)
+
+Before this work, the extension:
 
 - Declares `extensionKind: ["ui"]`, `untrustedWorkspaces.supported: false`, and
   `virtualWorkspaces.supported: false` in `extensions/vscode/package.json`.
@@ -46,6 +63,19 @@ The implemented extension currently:
 Do not merely remove the manifest declarations or runtime guards. Preserve
 existing local behavior and add support only behind explicit host capabilities
 and tested safety boundaries.
+
+## Implementation summary
+
+| Area | Implementation (paths under `extensions/vscode/` unless noted) |
+|---|---|
+| Activation | `src/activate.ts`, shared by `src/extension.ts` (Node hosts) and `src/web/extension.ts` (browser), with platform adapters in `src/platform.ts` and `src/nodePlatform.ts`. Manifest: `extensionKind: ["workspace"]`, `browser` entry, limited untrusted and virtual workspace support. |
+| Policy | `src/policy.ts` (pure, shared with unit tests): `denial(state, operation, paths)` for desktop, Git, saving, folders and revealing files, plus the menu context keys. Commands, the controller, embedded panel requests and webview capabilities all consult it. |
+| Resources | `src/paths.ts`, `src/uris.ts`: file system paths for `file:` URIs in Node hosts, URI strings for everything else; `src/fileAccess.ts` with `src/vscodeFiles.ts` (VS Code's file system API) and `src/nodeFiles.ts`. |
+| Engines | `src/engine.ts` routes each request to the helper (`src/helper.ts`) or the WebAssembly engine (`src/wasmEngine.ts`); Rust side `src-tauri/src/protocol.rs` and `src-tauri/src/wasm.rs` (see [backend-protocol.md](backend-protocol.md#webassembly-engine)). |
+| Virtual folders | `src/virtualFolders.ts`: bounded copies with progress and cancellation, released with the panel, swept after crashes. |
+| Webview | `src/host/index.ts` (`HostCapabilities`), `src/webview/host.ts` and `src/views/FolderCompare.tsx` in the repository root: desktop and reveal actions follow the host; Restricted Mode note. |
+| Packaging | `scripts/stage-helper.cjs`, `scripts/package-targets.cjs`, `scripts/prepublish.cjs`, `scripts/build-engine.cjs`, `scripts/build-web.cjs`; CI in `.github/workflows/vscode-extension.yml`. |
+| Tests | Unit: `test/hosts.test.ts`, `test/engine.test.ts`, `test/parity.test.ts`. Electron: `test/host.ts`, `test/environments.ts` (virtual workspaces, no helper), `test/restricted.ts`. Browser: `test/web/suite.ts`. Remote: `test/remote.ts`. Runners: `scripts/test-integration.cjs`, `test-web.cjs`, `test-vsix.cjs`, `test-remote.cjs`. |
 
 ## H0 inventory findings (2026-10-28)
 
@@ -89,10 +119,17 @@ points for follow-on work:
   discovery/packaging, or extension lifecycle. WSL remains a Windows-only
   validation target. The laptop's pre-existing SSH service was not modified or
   used as a test host.
-- **H0 gate — not passed:** do not begin H004-H015 until H002 and H003 are
-  resolved in environments that can run the relevant browser and remote hosts.
-  H001 source inventory alone is not sufficient approval to alter the runtime
-  support boundary.
+- **H0 gate — not passed** (as of 2026-10-28): do not begin H004-H015 until
+  H002 and H003 are resolved in environments that can run the relevant browser
+  and remote hosts. H001 source inventory alone is not sufficient approval to
+  alter the runtime support boundary.
+- **Update 2026-11-28 — H002, H003 and the H0 gate done:** the real engine
+  modules build for WebAssembly behind Cargo features, run in the extension
+  (Node and browser hosts) and match the helper on every engine fixture; VS Code
+  for the Web activates the extension and compares with it. Remote-SSH and Dev
+  Containers windows activate the extension in the remote extension host with
+  the bundled helper. The owner approved the gate decisions above. Evidence is
+  in the handoff.
 
 Baseline checks run from this Omarchy/Linux checkout:
 
@@ -106,24 +143,26 @@ Baseline checks run from this Omarchy/Linux checkout:
   [handoff-host-support.md](handoff-host-support.md). They do not establish
   product support or complete the H0 gate.
 
-## Target capability matrix
+## Capability matrix
 
-This matrix defines intended support. Keep commands visible/enabled only when
-the active host, trust state, resource provider, and helper capabilities permit
-the operation.
+As implemented. Commands stay visible; menus use the policy's context keys, and
+every refused operation explains why (with a trust action in Restricted Mode).
 
-| Capability | Trusted local | Untrusted local | SSH / WSL / Dev Container | Virtual provider | Browser-only |
+| Capability | Trusted local | Restricted Mode | SSH / WSL / Dev Container | Virtual provider (desktop VS Code) | Browser-only |
 |---|---|---|---|---|---|
-| Embedded two-way text compare | Yes | Yes, read-only | Yes, remote helper | Best effort via provider reads | Yes, browser implementation |
-| Embedded text write-back | Yes | No | Yes via VS Code documents, if provider allows | Best effort via VS Code APIs | Best effort via VS Code APIs |
-| Merge/conflict view | Yes | Read-only preview; no result write/stage | Yes with remote helper and Git | Best effort; no staging promise | Best effort; no desktop launch |
-| Hex / Table / Picture views | Yes, per existing support | Read-only | Yes, remote helper | Best effort for readable bounded content | Yes within browser-safe limits |
-| Read-only Git comparisons | Yes | Yes | Yes, remote Git API/executable | Best effort when Git/provider supports it | Best effort via available VS Code APIs |
-| Git staging/configuration | Yes, explicit/confirmed | No | Yes, explicit/confirmed on remote | Only where supported safely | No terminal/native Git mutation |
-| Folder compare/sync/merge in desktop app | Yes | Disabled unless read-only safety can be guaranteed | No remote GUI launch | No native path operations | No |
-| Launch local desktop application | Yes | Disabled by default | No | No | No |
-| Provider-backed files and folders | Local filesystem | Local filesystem, read-only | Remote filesystem | Best effort | Through browser VS Code APIs |
+| Embedded two-way text compare | Yes | Yes, read-only | Yes, remote helper | Yes, WebAssembly engine | Yes, WebAssembly engine |
+| Embedded text write-back | Yes | No | Yes, through VS Code documents | Yes where the provider allows; read-only providers refused | Yes where the provider allows |
+| Git comparisons and conflict merge | Yes | No | Yes, Git on the remote host | No (needs a working tree on disk) | No |
+| Git staging and tool configuration | Yes, explicit and confirmed | No | Yes, explicit and confirmed, on the remote host | No | No |
+| Hex / Table / Picture views | Yes | Yes (read-only views) | Yes, remote helper | Yes, WebAssembly (64 MiB per file) | Yes, WebAssembly (64 MiB per file) |
+| Embedded folder comparison | Yes | Yes | Yes, remote helper | Yes, from bounded copies (20,000 files, 512 MB) | No |
+| Folder operations in the desktop app | Yes | No | No | No | No |
+| Launch local desktop application | Yes | No | No | No | No |
+| Reveal in the OS file manager | Yes | Yes | No (VS Code's Explorer instead) | No (Explorer) | No (Explorer) |
 
+Changes from the original targets: Restricted Mode has no Git comparisons or
+merge preview (owner decision: no Git at all), virtual and browser hosts have
+no Git, and the browser can't compare folders (the helper can't run there).
 Unavailable operations must explain why and offer a supported alternative where
 possible. Do not silently fall back from an embedded comparison to launching a
 desktop app.
@@ -155,7 +194,9 @@ desktop app.
   protocol handshake, startup, crash reporting and clean shutdown.
 - Document installing the helper in an SSH host or WSL distribution. Define a
   reproducible Dev Container install path; do not assume the desktop app exists
-  inside a container.
+  inside a container. *Resolved by bundling: VS Code installs the platform
+  package (with its helper) on the remote host; helper-only Linux archives on
+  each release cover manual installs.*
 - Executable overrides remain user/machine-scoped and are resolved by the host
   that starts the helper. Never execute a workspace-provided command or binary.
 
@@ -197,7 +238,8 @@ desktop app.
 - First run a feasibility spike for compiling/reusing the Rust engine as
   WebAssembly. If that is not practical, evaluate a narrowly scoped TypeScript
   engine against the Rust golden cases. Do not ship divergent compare semantics
-  without differential tests and documented limits.
+  without differential tests and documented limits. *Decided: the Rust engine
+  as WebAssembly, with parity tests against the helper.*
 - Bound memory and input sizes; cancel long-running comparisons and release
   buffers when panels close.
 - Do not upload workspace content to remote services. Preserve the existing
@@ -350,7 +392,9 @@ each run include:
 ## Continuation steps
 
 1. Follow the Windows transfer procedure above and inspect status/instructions.
-2. Begin with H001-H003; do not skip the feasibility gate.
+2. Run the remaining verifications listed in the handoff (WSL on Windows;
+   Arm64 and Intel macOS packages where hardware exists; the first CI run on
+   GitHub) and record the evidence there.
 3. Work one coherent increment at a time; update task status and evidence in the
    companion handoff on the same branch as code changes.
 4. Preserve existing local desktop behavior and avoid overwriting unrelated

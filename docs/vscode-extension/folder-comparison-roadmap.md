@@ -6,6 +6,14 @@
 folder panels now open inside VS Code with a folder-capable helper.
 Phases B-E remain future work; no remote support or folder mutations were enabled.
 
+**Update 2026-11-28:** the [host support work](host-support-plan.md) on
+`feature/vscode-workspaces` delivered most of Phases C and D for comparison-only
+folders: the extension runs in the workspace extension host with a helper
+bundled for that host, resources keep their URI identity, and folder panels
+work in Remote-SSH and Dev Containers windows (verified), in Restricted Mode,
+and for virtual workspaces from bounded copies. What Phase D still needs is
+listed under that phase. Phases B and E (folder mutations) remain future work.
+
 This is the portable source of truth for continuing the planning session on
 another computer or in another agent session. It complements, rather than
 replaces, the existing extension [plan](plan.md), [handoff](handoff.md) and
@@ -84,7 +92,13 @@ Prerequisites:
 **Exit gate:** isolated local runtime tests verify deliberate destructive
 operations, permissions, dirty/changed files, partial failures and recovery UX.
 
-### Phase C: authority-aware remote foundations (future)
+### Phase C: authority-aware remote foundations (delivered by host support)
+
+Delivered: workspace extension placement, helper per owning machine (bundled in
+platform packages), URI identity for non-`file` resources, remote drops mapped
+to remote paths, desktop launch and OS reveal refused remotely. Open: session
+storage and restored resources are not scoped by authority, and cross-authority
+comparisons are not designed.
 
 Do not simply remove remote guards. First design resource identity and execution:
 
@@ -105,7 +119,13 @@ Do not simply remove remote guards. First design resource identity and execution
 **Exit gate:** resource identities and execution locations are explicit and
 tested, with local behavior preserved.
 
-### Phase D: remote comparison-only support (future)
+### Phase D: remote comparison-only support (partly delivered by host support)
+
+Verified 2026-11-28 by `npm run test:remote` (see
+[handoff-host-support.md](handoff-host-support.md)): Remote-SSH and Dev Containers
+windows scan remote folders with the bundled helper. Still to verify in real
+environments: filters/presets, saved-disk child verdicts, session restoration
+and reconnect UX remotely, and WSL (needs Windows).
 
 Proposed incremental rollout, with a real-environment gate for each:
 

@@ -4,19 +4,19 @@ Compare files, local folders, selected text, and Git revisions side by side with
 VS Code. Edit text comparisons, explore CSV differences, and resolve three-way
 merge conflicts in a CompareCraft tab that follows your VS Code theme.
 
-Prefer a separate window? Open comparisons in the CompareCraft desktop app.
+CompareCraft works in VS Code on your computer, in remote windows (Remote - SSH,
+WSL, Dev Containers), in Restricted Mode, in virtual workspaces and in VS Code for
+the Web. See [Where CompareCraft works](#where-comparecraft-works).
+
+Prefer a separate window? Open comparisons in the optional
+[CompareCraft desktop app](https://github.com/Antebios/comparecraft/releases).
 Folder panels inside VS Code are comparison-only; use the desktop app for folder operations.
 
 ### Folder comparison roadmap
 
 The
 [folder comparison roadmap](../../docs/vscode-extension/folder-comparison-roadmap.md)
-documents the local, comparison-only first version, implementation tasks and
-handoff instructions, followed by future full local workflows and Remote SSH,
-WSL and Dev Containers phases.
-
-**Requires the [CompareCraft desktop app](https://github.com/Antebios/comparecraft/releases),
-installed separately.**
+documents the comparison-only folder panels and future full folder workflows.
 
 ## Screenshots
 
@@ -72,27 +72,60 @@ currently visible lines.
 
 ## Requirements
 
-- VS Code 1.95 or newer on local Windows, macOS, or Linux desktop.
-- An installed [CompareCraft desktop app](https://github.com/Antebios/comparecraft/releases)
-  from the same release line as the extension.
-- A trusted local workspace. Remote SSH, WSL, Dev Containers, browser-only hosts,
-  and virtual workspaces are not supported.
-- Git installed and available to VS Code for Git comparisons and conflict resolution.
+- VS Code 1.95 or newer.
+- Nothing else for comparisons in VS Code: the extension package for your
+  platform (Windows, macOS, Linux and Alpine Linux; x64 and Arm64) includes
+  CompareCraft's comparison helper. On other platforms CompareCraft compares
+  files with its WebAssembly engine; folder comparisons there need the desktop
+  app's helper.
+- Optional: the [CompareCraft desktop app](https://github.com/Antebios/comparecraft/releases)
+  to open comparisons in their own window and for folder operations.
+- Git, for Git comparisons and conflict resolution.
+
+## Where CompareCraft works
+
+| Where | Comparisons in VS Code | Folder comparisons | Desktop app | Git commands |
+| --- | --- | --- | --- | --- |
+| VS Code on your computer | Yes | Yes | Yes | Yes |
+| Restricted Mode (a folder you haven't trusted) | Read-only | Yes | Trust the folder first | Trust the folder first |
+| Remote - SSH, WSL, Dev Containers | Yes, on the remote computer | Yes, on the remote computer | No | Yes, on the remote computer |
+| Virtual workspaces (for example a GitHub repository opened without cloning) | Yes; saved where the provider allows it | Yes, from a temporary copy | No | No |
+| VS Code for the Web (vscode.dev, github.dev) | Yes, with a built-in WebAssembly engine | No | No | No |
+
+- **Restricted Mode:** CompareCraft compares read-only. Saving, Git commands (a
+  repository's Git configuration can run programs) and the desktop app wait until
+  you trust the folder (**Workspaces: Manage Workspace Trust**); open CompareCraft
+  tabs update when you do.
+- **Remote windows:** CompareCraft runs on the remote computer, next to your files,
+  with the helper for that computer's platform. The desktop app runs on your local
+  computer and can't open remote files, so comparisons always open in VS Code.
+  **Show in File Manager** becomes **Reveal in Explorer View**.
+- **Virtual workspaces:** files are read and saved through VS Code. To compare two
+  folders, CompareCraft first copies them to a temporary local folder (up to 20,000
+  files and 512 MB in total) and compares the copies; refreshing copies them again.
+  Git commands need a working tree on disk: clone the repository.
+- **VS Code for the Web:** text, binary (Hex), CSV/TSV (Table) and picture
+  comparisons run in your browser with CompareCraft's WebAssembly engine. Folder
+  comparisons, Git commands and the desktop app need VS Code desktop.
+
+When something isn't available, the command explains why instead of failing.
 
 ## Get started
 
-1. Install the CompareCraft desktop app. Standard installations are detected
-  automatically. For a portable or custom installation, run **CompareCraft:
-  Locate Desktop Executable...** from the Command Palette.
-2. Select two files in Explorer, right-click, and choose **CompareCraft >
+1. Select two files in Explorer, right-click, and choose **CompareCraft >
   Compare Selected...**.
-3. Review the differences in a CompareCraft tab. Text files can be edited and
+2. Review the differences in a CompareCraft tab. Text files can be edited and
   saved directly; images, binary files, and tables open read-only.
+3. Optional: install the CompareCraft desktop app to open comparisons in their
+  own window. Standard installations are detected automatically. For a portable
+  or custom installation, run **CompareCraft: Locate Desktop Executable...** from
+  the Command Palette.
 
 To compare folders, use **CompareCraft: Compare Folder With...**, or select two
-folders and choose **Compare Selected in VS Code**. An older helper without
-folder capabilities offers an explicit desktop alternative; update CompareCraft
-to enable embedded folders.
+folders and choose **Compare Selected in VS Code**. If an older helper (from an
+older desktop app, or set in `comparecraft.backendPath`) lacks folder support,
+CompareCraft offers the desktop app instead; update CompareCraft to compare
+folders in VS Code.
 
 ## Compare files and folders
 
@@ -150,8 +183,9 @@ before comparing their folders in the desktop app.
   either side's `.gitignore` ignores, and `.git` folders. **Detect moved and
   renamed files** (Session Settings > Comparison) pairs identical left-only and
   right-only files and marks them **⇌**; toggle **⇌ Moved** on the toolbar to hide
-  them. Both are on by default. They need a CompareCraft desktop app released
-  after 0.5.0; with an older one they are shown disabled and a notice suggests updating.
+  them. Both are on by default. With an older helper (from CompareCraft 0.5.0
+  or earlier, or set in `comparecraft.backendPath`) they are shown disabled and
+  a notice suggests updating.
 - Folder comparisons read **saved files on disk**. Unsaved editor buffers are
   shown in child text comparisons but never treated as saved-disk gutter results.
   No files are automatically saved.
@@ -168,7 +202,10 @@ before comparing their folders in the desktop app.
 
 The helper must advertise protocol-v1 `folder.compare`, `folder.compareItems`
 and `file.quickCompare`. Protocol 1 alone does not imply folder support.
-Remote SSH, WSL and Dev Containers remain unsupported.
+In remote windows, folders are compared on the remote computer. In virtual
+workspaces they are compared from temporary copies (see
+[Where CompareCraft works](#where-comparecraft-works)); VS Code for the Web
+can't compare folders.
 
 ## Git comparisons and conflicts
 
@@ -247,7 +284,7 @@ CompareCraft shortcuts is `Cmd`.
 | --- | --- | --- |
 | `comparecraft.defaultMode` | `embedded` | Open comparisons in a VS Code tab (`embedded`) or the desktop app (`desktop`). Commands named "in Desktop App" always use the desktop app. |
 | `comparecraft.desktopPath` | empty | Path to the desktop executable for a custom installation. Usually set with **Locate Desktop Executable...**. |
-| `comparecraft.backendPath` | empty | Advanced: override the path to the helper used for VS Code tabs. Normally detected automatically. |
+| `comparecraft.backendPath` | empty | Advanced: a `comparecraft-backend` helper to use instead of the one bundled with the extension (or the desktop app's). Without any helper, CompareCraft compares with its WebAssembly engine. |
 
 Executable paths must be set in your **User** settings, not workspace settings.
 Comparison preferences inside VS Code are separate from the desktop app's settings.
@@ -260,19 +297,22 @@ start-up, and errors.
 
 | Symptom | What to do |
 | --- | --- |
-| "CompareCraft is not installed" | Install the desktop app, or run **Locate Desktop Executable...** for portable/AppImage/custom installs. |
-| A comparison tab fails to open | Run **CompareCraft: Check Embedded Backend** from the Command Palette. Update the desktop app to match your extension version, then reopen the comparison. |
+| "CompareCraft is not installed" | Only commands that open the desktop app need it. Install the desktop app, or run **Locate Desktop Executable...** for portable/AppImage/custom installs. |
+| A comparison tab fails to open | Run **CompareCraft: Check Embedded Backend** from the Command Palette. It reports which engine compares here (the helper bundled with the extension, the desktop app's helper or the WebAssembly engine), where it runs, and any problem. |
+| Folder comparison says it needs the helper | The extension package for this platform includes it; reinstall the extension, install the desktop app, or set `comparecraft.backendPath`. VS Code for the Web can't compare folders. |
 | A view offers to open in the desktop app | Your installed app does not support that view inside VS Code yet. Update CompareCraft. |
 | **Respect .gitignore files** or **Detect moved and renamed files** is disabled | The installed desktop app is older than the extension. Update CompareCraft to use these options. |
 | A CompareCraft shortcut runs a VS Code command too, or a VS Code shortcut does nothing in a CompareCraft tab | CompareCraft handles the keys its current view uses (see [Keyboard shortcuts](#keyboard-shortcuts)). Click outside the tab, or use the Command Palette (`Ctrl+Shift+P`). |
-| Commands are missing or disabled | Trust the workspace; remote and virtual workspaces are not supported. |
+| A command says it isn't available here | See [Where CompareCraft works](#where-comparecraft-works). In Restricted Mode, trust the folder to save, use Git or open the desktop app. |
 | Save in a CompareCraft tab is refused | The file changed in an editor or on disk after the tab loaded it, or (merge tabs) the result file has unsaved edits elsewhere. Save or revert, click **Refresh**, then save. |
 | Resolve Conflict is refused | Binary, symbolic link, submodule, and modify/delete conflicts must be resolved with Git directly. |
 | Git's terminal tools do not use CompareCraft | Run **Configure as Git Merge/Diff Tool...** for the repository, and rerun it if you move the desktop app. |
 
 ## Known limitations
 
-- Local desktop workspaces only; remote and virtual workspaces are not supported.
+- The desktop app can't be used from remote windows, virtual workspaces or
+  VS Code for the Web; comparisons open in VS Code there. See
+  [Where CompareCraft works](#where-comparecraft-works).
 - Folder sync and folder merge require the desktop app; embedded folders are comparison-only.
 - Binary (Hex), CSV/TSV (Table), Picture, and Patch views are read-only inside
   VS Code. Table and Picture views support files up to 64 MB.

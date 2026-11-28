@@ -2,119 +2,149 @@
 
 ## Status
 
-No host-support runtime/code implementation has started. The source inventory
-and continuation notes are documented in the plan at
-[host-support-plan.md](host-support-plan.md). The existing local extension
-implementation and evidence remain in [handoff.md](handoff.md).
+**Implemented on `feature/vscode-workspaces`, verified on Linux (2026-11-28);
+not pushed, merged or released.** The branch was rebased onto `main` at
+`7ee0131`. Its commits:
 
-This file is repository-tracked so work can resume from a clean checkout on a
-Windows computer. Keep it current with code changes; do not rely on chat history
-or a machine-local session database.
+| Commit | Content |
+|---|---|
+| `f00d52a`, `538b72e` | Manual page draft, this plan and handoff (2026-10-28) |
+| `56b1c8b` | Cargo features: desktop app, Tauri-free `native` helper, WebAssembly engine; shared `protocol.rs` |
+| `ffa1642` | Extension: shared activation, browser entry, policy, engine router, URI-aware resources, virtual folder copies, manifest |
+| `bb1a9be` | Webview follows host capabilities (desktop app, OS reveal, Restricted Mode note) |
+| `f15700d` | Tests for virtual workspaces, Restricted Mode and VS Code for the Web; read-only provider and partial copy fixes |
+| `1524d58` | Platform VSIX packages with the bundled helper; CI |
+| `67d399d` | Remote smoke tests over Remote-SSH and Dev Containers |
+| `9fc51b5` | Removed the view-method table the engine router replaced |
+| `bddc16c` | CI attaches the VSIX packages and Linux helpers to releases |
+| (docs commit) | Documentation and this handoff |
 
-## Omarchy/Linux feasibility environment
+The plan is [host-support-plan.md](host-support-plan.md); owner decisions are in
+[decisions.md](decisions.md#host-support). The local extension's own history and
+evidence remain in [handoff.md](handoff.md). This file is repository-tracked so
+work can resume from a clean checkout on another computer; keep it current with
+code changes.
 
-The following tools were installed or prepared on this Linux laptop for H002 and
-H003; they are not prerequisites for a Windows checkout and are not committed
-to the repository:
-
-- Rustup 1.29.2 with stable Rust 1.99.1 and the
-  `wasm32-unknown-unknown` target under `~/.cargo`. The Cargo bin directory is
-  added to the Bash login/interactive and Zsh startup paths.
-- `@vscode/test-web` 0.0.81 and `@devcontainers/cli` 0.90.0 in
-  `~/.local/share/comparecraft-host-validation`.
-- The existing VS Code 1.143.1, Chromium, Docker 29.9.2 and Remote SSH /
-  Dev Containers extensions; an Ubuntu 24.04 Dev Container image is cached.
-- A disposable Dev Container was started with networking disabled. The backend
-  binary was copied into it for the H003 stdio probe. The host's existing SSH
-  daemon was left unchanged and was not used for testing.
-
-No system packages were installed and no system configuration was changed;
-`sudo` was unavailable. The temporary WASM/browser fixtures live in the
-Copilot session folder, not this repository, and are not needed to continue on
-Windows.
+What remains needs other machines or GitHub (see [Next actions](#next-actions)):
+WSL, host tests of the Arm64 Linux/Windows, Intel macOS and Alpine packages, and
+the first run of the new CI workflow.
 
 ## Task ledger
 
 Statuses: `pending`, `in_progress`, `blocked`, `done`. A task is `done` only
 when its evidence is recorded. Planning is not implementation evidence.
 
-| Task | Phase | Status | Prerequisites | Evidence / blocker |
-|---|---|---|---|---|
-| H001 | H0 | done | None | Source inventory recorded in `host-support-plan.md`; extension tests pass |
-| H002 | H0 | in_progress | H001 | Focused WASM compile and VS Code Web fixture activation pass; actual browser comparison/parity, bundle and performance evidence remain |
-| H003 | H0 | in_progress | H001 | Dev Container helper stdio handshake passes; VS Code remote extension-host activation and helper discovery/packaging remain; WSL needs Windows |
-| H004 | H1 | pending | H001-H003 | Typed host and URI-safe adapters |
-| H005 | H1 | pending | H004 | Provider resources, snapshots, write guards and cleanup |
-| H006 | H1 | pending | H004 | Central capability policy |
-| H007 | H2 | pending | H004, H006 | Remote extension-host behavior |
-| H008 | H2 | pending | H003, H007 | Remote helper discovery and installation |
-| H009 | H2 | pending | H005, H007, H008 | Embedded remote workflows and Git |
-| H010 | H3 | pending | H006 | Restricted untrusted mode |
-| H011 | H3 | pending | H010 | Security audit and enforcement tests |
-| H012 | H4 | pending | H005, H006 | Virtual file compare and edit |
-| H013 | H4 | pending | H012 | Read-only virtual-folder support |
-| H014 | H5 | pending | H002, H004, H005 | Browser embedded comparison |
-| H015 | H5 | pending | H014 | Browser views and capability gating |
-| H016 | H6 | pending | H009, H011, H013, H015 | Cross-host automated test matrix |
-| H017 | H6 | pending | H009, H011, H013, H015 | User docs and screenshots |
-| H018 | H6 | pending | H016, H017 | Evidence-based release handoff |
-
-## Resume on Windows
-
-1. Confirm this file, `host-support-plan.md`, and the link from `plan.md` exist
-   on the branch/commit being resumed. If they only exist as uncommitted files
-   on Linux, first transfer them through the approved repository workflow.
-2. In the Windows clone, run `git status` and inspect the branch before
-   switching. Preserve any unrelated changes; do not reset a dirty worktree.
-3. Read `host-support-plan.md`, `plan.md`, `decisions.md`, `handoff.md`, and
-   `backend-protocol.md`. Confirm implementation approval and choose the next
-   unblocked task.
-4. Check prerequisites: VS Code desktop, Git for Windows, Node/npm per
-   `extensions/vscode/DEVELOPMENT.md`; Rust/C++ tooling when building the
-   helper; Docker Desktop for Dev Containers; WSL and/or a reachable SSH host
-   for remote tests. The Linux feasibility environment is user-local and does
-   not transfer to Windows: it has Rustup plus `wasm32-unknown-unknown`,
-   `@vscode/test-web`, `@devcontainers/cli`, Chromium, and a cached Ubuntu
-   Dev Container image.
-5. Use disposable workspaces and Git repositories. Record the Windows commit,
-   OS/architecture, VS Code version, test command and results below.
-6. H001 is complete; H002 and H003 have partial Linux feasibility evidence
-   below. Resume the remaining browser comparison/parity and actual VS Code
-   remote extension-host checks in suitable Windows/browser and remote-host
-   environments. Validate WSL on Windows. Do not begin H004 until the H0 gate
-   selects the browser engine and remote helper installation approach.
+| Task | Phase | Status | Evidence (see the log below) |
+|---|---|---|---|
+| H001 | H0 | done | Source inventory in the plan (2026-10-28) |
+| H002 | H0 | done | WebAssembly engine from the real modules; parity with the helper on all engine fixtures; runs in VS Code for the Web |
+| H003 | H0 | done | Remote-SSH and Dev Containers windows activate the extension remotely with the bundled helper |
+| H004 | H1 | done | `activate.ts` with Node and browser platforms; browser bundle contains only `require("vscode")` (enforced by `build-web.cjs`) |
+| H005 | H1 | done | URI-aware paths, `FileAccess`, provider reads and document writes with stale guards, bounded virtual folder copies with cleanup |
+| H006 | H1 | done | `policy.ts` with unit tests; enforced in commands, controller, panel requests and webview capabilities |
+| H007 | H2 | done (SSH, Dev Containers) | Remote extension placement, activation, webview, storage and helper lifecycle in both remote smoke tests; WSL is H019 |
+| H008 | H2 | done (SSH, Dev Containers) | Platform packages bundle the helper; `checkBackend` reports it; helper-only Linux archives in CI; WSL is H019 |
+| H009 | H2 | done (SSH, Dev Containers) | Remote text, folder and Git comparisons; desktop app and OS reveal refused; drops mapped; helper ends with the extension host |
+| H010 | H3 | done | Limited untrusted support; Restricted Mode run compares read-only |
+| H011 | H3 | done | Saving, Git and desktop refused even when requested directly; trust grant updates panels |
+| H012 | H4 | done | In-memory providers: compare, save through the provider, read-only refusal, missing file |
+| H013 | H4 | done | Folder copies with file/size limits, cancellation, invalid and case-colliding names, sweep; integration compare of provider folders |
+| H014 | H5 | done | Browser entry and WebAssembly engine; text compare, merge and save in VS Code for the Web |
+| H015 | H5 | done | Hex/Table/Picture in the browser; folder, Git and desktop refused with explanations (no browser Git reads, by decision) |
+| H016 | H6 | done | Unit, parity, Electron, Restricted Mode, browser, VSIX and remote suites; CI workflow (not yet run on GitHub: H020) |
+| H017 | H6 | done | README, manual page (screenshots refreshed), DEVELOPMENT, CHANGELOG, decisions, backend protocol, plan, folder roadmap. No new screenshots: environments differ only in available actions and messages |
+| H018 | H6 | done | This handoff |
+| H019 | H2 | pending | WSL on Windows: install the `linux-x64` package in a WSL window and repeat the remote checks (`test/remote.ts` expects `remoteName` `wsl`) |
+| H020 | H6 | pending | First GitHub Actions run of `vscode-extension.yml` (helpers, packages, Linux/Windows/macOS package tests, web, remote) |
+| H021 | H6 | pending | Host tests of `linux-arm64`, `win32-arm64`, `darwin-x64` and Alpine packages on matching hardware (CI only builds them and checks the helpers) |
 
 ## Evidence log
 
-H001 baseline evidence from the Omarchy/Linux checkout:
+Earlier feasibility evidence (2026-10-28, before implementation):
 
 | Date | Task | Host / versions | Command or journey | Result and evidence |
 |---|---|---|---|---|
 | 2026-10-28 | H001 | Omarchy Linux; Node v24.11.0, npm 11.6.1, Rust 1.99.1 | `npm --prefix extensions/vscode test` | Pass: TS build and 54 extension tests |
-| 2026-10-28 | H001 | Omarchy Linux; Rust 1.99.1 | `npm test` at repository root | Pass on rerun: typecheck and 88 Rust tests. Initial run had one settings round-trip failure (`Null` vs `"dark"`); first-run issue remains a baseline flake to investigate if it recurs. |
-| 2026-10-28 | H002 | Omarchy Linux; Rust 1.99.1; user-local Rustup and `wasm32-unknown-unknown` | `cargo check --lib --target wasm32-unknown-unknown` | Full crate fails at host-specific `mio`/`getrandom` dependencies; this is not a viable whole-crate browser build. |
-| 2026-10-28 | H002 | Omarchy Linux; Rust 1.99.1 | Temporary `wasm-bindgen` crate importing the repository's `src-tauri/src/diff.rs` and `align.rs` | Pass: actual diff/alignment modules compile for `wasm32-unknown-unknown`. Temporary probe is not part of the repository and does not establish parity or browser execution. |
-| 2026-10-28 | H002 | Omarchy Linux; VS Code 1.143.1; Chromium; `@vscode/test-web` 0.0.81 | Temporary browser-extension fixture run with `@vscode/test-web` | Pass: VS Code Web activated the fixture and its assertion passed. This did not activate CompareCraft's production extension or run a comparison in-browser. |
-| 2026-10-28 | H003 | Omarchy Linux; Docker 29.9.2; Ubuntu 24.04 Dev Container | Existing `BackendClient` spawned `comparecraft-backend` using `docker exec -i`, requested `text.diff`, then disposed the client | Pass: protocol 1 handshake, diff response (`identical=false`) and clean shutdown. No VS Code remote extension host was attached. |
-| 2026-10-28 | H003 | Omarchy Linux | Check local SSH / WSL availability | SSH daemon already listens on the host; it was not modified or used. WSL is unavailable on Linux and remains pending Windows validation. |
+| 2026-10-28 | H001 | Omarchy Linux; Rust 1.99.1 | `npm test` at repository root | Pass on rerun: typecheck and 88 Rust tests; one settings round-trip failure on the first run (see Known issues) |
+| 2026-10-28 | H002 | Omarchy Linux; Rust 1.99.1 | `cargo check --lib --target wasm32-unknown-unknown` | Whole Tauri crate fails at `mio`/`getrandom`: led to Cargo features |
+| 2026-10-28 | H002 | Omarchy Linux; VS Code Web via `@vscode/test-web` 0.0.81 | Temporary fixture | Pass: a browser extension fixture activated |
+| 2026-10-28 | H003 | Omarchy Linux; Docker 29.9.2; Ubuntu 24.04 container | `BackendClient` over `docker exec -i` | Pass: protocol 1 handshake, `text.diff`, clean shutdown (no VS Code remote host) |
 
-No Windows-specific, CompareCraft production browser-host, remote
-extension-host, or packaged-helper installation tests have been run. Append
-evidence as work proceeds:
+Implementation evidence. All runs on Omarchy Linux x64 (Hyprland/Wayland desktop;
+Electron tests under Xvfb on X11), Node v26.13.1, npm 11.20.0, Rust 1.99.1,
+VS Code 1.148.0 (`@vscode/test-electron` download), Docker 29.9.2:
 
-| Date | Task | Host / versions | Command or journey | Result and evidence |
+| Date | Task | Kind | Command or journey | Result and evidence |
 |---|---|---|---|---|
-| — | — | — | — | — |
+| 2026-11-28 | baseline | unit/UI | Root `npm test`; extension `npm test` before changes | Pass: typecheck, 101 Playwright UI tests, 149 Rust tests; 64 extension tests |
+| 2026-11-28 | H002 | build | `cargo test` (default features); `npx tauri build --no-bundle --debug` | Pass: desktop app and tests build with the feature-gated manifest |
+| 2026-11-28 | H002/H008 | build | `cargo build --release --no-default-features --features native --bin comparecraft-backend --target x86_64-unknown-linux-musl` | Pass: 4.7 MB static-pie helper without Tauri; `--version` works |
+| 2026-11-28 | H002 | build | `npm run build:engine` + Node smoke test | Pass: 2.68 MB module, no imports; exports `memory`, `cc_alloc`, `cc_call`, `cc_free` |
+| 2026-11-28 | H002 | unit | `node --test out/test/parity.test.js` with the debug helper | Pass: 1,936 `text.diff` comparisons (121 fixtures × 16 rule sets) identical; `text.decode`/`kind.detect`, `text.merge`, `hex.alignData` (3 alignments), `pix.compareData`/`pix.imageData` (4 option sets), `table.compareData`, `quick.compareData` identical. All `text.diff` cases: helper 1,824 ms including IPC, WebAssembly 383 ms |
+| 2026-11-28 | H004-H006, H013 | unit | `npm test` (extensions/vscode) | Pass: 84 tests (policy, URI paths, engine routing, folder copies incl. removal of partial copies) |
+| 2026-11-28 | H004 | build | `node scripts/build-web.cjs` | Pass: 106 KB browser bundle; only `require("vscode")` |
+| 2026-11-28 | H005, H010-H013 | integration | `COMPARECRAFT_BACKEND=<debug helper> node scripts/test-integration.cjs` | Pass: 15 checks, including in-memory providers (save through the provider, "r.txt is read-only", missing file "not found", Hex/Table/Picture via WebAssembly, folder copies), the WebAssembly fallback without a helper, and the Restricted Mode launch (read-only compare, folders shown, save/Git/desktop refused) |
+| 2026-11-28 | H014/H015 | browser | `node scripts/build-web.cjs --tests && node scripts/test-web.cjs` (VS Code for the Web stable `661626d0`, headless Chromium, `@vscode/test-web` 0.0.81) | Pass: activation, `checkBackend` engine `wasm`, text load/diff/merge/save through the provider, Hex/Table/Picture views, desktop/Git/folder/reveal refused with explanations |
+| 2026-11-28 | H011 | UI | Root `npm run typecheck && npx playwright test` | Pass 101/102 including the new Restricted Mode UI test; the one failure is the pre-existing minimap flake (see Known issues) |
+| 2026-11-28 | H008 | build | `npm run stage:helper -- --target linux-x64 --also alpine-x64`; `--target linux-arm64 --also alpine-arm64` | Pass: x64 static-pie 4.5 MB; Arm64 statically linked 3.7 MB, cross-compiled with `rust-lld` |
+| 2026-11-28 | H008 | manual | `docker run --rm --network none -v <helpers/alpine-x64>:/h:ro alpine:3 /h/comparecraft-backend --version` | Pass on Alpine 3.24.4: `comparecraft-backend 0.1.0-dev (protocol 1)` |
+| 2026-11-28 | H008 | package | `COMPARECRAFT_PREBUILT=1 node scripts/package-targets.cjs --helpers helpers --targets linux-x64,alpine-x64` | Pass: 4.4 MB platform packages (`TargetPlatform` set, `extension/bin/comparecraft-backend` mode 0755); 2.2 MB universal package without `bin/` |
+| 2026-11-28 | H008/H016 | packaged | `node scripts/test-vsix.cjs comparecraft-0.1.0-linux-x64.vsix` | Pass: older install, upgrade, 53-file content check including the helper, host checks with the bundled helper, Restricted Mode, uninstall |
+| 2026-11-28 | H016 | packaged | `env -u COMPARECRAFT_BACKEND node scripts/test-vsix.cjs comparecraft-0.1.0.vsix` | Pass: 52 files, no helper; WebAssembly fallback; Restricted Mode with the WebAssembly engine explains that folders need the helper |
+| 2026-11-28 | H016 | lint | `actionlint .github/workflows/vscode-extension.yml` (1.7.12) | Pass; the workflow hasn't run on GitHub yet (H020) |
+| 2026-11-28 | H003, H007-H009 | remote | `node scripts/test-remote.cjs --via ssh --vsix comparecraft-0.1.0-linux-x64.vsix`: Remote-SSH (Marketplace latest) from an isolated profile to Debian bookworm sshd in a container on 127.0.0.1, throwaway ed25519 key | Pass: activated in the `ssh-remote` extension host (workspace kind, Linux); bundled helper ran remotely; environment "a window connected to an SSH host"; remote text load/diff/save; `vscode-remote` drops became remote paths; desktop app and OS reveal refused; folder scan via the helper; Git compare with HEAD ran Git remotely; helper exited with the remote extension host |
+| 2026-11-28 | H003, H007-H009 | remote | `node scripts/test-remote.cjs --via container ...`: Dev Containers 0.481.0, folder opened in a dev container (remote user `tester`, local Git config and credential helpers not copied) | Pass: the same checks in the `dev-container` extension host ("a window connected to a dev container"); containers and derived images removed afterwards |
+| — | H019 | remote | WSL | Pending: needs Windows |
 
-Record Windows, Linux, macOS, SSH, WSL, Dev Container, virtual-provider and
-browser evidence separately. Identify evidence as unit, integration, manual UI
-or packaged-installer verification. Redact hostnames and private paths.
+Record further evidence the same way: date, task, host and versions, exact
+command, and whether it is unit, integration, browser, packaged, remote or
+manual evidence. Redact hostnames and private paths.
 
-## Change log / next action
+## Known issues and notes
 
-- H001 inventory is complete. H002 and H003 are in progress with partial
-  feasibility evidence; H004-H018 remain pending.
-- Next action: run a real comparison through a browser-compatible engine and
-  differential tests; attach VS Code to the isolated Dev Container and validate
-  production extension activation/helper discovery. Then continue remote-host
-  checks (including WSL on Windows). Do not start H004 until H0's gate passes.
+- **Rust test flake (pre-existing):** `settings::tests::settings_round_trip_and_export`
+  races a `cli` test over `COMPARECRAFT_CONFIG_DIR` and failed about one run in
+  three, on `main` as well. Not changed here.
+- **Playwright flake (pre-existing):** `tests/ui/comparison-lifecycle.spec.ts:35`
+  (minimap viewport) failed 1 of 15 repeats on the code before these changes.
+- **VS Code 1.148 hangs on exit after tests:** the runners stop it once the
+  tests have recorded their result (`scripts/run-host-tests.cjs`).
+- **Wayland desktops:** Electron tests under Xvfb need `WAYLAND_DISPLAY` (and
+  `OZONE_PLATFORM`/`GDK_BACKEND` overrides) cleared; see DEVELOPMENT.md.
+- **Attaching to running containers** asks a modal trust question that test
+  windows refuse, so `test:remote --via container` opens a folder in a dev
+  container instead. Attach flows use the same extension host and code paths.
+- **Saved sessions don't record their host:** sessions keep paths without the
+  remote authority. If VS Code shares the extension's global state between local
+  and remote windows, a session saved in an SSH window can be listed where its
+  paths don't exist. Not verified; scoping sessions by authority is open (folder
+  roadmap Phase C).
+- **WebAssembly calls are synchronous** in the extension host: a 64 MiB input
+  blocks it while comparing. The helper is used whenever it is installed and the
+  files are on disk.
+- **Release workflow trigger (pre-existing):** `release: created` doesn't fire for
+  releases created with `GITHUB_TOKEN` (for example by the desktop build's
+  `tauri-action` draft); create the release directly as DEVELOPMENT.md says.
+
+## Environment on the Linux laptop
+
+Installed user-locally, not committed and not needed on other computers: Rustup
+targets `wasm32-unknown-unknown`, `x86_64-unknown-linux-musl` and
+`aarch64-unknown-linux-musl`; npm dev dependencies `esbuild` and
+`@vscode/test-web`; VS Code 1.148.0 and VS Code for the Web downloads in the
+ignored `.vscode-test/` and `.vscode-test-web/`. Docker images pulled for tests:
+`alpine:3`, `debian:bookworm-slim` (base of `comparecraft-remote-test`, which
+`test:remote` builds and keeps for reruns). The host's own SSH daemon was not
+used or changed; remote tests used disposable containers bound to 127.0.0.1.
+
+## Next actions
+
+1. Owner: review and push `feature/vscode-workspaces`, open a pull request and
+   watch the first CI run (H020). Fix any platform-specific failures there
+   (Windows and macOS packages haven't run locally).
+2. On Windows with WSL: install the `linux-x64` VSIX in a WSL window and repeat
+   the remote checks; also run `npm run test:vsix` on the `win32-x64` package
+   (H019).
+3. Where hardware exists, host-test the Arm64 and Intel macOS packages (H021).
+4. Consider scoping saved sessions by remote authority before advertising
+   remote folder sessions (folder roadmap Phase C/D).
